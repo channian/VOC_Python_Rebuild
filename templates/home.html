@@ -3,107 +3,230 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>廠務法規許可值標準化管控平台</title>
-    <!-- 使用 Bootstrap 5 取代舊有的手寫樣式與龐大 ViewState -->
+    <title>廠務法規許可標準化管控平台</title>
+    <!-- Google Fonts for Premium Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- 引入 HTMX 動態刷新技術 -->
+    <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <style>
-        .light-G { background-color: #198754; box-shadow: 0 0 8px #198754; color: white; border-radius: 50%; height: 22px; width: 22px; display: inline-block; }
-        .light-Y { background-color: #ffc107; box-shadow: 0 0 8px #ffc107; color: black; border-radius: 50%; height: 22px; width: 22px; display: inline-block; }
-        .light-O { background-color: #fd7e14; box-shadow: 0 0 8px #fd7e14; color: white; border-radius: 50%; height: 22px; width: 22px; display: inline-block; }
-        .light-R { background-color: #dc3545; box-shadow: 0 0 8px #dc3545; color: white; border-radius: 50%; height: 22px; width: 22px; display: inline-block; }
-        .table-custom th { background-color: #CCFFFF; text-align: center; vertical-align: middle; border-bottom: 2px solid #aaa; }
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --neon-green: #00e676;
+            --neon-yellow: #ffea00;
+            --neon-orange: #ff9100;
+            --neon-red: #ff1744;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Premium gradient background */
+            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            min-height: 100vh;
+            color: #2d3748;
+            background-attachment: fixed;
+        }
+        h3.page-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            color: #1a202c;
+            letter-spacing: -0.5px;
+            text-shadow: 0 4px 15px rgba(255,255,255,0.7);
+        }
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        .table-custom {
+            margin-bottom: 0;
+            background: transparent;
+        }
+        .table-custom thead th {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            border-bottom: none;
+            color: #4a5568;
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+            padding: 1rem 0.5rem;
+        }
+        .table-custom tbody tr {
+            transition: all 0.2s ease;
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0; /* for animation */
+        }
+        .table-custom tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            transform: scale(1.01);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            position: relative;
+            z-index: 2;
+            border-radius: 8px;
+        }
+        .table-custom td {
+            border-color: rgba(0, 0, 0, 0.05);
+            vertical-align: middle;
+            padding: 0.8rem 0.5rem;
+        }
+        
+        /* Modern Glow Lights */
+        .light-indicator {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+        }
+        .light-G { background: var(--neon-green); box-shadow: 0 0 15px rgba(0, 230, 118, 0.6); }
+        .light-Y { background: var(--neon-yellow); box-shadow: 0 0 15px rgba(255, 234, 0, 0.6); }
+        .light-O { background: var(--neon-orange); box-shadow: 0 0 15px rgba(255, 145, 0, 0.6); }
+        .light-R { background: var(--neon-red); box-shadow: 0 0 15px rgba(255, 23, 68, 0.8); animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 8px rgba(255, 23, 68, 0.4); transform: scale(1); }
+            50% { box-shadow: 0 0 25px rgba(255, 23, 68, 1); transform: scale(1.1); }
+            100% { box-shadow: 0 0 8px rgba(255, 23, 68, 0.4); transform: scale(1); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Stylish Badges */
+        .badge-premium {
+            padding: 0.6em 1.2em;
+            border-radius: 50rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,255,255,0.6);
+        }
+        .btn-glass {
+            background: rgba(255,255,255,0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.8);
+            color: #2d3748;
+            font-weight: 600;
+            border-radius: 50rem;
+            transition: all 0.3s;
+        }
+        .btn-glass:hover {
+            background: rgba(255,255,255,0.95);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.8); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #fff; }
     </style>
 </head>
-<body class="bg-light">
+<body>
 
-<div class="container-fluid mt-3">
-    <!-- 頭部看板標題 -->
-    <h3 class="mb-4 text-center fw-bold link-primary text-decoration-none">廠務法規許可值標準化管控平台</h3>
+<div class="container-fluid py-4 px-lg-5">
+    <!-- 頭部標題 -->
+    <div class="text-center mb-5 mt-2">
+        <h3 class="page-title display-6 mb-1">廠務法規許可標準化管控平台</h3>
+        <p class="text-dark opacity-75 fw-semibold font-monospace tracking-wide">Premium Facility Regulatory Dashboard</p>
+    </div>
     
     <!-- 功能按鈕與燈號狀態說明 -->
-    <div class="d-flex justify-content-between mb-3 align-items-end">
+    <div class="d-flex justify-content-between align-items-end mb-4 flex-wrap gap-3">
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary btn-sm fw-bold">異常件數查詢</button>
-            <button class="btn btn-outline-secondary btn-sm fw-bold">異常件數統計表</button>
-            <!-- 以下按鈕未來將依照 acl_service 所核發的權限透過 Jinja 條件控制顯示與否 -->
-            <button class="btn btn-primary btn-sm fw-bold">法規許可值與規格值維護 (權限)</button>
+            <button class="btn btn-glass px-4 py-2 shadow-sm">異常查詢</button>
+            <button class="btn btn-glass px-4 py-2 shadow-sm">統計報表</button>
+            <button class="btn btn-primary px-4 py-2 rounded-pill shadow" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: 600;">
+                設定與維護 (Admin)
+            </button>
         </div>
-        <div class="d-flex gap-2 align-items-center">
-            <span class="badge bg-danger rounded-pill px-3 py-2">最新讀值 &ge; OOS</span>
-            <span class="badge text-dark rounded-pill px-3 py-2" style="background-color: #fd7e14 !important; color:#fff !important">OOC &le; 最新讀值 &lt; OOS</span>
-            <span class="badge bg-warning text-dark rounded-pill px-3 py-2">Alert &lt; 最新讀值 &lt; OOC </span>
-            <span class="badge bg-success rounded-pill px-3 py-2">正常狀態</span>
+        <div class="d-flex gap-2 align-items-center bg-white bg-opacity-50 p-2 rounded-pill shadow-sm border border-light">
+            <span class="badge badge-premium bg-danger text-white">最新讀值 &ge; OOS</span>
+            <span class="badge badge-premium text-white" style="background: linear-gradient(135deg, #ff9966, #ff5e62);">OOC &le; 與最新讀值 &lt; OOS</span>
+            <span class="badge badge-premium bg-warning text-dark">Alert &lt; 最新讀值 &lt; OOC</span>
+            <span class="badge badge-premium bg-success text-white px-4">正常</span>
         </div>
     </div>
 
-    <!-- 儀表板資料區塊 (這裡將由 HTMX 每 15 分鐘定時不重整更新畫面) -->
-    <div class="card shadow-sm border-0 rounded-4" hx-get="/home" hx-trigger="every 15m">
-        <div class="card-body p-0">
-            <div class="table-responsive rounded-4" style="max-height: 75vh;">
-                <table class="table table-bordered table-hover mb-0 table-custom table-sm">
-                    <thead style="position: sticky; top: 0; z-index: 10;">
-                        <tr>
-                            <th rowspan="2">廠區</th>
-                            <th rowspan="2">項目</th>
-                            <th rowspan="2">單位</th>
-                            <th rowspan="2">法規許可值</th>
-                            <th colspan="2">SPEC(三階文件)</th>
-                            <th rowspan="2">Alert</th>
-                            <th rowspan="2">允收值</th>
-                            <th rowspan="2">最新讀值</th>
-                            <th rowspan="2">狀態</th>
-                            <th rowspan="2">備註</th>
-                        </tr>
-                        <tr>
-                            <th class="bg-light text-primary">OOS</th>
-                            <th class="bg-light text-primary">OOC</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in voc_list %}
-                        <tr class="text-center align-middle">
-                            <td class="fw-bold">{{ row.plantno }}</td>
-                            <td>
-                                <!-- 項目底色依照舊版邏輯處理 (VOC/CWMS/SCADA 區別) -->
-                                {% if 'VOC' in row.item %}
-                                    <span class="badge bg-success">{{ row.item }}</span>
-                                {% elif row.source == 2 %}
-                                    <span class="badge bg-warning text-dark">{{ row.item }}</span>
-                                {% else %}
-                                    <span class="badge bg-primary">{{ row.item }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-secondary">{{ row.unit }}</td>
-                            <td class="bg-warning bg-opacity-25 fw-bold">{{ row.law_spec }}</td>
-                            
-                            <td>{{ row.oos }}</td>
-                            <td>{{ row.ooc }}</td>
-                            <td>{{ row.alert }}</td>
-                            <td>{{ row.recv }}</td>
-                            
-                            <!-- 讀值區塊標註 -->
-                            <td class="fw-bold fs-6 {% if row.source == 1 %}bg-warning bg-opacity-10{% elif row.source == 2 %}bg-warning bg-opacity-50{% else %}bg-secondary bg-opacity-25{% endif %}">
-                                {{ row.rvalue }}
-                            </td>
-                            
-                            <!-- HTMX 動態算出燈號圓點 -->
-                            <td>
-                                <span class="light-{{ row.light_status }}" title="Status: {{ row.light_status }}"></span>
-                            </td>
-                            <td class="small text-start text-muted" style="max-width: 150px; text-overflow:ellipsis; overflow:hidden">{{ row.remark }}</td>
-                        </tr>
-                        {% endfor %}
+    <!-- 儀表板資料區塊 (Glassmorphism) -->
+    <div class="glass-card" hx-get="/home" hx-trigger="every 15m">
+        <div class="table-responsive" style="max-height: 68vh;">
+            <table class="table table-custom mb-0">
+                <thead style="position: sticky; top: 0; z-index: 10;">
+                    <tr class="text-center">
+                        <th rowspan="2" class="align-middle border-end-0">廠區</th>
+                        <th rowspan="2" class="align-middle">項目</th>
+                        <th rowspan="2" class="align-middle">單位</th>
+                        <th rowspan="2" class="align-middle border-end">法規許可值</th>
+                        <th colspan="2" class="border-end">SPEC (三階文件預警)</th>
+                        <th rowspan="2" class="align-middle">Alert</th>
+                        <th rowspan="2" class="align-middle border-end">允收值</th>
+                        <th rowspan="2" class="align-middle text-primary" style="background: rgba(255,255,255,0.9)">最新讀值</th>
+                        <th rowspan="2" class="align-middle">狀態</th>
+                        <th rowspan="2" class="align-middle">備註</th>
+                    </tr>
+                    <tr class="text-center">
+                        <th class="text-danger border-bottom-0">OOS</th>
+                        <th class="text-warning border-end border-bottom-0" style="color: #d97706 !important;">OOC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in voc_list %}
+                    <tr class="text-center align-middle" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                        <td class="fw-bold fs-5 text-secondary font-monospace">{{ row.plantno }}</td>
+                        <td>
+                            {% if 'VOC' in row.item %}
+                                <span class="badge rounded-pill bg-success px-3 py-2 shadow-sm">{{ row.item }}</span>
+                            {% elif row.source == 2 %}
+                                <span class="badge rounded-pill px-3 py-2 shadow-sm" style="background: #fd7e14;">{{ row.item }}</span>
+                            {% else %}
+                                <span class="badge rounded-pill bg-primary px-3 py-2 shadow-sm">{{ row.item }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted fw-semibold small">{{ row.unit }}</td>
+                        <td class="fw-bold text-dark border-end" style="background: rgba(255, 235, 153, 0.4);">{{ row.law_spec }}</td>
                         
-                        {% if not voc_list %}
-                        <tr>
-                            <td colspan="11" class="text-center text-muted py-5 fw-bold fs-5">無法連線到資料來源 / 或權限不足以讀取廠區資料</td>
-                        </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
+                        <td class="text-danger fw-bold">{{ row.oos }}</td>
+                        <td class="fw-bold border-end" style="color: #d97706;">{{ row.ooc }}</td>
+                        <td class="text-muted fw-semibold">{{ row.alert }}</td>
+                        <td class="text-muted border-end fw-semibold">{{ row.recv }}</td>
+                        
+                        <td class="fw-bold fs-5 {% if row.source == 1 %}text-primary{% elif row.source == 2 %}text-warning{% else %}text-secondary{% endif %}" style="background: rgba(255,255,255,0.4);">
+                            {{ row.rvalue }}
+                        </td>
+                        
+                        <td>
+                            <span class="light-indicator light-{{ row.light_status }}" title="Status: {{ row.light_status }}"></span>
+                        </td>
+                        <td class="small text-start text-muted fw-medium" style="max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ row.remark }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    
+                    {% if not voc_list %}
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-5">
+                            <div class="spinner-grow text-primary opacity-50 mb-3" role="status"></div>
+                            <h4 class="fw-bold text-dark">尚未接收到資料</h4>
+                            <p class="small">請確保您的權限設定正確且資料庫連線正常</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

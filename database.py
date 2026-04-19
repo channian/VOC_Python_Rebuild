@@ -50,11 +50,18 @@ def get_utidb_db():
 # ==========================================
 # 4. CIM Oracle 資料庫連線實體 (只提供讀取資料功能)
 # ==========================================
-cim_engine = create_engine(settings.DB_CIM_URL, echo=settings.DEBUG)
-CimSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=cim_engine)
+try:
+    cim_engine = create_engine(settings.DB_CIM_URL, echo=settings.DEBUG)
+    CimSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=cim_engine)
+except Exception as e:
+    # 避免開發環境因為缺乏 oracledb C++ 編譯器而無法啟動整個系統
+    cim_engine = None
+    CimSessionLocal = None
 
 def get_cim_db():
     """ FastAPI Dependency: 取得廠務 CIM (Oracle) 唯讀 session """
+    if CimSessionLocal is None:
+        raise Exception("Oracle 連線引擎未安裝成功。")
     db = CimSessionLocal()
     try:
         yield db

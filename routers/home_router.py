@@ -17,9 +17,7 @@ def read_home(request: Request, db: Session = Depends(get_voc_db)):
     dashboard_data = get_dashboard_data(db)
     
     return templates.TemplateResponse(
-        "home.html", 
-        {
-            "request": request, 
-            "voc_list": dashboard_data
-        }
+        request=request,
+        name="home.html", 
+        context={"voc_list": dashboard_data}
     )
