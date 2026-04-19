@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from routers import home_router
+from routers import home_router, acl_router
 
 # 初始化 FastAPI 應用程式模組
 app = FastAPI(
@@ -11,6 +11,7 @@ app = FastAPI(
 
 # 註冊儀表板路由
 app.include_router(home_router.router)
+app.include_router(acl_router.router)
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
