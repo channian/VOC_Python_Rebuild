@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from routers import home_router, acl_router
+from routers import home_router, acl_router, spec_router
 
 # 初始化 FastAPI 應用程式模組
 app = FastAPI(
@@ -9,11 +9,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 註冊儀表板路由
+# 註冊儀表板與其他路由
 app.include_router(home_router.router)
 app.include_router(acl_router.router)
+app.include_router(spec_router.router)
 
-@app.get("/", response_class=HTMLResponse)
 async def read_root():
     """
     提供基礎的根目錄路由測試。
