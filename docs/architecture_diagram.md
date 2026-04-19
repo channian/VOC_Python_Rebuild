@@ -6,7 +6,7 @@
 
 ```mermaid
 graph TD
-    User([系統使用者]) -->|HTTP/HTTPS Request\(Windows Authentication)| WebApp(網頁系統前端 ASP.NET Web Forms)
+    User([系統使用者]) -->|"HTTP/HTTPS Request\n(Windows Authentication)"| WebApp(網頁系統前端 ASP.NET Web Forms)
     
     subgraph "Application Server (IIS)"
         WebApp --> WebBackend("後端商業邏輯 (Code-behind .cs)")
