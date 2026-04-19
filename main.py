@@ -14,7 +14,7 @@ async def read_root():
     提供基礎的根目錄路由測試。
     未來此處將透過 Jinja2 渲染 HTML 模板搭配 HTMX 做首頁。
     """
-    return \"\"\"
+    return """
     <html>
         <head>
             <title>VOC 管理平台</title>
@@ -25,7 +25,7 @@ async def read_root():
             <p>FastAPI Server 運作正常！</p>
         </body>
     </html>
-    \"\"\"
+    """
 
 if __name__ == "__main__":
     import uvicorn
