@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from routers import home_router, acl_router, spec_router, control_router
+from routers import home_router, acl_router, spec_router, control_router, flow_router
 
 # 初始化 FastAPI 應用程式模組
 app = FastAPI(
@@ -14,6 +14,7 @@ app.include_router(home_router.router)
 app.include_router(acl_router.router)
 app.include_router(spec_router.router)
 app.include_router(control_router.router)
+app.include_router(flow_router.router)
 
 async def read_root():
     """
