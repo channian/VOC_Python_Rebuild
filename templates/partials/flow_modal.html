@@ -1,0 +1,59 @@
+<div class="modal-header border-0 pb-0">
+    <h4 class="modal-title fw-bold font-monospace text-primary">📝 簽核管理 (SignFlow)</h4>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body py-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle shadow-sm rounded-3 overflow-hidden">
+            <thead class="table-light text-secondary">
+                <tr>
+                    <th>申請單號</th>
+                    <th>廠區</th>
+                    <th>申請人</th>
+                    <th>申請類型</th>
+                    <th>申請時間</th>
+                    <th>狀態</th>
+                    <th class="text-center">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in todos %}
+                <tr>
+                    <td class="fw-semibold text-primary">{{ item.FormNo }}</td>
+                    <td>{{ item.Plant }}</td>
+                    <td>{{ item.Applicant }}</td>
+                    <td>{{ item.FormType }}</td>
+                    <td class="small text-muted">{{ item.ApplyDate }}</td>
+                    <td><span class="badge bg-warning text-dark">{{ item.Status }}</span></td>
+                    <td class="text-center">
+                        <!-- hx-post 到 /flow/sign API，然後成功後可以重新 reload 或替換該行 -->
+                        <button class="btn btn-sm btn-success px-3 rounded-pill" 
+                                hx-post="/flow/sign" 
+                                hx-ext="json-enc" 
+                                hx-vals='{"form_no": "{{ item.FormNo }}", "action": "approve"}'
+                                hx-on::after-request="if(event.detail.successful) alert('簽核成功！'); location.reload();">
+                            核准
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger px-3 rounded-pill"
+                                hx-post="/flow/sign" 
+                                hx-ext="json-enc" 
+                                hx-vals='{"form_no": "{{ item.FormNo }}", "action": "reject"}'
+                                hx-on::after-request="if(event.detail.successful) alert('已退回！'); location.reload();">
+                            退回
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        🎉 目前沒有待簽核的項目
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="modal-footer border-0">
+    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">關閉視窗</button>
+</div>

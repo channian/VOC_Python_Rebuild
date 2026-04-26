@@ -3,6 +3,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import logging
 from fastapi import BackgroundTasks
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,14 @@ SMS_PWD = "11307"
 
 def send_email_sync(subject: str, body: str, to_addresses: list[str]):
     """ 透過 IT mail server 發送 Email """
+    # --- 測試模式攔截邏輯 ---
+    if settings.TEST_MODE:
+        logger.info(f"TEST_MODE 攔截 Email。原標題: {subject}, 原收件: {to_addresses}")
+        subject = f"[TEST MODE 攔截] {subject}"
+        body = f"<div style='background-color:#ffe4e6; padding:10px; border-radius:5px; margin-bottom:15px; border: 1px solid #f43f5e; color: #9f1239;'><b>(測試攔截) 原本這封信會寄給：{to_addresses}</b></div>" + body
+        to_addresses = [settings.TEST_DEV_EMAIL]
+    # -----------------------
+
     try:
         msg = MIMEMultipart()
         msg['Subject'] = subject
@@ -32,6 +41,13 @@ def send_sms_sync(phone: str, message: str):
     透過 SNSCOMSERVER COM 元件發送簡訊 (從 SendSMS.cs 移植)
     若 Windows 環境未註冊該 COM 元件，將降級為 Logger 列印。
     """
+    # --- 測試模式攔截邏輯 ---
+    if settings.TEST_MODE:
+        logger.info(f"TEST_MODE 攔截 SMS。原手機: {phone}, 訊息: {message}")
+        message = f"[TEST攔截]原致:{phone}。{message}"
+        phone = settings.TEST_DEV_PHONE
+    # -----------------------
+
     logger.info(f"Attempting to send SMS to {phone}...")
     try:
         import win32com.client

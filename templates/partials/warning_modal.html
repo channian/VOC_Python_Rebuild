@@ -1,0 +1,45 @@
+<div class="modal-header border-0 pb-0">
+    <h4 class="modal-title fw-bold text-warning" style="color: #d97706 !important;">🔔 異常預警紀錄 (Warning)</h4>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body py-4">
+    <div class="alert alert-info border-0 shadow-sm rounded-3">
+        此處會顯示系統最近捕捉到的 OOS / OOC 以及水質異常自動通報紀錄。
+    </div>
+    <div class="table-responsive mt-3">
+        <table class="table table-hover align-middle shadow-sm rounded-3 overflow-hidden">
+            <thead class="table-light">
+                <tr>
+                    <th>廠區</th>
+                    <th>項目</th>
+                    <th>異常類型</th>
+                    <th>發生時間</th>
+                    <th>通報對象</th>
+                    <th>狀態</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Mock Data -->
+                <tr>
+                    <td class="fw-bold">K1</td>
+                    <td>VOC</td>
+                    <td><span class="badge bg-danger">OOS 超標</span></td>
+                    <td class="small text-muted">2026-04-26 10:15:00</td>
+                    <td>廠務部, 環安衛</td>
+                    <td><span class="badge bg-success">已發送 SMS/Email</span></td>
+                </tr>
+                <tr>
+                    <td class="fw-bold">K2</td>
+                    <td>pH</td>
+                    <td><span class="badge bg-warning text-dark">OOC 警戒</span></td>
+                    <td class="small text-muted">2026-04-26 09:30:00</td>
+                    <td>水資源課</td>
+                    <td><span class="badge bg-success">已發送 Email</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="modal-footer border-0">
+    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">關閉</button>
+</div>

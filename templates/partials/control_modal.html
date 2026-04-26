@@ -1,0 +1,32 @@
+<div class="modal-header border-0 pb-0">
+    <h4 class="modal-title fw-bold text-danger">🚧 廠區隔離設定 (Control)</h4>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body py-4">
+    <p class="text-muted">此處列出目前遭受隔離的廠區與項目，可手動解除隔離。</p>
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>廠區</th>
+                    <th>隔離項目</th>
+                    <th>隔離時間</th>
+                    <th>原因</th>
+                    <th class="text-center">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 這裡未來可填入真實資料，目前放示意或空狀態 -->
+                <tr>
+                    <td colspan="5" class="text-center text-success py-4">
+                        ✅ 目前全廠區皆無隔離狀態
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="modal-footer border-0 bg-light rounded-bottom-3 d-flex justify-content-between">
+    <button class="btn btn-outline-danger fw-semibold px-4">➕ 新增手動隔離</button>
+    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">關閉</button>
+</div>

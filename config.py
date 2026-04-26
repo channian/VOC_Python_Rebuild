@@ -22,5 +22,10 @@ class Settings(BaseSettings):
     # LDAP 認證伺服器
     LDAP_SERVER: str = "ldap://KH"
 
+    # 雙軌並行測試模式 (Test Mode / Dry Run)
+    TEST_MODE: bool = True
+    TEST_DEV_EMAIL: str = "developer@asegroup.com"
+    TEST_DEV_PHONE: str = "0912345678"
+
 # 實例化以便在專案各處匯入使用
 settings = Settings()

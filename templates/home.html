@@ -145,11 +145,14 @@
     
     <!-- 功能按鈕與燈號狀態說明 -->
     <div class="d-flex justify-content-between align-items-end mb-4 flex-wrap gap-3">
-        <div class="d-flex gap-2">
-            <button class="btn btn-glass px-4 py-2 shadow-sm">異常查詢</button>
-            <button class="btn btn-glass px-4 py-2 shadow-sm">統計報表</button>
-            <button class="btn btn-primary px-4 py-2 rounded-pill shadow" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: 600;">
-                設定與維護 (Admin)
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-glass px-3 py-2 shadow-sm" title="進入API文件" onclick="location.href='/docs'">🚀 API測試</button>
+            <button class="btn btn-glass px-3 py-2 shadow-sm" title="管理簽核流程" hx-get="/ui/flow" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">📝 簽核管理</button>
+            <button class="btn btn-glass px-3 py-2 shadow-sm" title="廠區隔離設定" hx-get="/ui/control" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">🚧 廠區隔離</button>
+            <button class="btn btn-glass px-3 py-2 shadow-sm" title="規格參數維護" hx-get="/ui/spec" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">⚙️ 規格維護</button>
+            <button class="btn btn-glass px-3 py-2 shadow-sm" title="異常預警紀錄" hx-get="/ui/warning" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">🔔 預警紀錄</button>
+            <button class="btn btn-primary px-4 py-2 rounded-pill shadow ms-2" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: 600;" hx-get="/ui/acl" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">
+                🛡️ 系統設定 (Admin)
             </button>
         </div>
         <div class="d-flex gap-2 align-items-center bg-white bg-opacity-50 p-2 rounded-pill shadow-sm border border-light">
@@ -231,6 +234,29 @@
     </div>
 </div>
 
+<!-- Dynamic HTMX Modal Container -->
+<div class="modal fade" id="dynamicModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="blur">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content shadow-lg border-0" id="dynamic-modal-content" style="background: rgba(255,255,255,0.95); backdrop-filter: blur(15px);">
+      <!-- htmx 載入的內容會放在這裡 -->
+      <div class="modal-body text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <div class="mt-2 text-muted fw-semibold">載入中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // 清空 Modal 內容，確保下次打開時顯示載入中動畫
+    document.getElementById('dynamicModal').addEventListener('hidden.bs.modal', function () {
+        document.getElementById('dynamic-modal-content').innerHTML = `
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="mt-2 text-muted fw-semibold">載入中...</div>
+            </div>`;
+    });
+</script>
 </body>
 </html>

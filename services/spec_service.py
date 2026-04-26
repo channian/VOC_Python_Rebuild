@@ -10,12 +10,17 @@ def list_specs(db: Session, plantno: str = "", item: str = "") -> List[SpecRespo
     query = db.query(VocSpec.plantno, VocSpec.item, VocSpec.LAW, VocSpec.OOS, VocSpec.OOC, VocSpec.alert, VocSource.source).outerjoin(
         VocSource, VocSpec.source == VocSource.sourceid
     )
-    if plantno:
-        query = query.filter(VocSpec.plantno == plantno)
-    if item:
-        query = query.filter(VocSpec.item == item)
+    try:
+        if plantno:
+            query = query.filter(VocSpec.plantno == plantno)
+        if item:
+            query = query.filter(VocSpec.item == item)
+            
+        result = query.all()
+    except Exception as e:
+        print(f"DB Query Error: {e}")
+        result = []
         
-    result = query.all()
     # Mock fallback, in case real db isn't connected and returns empty
     if not result:
         return [

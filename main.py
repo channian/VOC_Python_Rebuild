@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from routers import home_router, acl_router, spec_router, control_router, flow_router, warning_router
+from routers import home_router, acl_router, spec_router, control_router, flow_router, warning_router, ui_router
 
 # 初始化 FastAPI 應用程式模組
 app = FastAPI(
@@ -16,24 +16,15 @@ app.include_router(spec_router.router)
 app.include_router(control_router.router)
 app.include_router(flow_router.router)
 app.include_router(warning_router.router)
+app.include_router(ui_router.router)
 
+@app.get("/", include_in_schema=False)
 async def read_root():
     """
-    提供基礎的根目錄路由測試。
-    未來此處將透過 Jinja2 渲染 HTML 模板搭配 HTMX 做首頁。
+    重定向到首頁儀表板。
     """
-    return """
-    <html>
-        <head>
-            <title>VOC 管理平台</title>
-            <meta charset="utf-8">
-        </head>
-        <body>
-            <h1>🏭 VOC 系統 Python 版 - 建置中</h1>
-            <p>FastAPI Server 運作正常！</p>
-        </body>
-    </html>
-    """
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/home")
 
 if __name__ == "__main__":
     import uvicorn
