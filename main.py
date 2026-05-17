@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from routers import home_router, acl_router, spec_router, control_router, flow_router, warning_router, ui_router
 
 # 初始化 FastAPI 應用程式模組
@@ -8,6 +9,9 @@ app = FastAPI(
     description="現代化 Python 重構專案",
     version="1.0.0"
 )
+
+# 靜態資源（CSS / JS / 圖片）
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 註冊儀表板與其他路由
 app.include_router(home_router.router)

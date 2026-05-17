@@ -1,262 +1,310 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>廠務法規許可標準化管控平台</title>
-    <!-- Google Fonts for Premium Typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700;800&display=swap" rel="stylesheet">
-    <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <style>
-        :root {
-            --glass-bg: rgba(255, 255, 255, 0.65);
-            --glass-border: rgba(255, 255, 255, 0.5);
-            --neon-green: #00e676;
-            --neon-yellow: #ffea00;
-            --neon-orange: #ff9100;
-            --neon-red: #ff1744;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            /* Premium gradient background */
-            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
-            min-height: 100vh;
-            color: #2d3748;
-            background-attachment: fixed;
-        }
-        h3.page-title {
-            font-family: 'Outfit', sans-serif;
-            font-weight: 800;
-            color: #1a202c;
-            letter-spacing: -0.5px;
-            text-shadow: 0 4px 15px rgba(255,255,255,0.7);
-        }
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 1.5rem;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-            overflow: hidden;
-            transition: transform 0.3s ease;
-        }
-        .table-custom {
-            margin-bottom: 0;
-            background: transparent;
-        }
-        .table-custom thead th {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(5px);
-            border-bottom: none;
-            color: #4a5568;
-            font-weight: 700;
-            font-size: 0.85rem;
-            letter-spacing: 0.5px;
-            padding: 1rem 0.5rem;
-        }
-        .table-custom tbody tr {
-            transition: all 0.2s ease;
-            animation: fadeIn 0.5s ease-out forwards;
-            opacity: 0; /* for animation */
-        }
-        .table-custom tbody tr:hover {
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            transform: scale(1.01);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            position: relative;
-            z-index: 2;
-            border-radius: 8px;
-        }
-        .table-custom td {
-            border-color: rgba(0, 0, 0, 0.05);
-            vertical-align: middle;
-            padding: 0.8rem 0.5rem;
-        }
-        
-        /* Modern Glow Lights */
-        .light-indicator {
-            height: 20px;
-            width: 20px;
-            border-radius: 50%;
-            display: inline-block;
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
-        }
-        .light-G { background: var(--neon-green); box-shadow: 0 0 15px rgba(0, 230, 118, 0.6); }
-        .light-Y { background: var(--neon-yellow); box-shadow: 0 0 15px rgba(255, 234, 0, 0.6); }
-        .light-O { background: var(--neon-orange); box-shadow: 0 0 15px rgba(255, 145, 0, 0.6); }
-        .light-R { background: var(--neon-red); box-shadow: 0 0 15px rgba(255, 23, 68, 0.8); animation: pulse 1.5s infinite; }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 8px rgba(255, 23, 68, 0.4); transform: scale(1); }
-            50% { box-shadow: 0 0 25px rgba(255, 23, 68, 1); transform: scale(1.1); }
-            100% { box-shadow: 0 0 8px rgba(255, 23, 68, 0.4); transform: scale(1); }
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>廠務法規許可標準化管控平台</title>
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(15px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+  <!-- 字型 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
-        /* Stylish Badges */
-        .badge-premium {
-            padding: 0.6em 1.2em;
-            border-radius: 50rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-            border: 1px solid rgba(255,255,255,0.6);
-        }
-        .btn-glass {
-            background: rgba(255,255,255,0.5);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.8);
-            color: #2d3748;
-            font-weight: 600;
-            border-radius: 50rem;
-            transition: all 0.3s;
-        }
-        .btn-glass:hover {
-            background: rgba(255,255,255,0.95);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
-        }
-        
-        /* Custom scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.2); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.8); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #fff; }
-    </style>
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- 全局樣式 -->
+  <link rel="stylesheet" href="/static/css/voc.css">
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
 </head>
 <body>
 
-<div class="container-fluid py-4 px-lg-5">
-    <!-- 頭部標題 -->
-    <div class="text-center mb-5 mt-2">
-        <h3 class="page-title display-6 mb-1">廠務法規許可標準化管控平台</h3>
-        <p class="text-dark opacity-75 fw-semibold font-monospace tracking-wide">Premium Facility Regulatory Dashboard</p>
-    </div>
-    
-    <!-- 功能按鈕與燈號狀態說明 -->
-    <div class="d-flex justify-content-between align-items-end mb-4 flex-wrap gap-3">
-        <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-glass px-3 py-2 shadow-sm" title="進入API文件" onclick="location.href='/docs'">🚀 API測試</button>
-            <button class="btn btn-glass px-3 py-2 shadow-sm" title="管理簽核流程" hx-get="/ui/flow" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">📝 簽核管理</button>
-            <button class="btn btn-glass px-3 py-2 shadow-sm" title="廠區隔離設定" hx-get="/ui/control" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">🚧 廠區隔離</button>
-            <button class="btn btn-glass px-3 py-2 shadow-sm" title="規格參數維護" hx-get="/ui/spec" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">⚙️ 規格維護</button>
-            <button class="btn btn-glass px-3 py-2 shadow-sm" title="異常預警紀錄" hx-get="/ui/warning" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">🔔 預警紀錄</button>
-            <button class="btn btn-primary px-4 py-2 rounded-pill shadow ms-2" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: 600;" hx-get="/ui/acl" hx-target="#dynamic-modal-content" data-bs-toggle="modal" data-bs-target="#dynamicModal">
-                🛡️ 系統設定 (Admin)
-            </button>
-        </div>
-        <div class="d-flex gap-2 align-items-center bg-white bg-opacity-50 p-2 rounded-pill shadow-sm border border-light">
-            <span class="badge badge-premium bg-danger text-white">最新讀值 &ge; OOS</span>
-            <span class="badge badge-premium text-white" style="background: linear-gradient(135deg, #ff9966, #ff5e62);">OOC &le; 與最新讀值 &lt; OOS</span>
-            <span class="badge badge-premium bg-warning text-dark">Alert &lt; 最新讀值 &lt; OOC</span>
-            <span class="badge badge-premium bg-success text-white px-4">正常</span>
-        </div>
-    </div>
+<!-- ══════════════════════════════════════════════════════════
+     Header — 頂端標題列
+     Phase 3：{{ current_user.name }} / {{ current_user.dept }} 由 LDAP 提供
+  ══════════════════════════════════════════════════════════ -->
+<header class="voc-header d-flex align-items-center justify-content-between">
+  <h1 class="mb-0">廠務法規許可標準化管控平台</h1>
+  <div class="user-info d-flex align-items-center gap-3">
+    <span><!-- Phase 3: {{ current_user.dept }} {{ current_user.name }} --></span>
+    <a href="/logout" class="text-white text-decoration-none opacity-75" style="font-size:0.8rem;">登出</a>
+  </div>
+</header>
 
-    <!-- 儀表板資料區塊 (Glassmorphism) -->
-    <div class="glass-card" hx-get="/home" hx-trigger="every 15m">
-        <div class="table-responsive" style="max-height: 68vh;">
-            <table class="table table-custom mb-0">
-                <thead style="position: sticky; top: 0; z-index: 10;">
-                    <tr class="text-center">
-                        <th rowspan="2" class="align-middle border-end-0">廠區</th>
-                        <th rowspan="2" class="align-middle">項目</th>
-                        <th rowspan="2" class="align-middle">單位</th>
-                        <th rowspan="2" class="align-middle border-end">法規許可值</th>
-                        <th colspan="2" class="border-end">SPEC (三階文件預警)</th>
-                        <th rowspan="2" class="align-middle">Alert</th>
-                        <th rowspan="2" class="align-middle border-end">允收值</th>
-                        <th rowspan="2" class="align-middle text-primary" style="background: rgba(255,255,255,0.9)">最新讀值</th>
-                        <th rowspan="2" class="align-middle">狀態</th>
-                        <th rowspan="2" class="align-middle">備註</th>
-                    </tr>
-                    <tr class="text-center">
-                        <th class="text-danger border-bottom-0">OOS</th>
-                        <th class="text-warning border-end border-bottom-0" style="color: #d97706 !important;">OOC</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in voc_list %}
-                    <tr class="text-center align-middle" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
-                        <td class="fw-bold fs-5 text-secondary font-monospace">{{ row.plantno }}</td>
-                        <td>
-                            {% if 'VOC' in row.item %}
-                                <span class="badge rounded-pill bg-success px-3 py-2 shadow-sm">{{ row.item }}</span>
-                            {% elif row.source == 2 %}
-                                <span class="badge rounded-pill px-3 py-2 shadow-sm" style="background: #fd7e14;">{{ row.item }}</span>
-                            {% else %}
-                                <span class="badge rounded-pill bg-primary px-3 py-2 shadow-sm">{{ row.item }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-muted fw-semibold small">{{ row.unit }}</td>
-                        <td class="fw-bold text-dark border-end" style="background: rgba(255, 235, 153, 0.4);">{{ row.law_spec }}</td>
-                        
-                        <td class="text-danger fw-bold">{{ row.oos }}</td>
-                        <td class="fw-bold border-end" style="color: #d97706;">{{ row.ooc }}</td>
-                        <td class="text-muted fw-semibold">{{ row.alert }}</td>
-                        <td class="text-muted border-end fw-semibold">{{ row.recv }}</td>
-                        
-                        <td class="fw-bold fs-5 {% if row.source == 1 %}text-primary{% elif row.source == 2 %}text-warning{% else %}text-secondary{% endif %}" style="background: rgba(255,255,255,0.4);">
-                            {{ row.rvalue }}
-                        </td>
-                        
-                        <td>
-                            <span class="light-indicator light-{{ row.light_status }}" title="Status: {{ row.light_status }}"></span>
-                        </td>
-                        <td class="small text-start text-muted fw-medium" style="max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            {{ row.remark }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    
-                    {% if not voc_list %}
-                    <tr>
-                        <td colspan="11" class="text-center text-muted py-5">
-                            <div class="spinner-grow text-primary opacity-50 mb-3" role="status"></div>
-                            <h4 class="fw-bold text-dark">尚未接收到資料</h4>
-                            <p class="small">請確保您的權限設定正確且資料庫連線正常</p>
-                        </td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+<!-- ══════════════════════════════════════════════════════════
+     功能按鈕列 — Phase 3 依權限顯示 {% if has_perm(user, 'xxx') %}
+  ══════════════════════════════════════════════════════════ -->
+<div class="function-bar">
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/control"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      廠區隔離申請
+    </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/spec"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      規格維護
+    </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/warning"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      預警紀錄
+    </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/flow"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      簽核管理
+    </button>
+    <!-- Phase 3: {% if has_perm(user, 'admin') %} -->
+    <button class="btn-voc btn-voc-primary"
+            hx-get="/ui/acl"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      系統管理
+    </button>
+    <!-- Phase 3: {% endif %} -->
+  </div>
 
-<!-- Dynamic HTMX Modal Container -->
-<div class="modal fade" id="dynamicModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="blur">
-  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content shadow-lg border-0" id="dynamic-modal-content" style="background: rgba(255,255,255,0.95); backdrop-filter: blur(15px);">
-      <!-- htmx 載入的內容會放在這裡 -->
-      <div class="modal-body text-center py-5">
-        <div class="spinner-border text-primary" role="status"></div>
-        <div class="mt-2 text-muted fw-semibold">載入中...</div>
-      </div>
-    </div>
+  <!-- 燈號說明 -->
+  <div class="status-legend">
+    <span class="status-item">
+      <span class="status-dot red"></span>紅：讀值 &ge; OOS
+    </span>
+    <span class="status-item">
+      <span class="status-dot orange"></span>橙：OOC &le; 讀值 &lt; OOS，或管制值不同步
+    </span>
+    <span class="status-item">
+      <span class="status-dot yellow"></span>黃：Alert &lt; 讀值 &lt; OOC，或超過允收值
+    </span>
+    <span class="status-item">
+      <span class="status-dot green"></span>綠：正常
+    </span>
+    <span class="status-item">
+      <span class="status-dot gray"></span>灰：斷訊 / 保養中 / N.D
+    </span>
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════
+     資訊列 — 資料來源色碼說明 + 自動刷新倒數
+  ══════════════════════════════════════════════════════════ -->
+<div class="update-bar">
+  <div>
+    資料來源底色：
+    <span class="data-badge scada">SCADA</span>
+    <span class="data-badge cwms">CWMS</span>
+    <span class="data-badge qa">QA 手測</span>
+  </div>
+  <div>
+    下次刷新：<span class="countdown" id="countdown">--:--</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     主表格
+  ══════════════════════════════════════════════════════════ -->
+<div class="table-container">
+  {% if voc_list %}
+  <table class="dashboard-table">
+    <!-- ── 表頭（雙層） ── -->
+    <thead>
+      <tr>
+        <th rowspan="2" class="align-middle">廠區</th>
+        <th rowspan="2" class="align-middle" style="text-align:left;">項目</th>
+        <th rowspan="2" class="align-middle">單位</th>
+        <th rowspan="2" class="align-middle spec-boundary">法規許可值</th>
+        <th colspan="3">SPEC 三階文件</th>
+        <th rowspan="2" class="align-middle recv-boundary">允收值</th>
+        <th rowspan="2" class="align-middle">最新讀值</th>
+        <th rowspan="2" class="align-middle">歷史曲線</th>
+        <th rowspan="2" class="align-middle">備註</th>
+      </tr>
+      <tr>
+        <th style="color:var(--status-red)">OOS</th>
+        <th style="color:var(--status-orange)">OOC</th>
+        <th style="color:var(--status-yellow)">Alert</th>
+      </tr>
+    </thead>
+
+    <!-- ── 資料列 ── -->
+    <tbody>
+    {# 計算燈號對應 CSS class #}
+    {% set light_cls = {'R':'row-R','O':'row-O','Y':'row-Y','G':'row-G','-':'row-'} %}
+
+    {% for row in voc_list %}
+
+    {# emptycell：VOC_EmptyCell 標記此列為空白分隔，直接渲染空列 #}
+    {% if row.emptycell %}
+    <tr style="height:8px;background:var(--voc-bg-main);">
+      <td colspan="11" style="border:none;padding:0;"></td>
+    </tr>
+    {% endif %}
+
+    <tr class="{{ light_cls.get(row.light_status, 'row-G') }}">
+
+      {# ── 廠區格（rowspan，只有第一列才渲染 <td>） ── #}
+      {% if row.show_plant %}
+      <td rowspan="{{ row.plant_rowspan }}"
+          class="plant-cell{{ ' has-red' if row.plant_has_red else '' }}">
+        {{ row.plantno }}
+      </td>
+      {% endif %}
+
+      {# ── 項目 ── #}
+      <td class="item-name">{{ row.item }}</td>
+
+      {# ── 單位 ── #}
+      <td>{{ row.unit }}</td>
+
+      {# ── 法規許可值（左側粗邊界線） ── #}
+      <td class="spec-boundary">{{ row.law_spec or '' }}</td>
+
+      {# ── OOS / OOC / Alert ── #}
+      <td>{{ row.oos or '' }}</td>
+      <td>{{ row.ooc or '' }}</td>
+      <td>{{ row.alert_spec or '' }}</td>
+
+      {# ── 允收值（右側粗邊界線） ── #}
+      <td class="recv-boundary">{{ row.recv or '' }}</td>
+
+      {# ── 最新讀值欄：底色依資料來源，異常時斜紋 ── #}
+      <td class="rvalue-cell src-{{ row.source }}
+                 {%- if row.is_anomaly %} no-data{% endif %}
+                 {%- if row.light_status == 'R' %} is-R
+                 {%- elif row.light_status == 'O' %} is-O
+                 {%- elif row.light_status == 'Y' %} is-Y{% endif %}"
+          title="SCADA OOS={{ row.scada_oos }} OOC={{ row.scada_ooc }} Alert={{ row.scada_alert }}&#10;CWMS OOS={{ row.cwms_oos }} OOC={{ row.cwms_ooc }}">
+        {{ row.rvalue_raw if row.rvalue_raw else 'N.D' }}
+      </td>
+
+      {# ── 歷史曲線連結 ── #}
+      <td>
+        {% if row.url %}
+        <a class="history-link" href="{{ row.url }}" target="_blank">曲線圖</a>
+        {% else %}
+        <span style="color:var(--voc-border)">—</span>
+        {% endif %}
+      </td>
+
+      {# ── 備註（斷訊說明、資料來源等） ── #}
+      <td class="remark-cell">
+        {%- set remark_parts = row.remark.split('|') if row.remark else [] -%}
+        {%- if remark_parts and remark_parts[0] %}{{ remark_parts[0] }}{% endif -%}
+      </td>
+
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% else %}
+  <!-- 無資料提示 -->
+  <div class="empty-state">
+    <div style="font-size:2.5rem;margin-bottom:1rem;">📋</div>
+    <h4 style="color:var(--voc-text);">尚無資料</h4>
+    <p>請確認資料庫連線是否正常，或您是否具有檢視權限。</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     Modal 容器 — HTMX 動態載入各功能面板
+     使用原生 <dialog> 以避免 Bootstrap JS 相依
+  ══════════════════════════════════════════════════════════ -->
+<dialog id="voc-modal" style="
+  border:none; border-radius:12px; padding:0;
+  box-shadow:0 24px 64px rgba(0,0,0,0.18);
+  max-width:min(90vw,960px); width:100%;
+  max-height:90vh; overflow:auto;
+">
+  <div id="modal-container" style="min-height:200px;">
+    <!-- HTMX 會把對應頁面片段注入這裡 -->
+    <div style="display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--voc-text-muted);">
+      載入中…
+    </div>
+  </div>
+</dialog>
+
+<!-- ══════════════════════════════════════════════════════════
+     JavaScript
+  ══════════════════════════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // 清空 Modal 內容，確保下次打開時顯示載入中動畫
-    document.getElementById('dynamicModal').addEventListener('hidden.bs.modal', function () {
-        document.getElementById('dynamic-modal-content').innerHTML = `
-            <div class="modal-body text-center py-5">
-                <div class="spinner-border text-primary" role="status"></div>
-                <div class="mt-2 text-muted fw-semibold">載入中...</div>
-            </div>`;
-    });
+/* ── 倒數計時器 ──────────────────────────────────────────────
+   每 15 分鐘更新一次（SCADA JOB 更新週期）。
+   下次更新時間點為：每小時第 3/18/33/48 分鐘整 + 30 秒緩衝。
+   ────────────────────────────────────────────────────────── */
+(function () {
+  const MARKS = [3, 18, 33, 48];   // JOB 寫入分鐘點
+  const BUFFER = 30;                // 等 JOB 寫完再撈（秒）
+
+  function nextRefreshMs() {
+    const now  = new Date();
+    const min  = now.getMinutes();
+    const sec  = now.getSeconds();
+    const nowSec = min * 60 + sec;
+
+    for (const m of MARKS) {
+      const markSec = m * 60 + BUFFER;
+      if (nowSec < markSec) {
+        return (markSec - nowSec) * 1000;
+      }
+    }
+    // 已過當小時最後一個點 → 算到下小時第一個點
+    const nextSec = MARKS[0] * 60 + BUFFER + (60 - min) * 60 - sec;
+    return nextSec * 1000;
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function tick() {
+    const ms   = nextRefreshMs();
+    const secs = Math.ceil(ms / 1000);
+    const m    = Math.floor(secs / 60);
+    const s    = secs % 60;
+    document.getElementById('countdown').textContent = pad(m) + ':' + pad(s);
+
+    if (secs <= 1) {
+      // 時間到，刷新整頁
+      location.reload();
+    }
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+
+/* ── Modal 關閉處理 ──────────────────────────────────────────
+   按 Esc 或點擊 dialog 背景關閉；關閉後重置內容。
+   ────────────────────────────────────────────────────────── */
+(function () {
+  const modal = document.getElementById('voc-modal');
+
+  // 點擊 dialog 背景（非內容區）時關閉
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) modal.close();
+  });
+
+  // 關閉後重置到 loading 狀態，下次開啟時乾淨
+  modal.addEventListener('close', function () {
+    document.getElementById('modal-container').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--voc-text-muted);">
+        載入中…
+      </div>`;
+  });
+})();
 </script>
 </body>
 </html>

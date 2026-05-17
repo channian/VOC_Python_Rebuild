@@ -1,0 +1,313 @@
+/* ==========================================================================
+   voc.css — 廠務法規許可標準化管理平台 全局樣式
+   設計來源：templates/design/P1-Dashboard.html + colors_and_type.css
+   ========================================================================== */
+
+/* ---------- 設計 Token ---------- */
+:root {
+  /* 品牌色 */
+  --voc-primary:      #1A56A0;
+  --voc-primary-dark: #0f3d7a;
+
+  /* 頁面底色 */
+  --voc-bg-main: #f8f9fa;
+  --voc-bg-card: #ffffff;
+
+  /* 文字 */
+  --voc-text:       #1e293b;
+  --voc-text-muted: #64748b;
+
+  /* 邊框 */
+  --voc-border: #e2e8f0;
+
+  /* 狀態燈號色（整列底色 + 點點） */
+  --status-red:        #dc3545;
+  --status-red-bg:     #fff0f0;
+  --status-orange:     #fd7e14;
+  --status-orange-bg:  #fff3e0;
+  --status-yellow:     #d97706;
+  --status-yellow-bg:  #fffbeb;
+  --status-green:      #22c55e;
+  --status-green-bg:   #f0fdf4;
+  --status-gray:       #94a3b8;
+  --status-gray-bg:    #f1f5f9;
+
+  /* 資料來源底色（最新讀值欄） */
+  --data-scada: #fff8dc;  /* SCADA → 米白 Cornsilk */
+  --data-cwms:  #ffe4b5;  /* CWMS  → 淺橙 */
+  --data-qa:    #e2e8f0;  /* QA    → 淺灰 */
+
+  /* 字型 */
+  --font-sans: "Inter", -apple-system, "Segoe UI", "Microsoft JhengHei",
+               "PingFang TC", "Noto Sans TC", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+
+/* ---------- 全局基礎 ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  background:  var(--voc-bg-main);
+  color:       var(--voc-text);
+  font-size:   14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}
+
+/* ---------- Header ---------- */
+.voc-header {
+  background:  var(--voc-primary);
+  color:       white;
+  padding:     0.875rem 1.5rem;
+  box-shadow:  0 2px 4px rgba(0,0,0,0.12);
+  position:    sticky;
+  top: 0;
+  z-index: 100;
+}
+.voc-header h1 {
+  font-size:   1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+.voc-header .user-info {
+  font-size: 0.875rem;
+  opacity: 0.92;
+}
+.voc-header a { color: inherit; }
+
+/* ---------- 功能按鈕列 ---------- */
+.function-bar {
+  background:    white;
+  border-bottom: 1px solid var(--voc-border);
+  padding:       0.625rem 1.5rem;
+  display:       flex;
+  align-items:   center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-voc {
+  padding:     0.4rem 0.875rem;
+  font-size:   0.8125rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn-voc-primary {
+  background:   var(--voc-primary);
+  border-color: var(--voc-primary);
+  color: white;
+}
+.btn-voc-primary:hover {
+  background:   var(--voc-primary-dark);
+  border-color: var(--voc-primary-dark);
+}
+.btn-voc-outline {
+  background:   white;
+  border-color: var(--voc-border);
+  color: var(--voc-text);
+}
+.btn-voc-outline:hover {
+  border-color: var(--voc-primary);
+  color:        var(--voc-primary);
+}
+.btn-voc-danger {
+  background:   white;
+  border-color: var(--status-red);
+  color:        var(--status-red);
+  font-size:    0.75rem;
+  padding:      0.3rem 0.625rem;
+}
+.btn-voc-danger:hover {
+  background: var(--status-red);
+  color: white;
+}
+
+/* ---------- 燈號說明列 ---------- */
+.status-legend {
+  display:     flex;
+  align-items: center;
+  gap: 1rem;
+  font-size:   0.8rem;
+  color:       var(--voc-text-muted);
+  flex-wrap:   wrap;
+}
+.status-item {
+  display:     flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.status-dot {
+  width:         10px;
+  height:        10px;
+  border-radius: 50%;
+  flex-shrink:   0;
+  display:       inline-block;
+}
+.status-dot.red    { background: var(--status-red); }
+.status-dot.orange { background: var(--status-orange); }
+.status-dot.yellow { background: var(--status-yellow); }
+.status-dot.green  { background: var(--status-green); }
+.status-dot.gray   { background: var(--status-gray); }
+
+/* ---------- 資訊列（倒數 + 來源說明） ---------- */
+.update-bar {
+  background:    white;
+  border-bottom: 1px solid var(--voc-border);
+  padding:       0.5rem 1.5rem;
+  display:       flex;
+  align-items:   center;
+  justify-content: space-between;
+  font-size:     0.8rem;
+  color:         var(--voc-text-muted);
+  flex-wrap:     wrap;
+  gap: 0.5rem;
+}
+.data-badge {
+  display:       inline-block;
+  padding:       0.1rem 0.5rem;
+  border-radius: 3px;
+  font-size:     0.75rem;
+  margin-right:  0.375rem;
+}
+.data-badge.scada { background: var(--data-scada); color: var(--voc-text); }
+.data-badge.cwms  { background: var(--data-cwms);  color: var(--voc-text); }
+.data-badge.qa    { background: var(--data-qa);    color: var(--voc-text); }
+
+.countdown {
+  font-family: var(--font-mono);
+  color:       var(--voc-primary);
+  font-weight: 600;
+}
+
+/* ---------- 主表格容器 ---------- */
+.table-container {
+  padding:    1rem 1.5rem 2rem;
+  overflow-x: auto;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+.table-container::-webkit-scrollbar       { width: 8px; height: 8px; }
+.table-container::-webkit-scrollbar-track { background: var(--voc-bg-main); }
+.table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.table-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ---------- 儀表板表格 ---------- */
+.dashboard-table {
+  width:            100%;
+  border-collapse:  collapse;
+  background:       white;
+  box-shadow:       0 1px 3px rgba(0,0,0,0.08);
+  font-size:        0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 表頭 sticky */
+.dashboard-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.dashboard-table th {
+  padding:          0.5rem 0.625rem;
+  text-align:       center;
+  font-weight:      600;
+  font-size:        0.7rem;
+  text-transform:   uppercase;
+  letter-spacing:   0.03em;
+  color:            var(--voc-text);
+  background:       #f1f5f9;
+  border:           1px solid var(--voc-border);
+  white-space:      nowrap;
+}
+.dashboard-table td {
+  padding:    0.4rem 0.625rem;
+  border:     1px solid var(--voc-border);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size:  0.8rem;
+  vertical-align: middle;
+}
+
+/* 廠區格（rowspan，置中對齊） */
+.plant-cell {
+  font-weight:   700;
+  font-size:     0.875rem;
+  font-family:   var(--font-sans);
+  background:    var(--voc-bg-main);
+  vertical-align: middle;
+}
+.plant-cell.has-red {
+  background: var(--status-red-bg);
+  color:      var(--status-red);
+}
+
+/* 項目名稱：左對齊 */
+.item-name {
+  text-align:  left;
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+/* LAW 左側粗線（法規邊界） */
+.spec-boundary  { border-left: 3px solid var(--voc-primary) !important; }
+/* recv 右側粗線 */
+.recv-boundary  { border-right: 3px solid var(--voc-primary) !important; }
+
+/* ---------- 整列燈號底色 ---------- */
+tr.row-R { background: var(--status-red-bg); }
+tr.row-O { background: var(--status-orange-bg); }
+tr.row-Y { background: var(--status-yellow-bg); }
+tr.row-G { background: var(--status-green-bg); }
+tr.row-  { background: var(--status-gray-bg); }
+
+/* ---------- 最新讀值欄來源底色 ---------- */
+.rvalue-cell.src-1 { background: var(--data-scada); }
+.rvalue-cell.src-2 { background: var(--data-cwms); }
+.rvalue-cell.src-3 { background: var(--data-qa); }
+
+/* 讀值加粗（異常狀態） */
+.rvalue-cell.is-R { font-weight: 700; color: var(--status-red); }
+.rvalue-cell.is-O { font-weight: 700; color: var(--status-orange); }
+.rvalue-cell.is-Y { font-weight: 600; color: var(--status-yellow); }
+
+/* N.D. / 無資料 斜線紋路 */
+.no-data {
+  color:       var(--status-gray);
+  font-style:  italic;
+  background:  repeating-linear-gradient(
+    45deg, transparent, transparent 4px,
+    rgba(148,163,184,0.12) 4px, rgba(148,163,184,0.12) 8px
+  ) !important;
+}
+
+/* 歷史曲線連結 */
+.history-link {
+  color:           var(--voc-primary);
+  text-decoration: none;
+  font-family:     var(--font-sans);
+  font-size:       0.75rem;
+}
+.history-link:hover { text-decoration: underline; }
+
+/* 備註文字 */
+.remark-cell {
+  font-size:   0.75rem;
+  color:       var(--voc-text-muted);
+  font-family: var(--font-sans);
+  font-style:  italic;
+  text-align:  left;
+}
+
+/* ---------- 「無資料」整頁提示 ---------- */
+.empty-state {
+  text-align: center;
+  padding: 4rem 1rem;
+  color: var(--voc-text-muted);
+}

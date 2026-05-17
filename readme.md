@@ -1,58 +1,119 @@
-# VOC 廠務法規許可標準化管理平台 (Python 重構現代化專案)
+# VOC 廠務法規許可標準化管控平台（Python 重構）
 
-這是一個極為乾淨、依循 S.O.L.I.D. 原則，且大量配備自動化單元測試的現代化 FastAPI 核心系統。
-專門為了汰換或雙軌並行舊版 ASP.NET (.aspx.cs) 巨石架構所打造。
+ASP.NET Web Forms 舊系統的現代化重構。以 FastAPI + SQLAlchemy + Jinja2 取代原有 `dbVOC.cs` 巨石架構，雙軌並行運作直到驗證穩定。
 
-## 一、 架構與技術棧
+---
 
-*   **框架**: FastAPI (極速建立現代化 API，內建非同步排程防護與依賴注入)
-*   **資料層**: SQLAlchemy 2.0 (透過 `pyodbc` 對接 SQL Server，處理跨庫連線)
-*   **防呆驗證**: Pydantic v2 (極度嚴謹的型別檢查，確保例外不進入資料庫)
-*   **後端通訊**: Python `smtplib` (取代舊版 SmtpMessage)、`win32com.client` (串接舊版 SendSMS 簡訊機)
-*   **單元測試**: Pytest (徹底保證系統能安心推進與重構)
+## 技術棧
 
-## 二、 如何啟動
+| 層次 | 技術 |
+|---|---|
+| Web 框架 | FastAPI + Uvicorn |
+| 資料層 | SQLAlchemy 2.0 + pyodbc（連 SQL Server）|
+| 資料驗證 | Pydantic v2 |
+| 前端渲染 | Jinja2 Server-Side + HTMX（無 React/Vue）|
+| 樣式 | 自製 `voc.css` 設計系統 + Bootstrap 5 |
+| 通知 | smtplib（Email）、win32com（簡訊）|
+| 測試 | Pytest |
 
-本系統可在 Windows 環境完美運行 (兼容內網 AD/SMTP 配置)：
+---
 
-1.  啟動獨立的 Python 虛擬環境：
-    ```powershell
-    .\venv\Scripts\Activate.ps1
-    ```
-2.  啟動後端整合測試伺服器：
-    ```powershell
-    uvicorn main:app --reload --host 0.0.0.0 --port 8000
-    ```
-3.  打開測試與除錯工具：
-    瀏覽器直連 `http://127.0.0.1:8000/docs` 即可操作全套的自動生成 OpenAPI 操作指南，直接對內核發送修改指令或申請表單。
+## 快速啟動
 
-## 三、 雙軌並行測試模式 (Dry Run / Test Mode)
+```powershell
+# 1. 建立設定檔（首次）
+copy .env.example .env
+notepad .env          # 填入 VOC_DB_URL 等連線資訊
 
-為了讓新舊系統並行測試時不會產生重複派送通知 (二次派報) 的問題，本系統內建了防呆攔截機制。
+# 2. 啟動服務
+.venv\Scripts\activate
+python main.py
 
-### 如何設定與調整
-1. 請開啟專案根目錄下的 `.env` 檔案 (若無請複製 `.env.example` 建立)。
-2. 確認並修改以下變數：
-   - `TEST_MODE=True` (啟動測試攔截模式)
-   - `TEST_DEV_EMAIL=developer@asegroup.com` (您的開發測試信箱)
-   - `TEST_DEV_PHONE=0912345678` (您的開發測試手機號碼)
-3. 當 `TEST_MODE=True` 時：
-   - 所有的警報 Email 與簡訊**皆不會**發送給原本設定的廠區主管。
-   - 所有的通知會被強制重新導向到您設定的 `TEST_DEV_EMAIL` 與 `TEST_DEV_PHONE`。
-   - 信件標題將自動加上 `[TEST MODE 攔截]`，以供辨識。
-4. **正式上線時**，請務必將 `.env` 中的 `TEST_MODE` 設為 `False`，並重啟 FastAPI 伺服器，系統即會切換為正式發信模式。
+# 3. 開啟首頁（用 Edge）
+# http://localhost:8000/home
 
-## 四、 專案核心解構 (Phase 1 ~ 5 v1.0 完備版)
+# 4. OpenAPI 文件
+# http://localhost:8000/docs
+```
 
-我們把過去 230KB 極度耦合的 `dbVOC.cs`，依據現代微服務思維抽離成以下架構：
+> 詳細測試步驟 → [`docs/首頁測試流程.md`](docs/首頁測試流程.md)
 
-- `models/`：純宣告層。與舊有 SQL Server `VOC`、`SignFlow` 資料庫結構 1:1 對應。
-- `schemas/`：安全護城河。例如 `control_schema.py` 直接擋下「開始時間大於一小時」的錯誤隔離申請。
-- `services/`：業務邏輯大腦。
-  - `control_service.py`: 管理廠區隔離邏輯與紀錄。
-  - `flow_service.py`: 管理跨庫簽核流程的申請清單以及核准核退。
-  - `notify_service.py` / `warning_service.py`: 取代舊版 `.aspx.cs` 直接綁定按鈕發信的惡夢，改由 FastAPI `BackgroundTasks` 以背後非同步寄送。
-- `routers/`：介面層。把 Services 組裝起來，提供整齊劃一的 REST API。
+---
 
-> 任何功能變更前，請優先以 `.\venv\Scripts\pytest` 確保所有邊界條件不被破壞！
-3. **測試驅動開發**: 任何小任務或單一路由開發完成前，必須撰寫並且通過單元測試。
+## 雙軌並行 / 測試模式
+
+新舊系統並行期間，設定 `.env` 防止重複發送通知：
+
+```
+TEST_MODE=True
+TEST_DEV_EMAIL=你的信箱@asegroup.com
+TEST_DEV_PHONE=09xxxxxxxx
+```
+
+`TEST_MODE=True` 時，所有 Email / 簡訊導向上面的測試帳號，標題加上 `[TEST MODE 攔截]`。  
+**正式上線前**，將 `TEST_MODE=False` 並重啟服務。
+
+---
+
+## 專案結構
+
+```
+VOC_Python_Rebuild/
+├── main.py                  # FastAPI 入口、路由掛載、靜態資源
+├── database.py              # SQLAlchemy Engine / Session
+├── config.py                # .env 設定讀取
+├── models/                  # ORM 模型（對應 SQL Server 表結構）
+│   └── spec_model.py        # VOC_SPEC, VOC_SCADA_WEB, VOC_plant...
+├── schemas/                 # Pydantic 資料結構（輸入驗證 + 輸出格式）
+│   └── dashboard_schema.py  # DashboardRow（燈號計算結果）
+├── services/                # 業務邏輯
+│   ├── dashboard_service.py # 燈號計算、SCADA vs SPEC 比對
+│   ├── control_service.py   # 廠區隔離邏輯
+│   ├── flow_service.py      # 簽核流程
+│   ├── notify_service.py    # Email / 簡訊發送
+│   └── warning_service.py   # 預警紀錄
+├── routers/                 # FastAPI 路由
+│   ├── home_router.py       # GET /home（首頁儀表板）
+│   ├── control_router.py    # 廠區隔離
+│   ├── spec_router.py       # 規格維護
+│   ├── flow_router.py       # 簽核管理
+│   ├── warning_router.py    # 預警紀錄
+│   ├── acl_router.py        # 系統管理
+│   └── ui_router.py         # HTMX 片段路由
+├── templates/               # Jinja2 模板
+│   ├── home.html            # 首頁儀表板（主畫面）
+│   └── design/              # Claude Design 設計稿（靜態參考）
+├── static/
+│   └── css/voc.css          # 設計系統（燈號色、rowspan、來源底色）
+└── docs/                    # 開發文件
+    ├── 首頁測試流程.md       # Phase 1 測試步驟
+    ├── 系統架構說明.md       # 架構圖（Mermaid）
+    ├── 重構路線圖.md         # 五階段重構計畫
+    └── JOB確認清單.md        # JOB 遷移待確認事項（18 題）
+```
+
+---
+
+## 實作進度
+
+| Phase | 內容 | 狀態 |
+|---|---|---|
+| Phase 1 | 首頁儀表板（燈號計算 + 資料顯示）| ✅ 完成 |
+| Phase 2 | 廠區隔離 / 規格維護 / 預警 / 簽核 Modal | 🔲 架構建立，內容待實作 |
+| Phase 3 | LDAP 登入 + 權限控制 | 🔲 尚未實作（目前直接進入）|
+| Phase 4 | QA手測值 / 派送名單 / 異常查詢 / 報表匯出 | 🔲 尚未實作 |
+| Phase 5 | JOB 遷移（Kepware → PostgreSQL）| 🔲 待確認（見 `docs/JOB確認清單.md`）|
+
+---
+
+## 燈號規則（與舊版 Home.aspx.cs 一致）
+
+| 燈號 | 條件 |
+|---|---|
+| 🔴 紅 | 讀值 ≥ OOS |
+| 🟠 橙 | OOC ≤ 讀值 < OOS，**或** SCADA / CWMS 管制值 ≠ SPEC 設定值 |
+| 🟡 黃 | Alert < 讀值 < OOC，**或** 讀值 > 允收值 |
+| 🟢 綠 | 正常 |
+| ⬜ 灰 | 斷訊（broken=1）/ 保養中（broken=2）/ N.D / 無資料 |
+
+> 修改燈號邏輯前，先跑 `pytest` 確認不破壞邊界條件。

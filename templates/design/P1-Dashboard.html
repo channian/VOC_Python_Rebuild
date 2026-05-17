@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>廠務法規許可值標準化管控平台 - 儀表板</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="colors_and_type.css">
+    <style>
+        :root {
+            /* VOC System Colors - adapting Kepware dark theme to requested deep blue */
+            --voc-primary: #1A56A0;
+            --voc-primary-dark: #0f3d7a;
+            --voc-bg-main: #f8f9fa;
+            --voc-bg-card: #ffffff;
+            --voc-text: #1e293b;
+            --voc-text-muted: #64748b;
+            --voc-border: #e2e8f0;
+            
+            /* Status colors - critical visual language */
+            --status-red: #dc3545;
+            --status-red-bg: #fee;
+            --status-orange: #fd7e14;
+            --status-orange-bg: #fff3e0;
+            --status-yellow: #ffc107;
+            --status-yellow-bg: #fff8e1;
+            --status-green: #22c55e;
+            --status-green-bg: #f0fdf4;
+            --status-gray: #94a3b8;
+            --status-gray-bg: #f1f5f9;
+            
+            /* Data source backgrounds */
+            --data-scada: #fff8dc; /* Cornsilk */
+            --data-cwms: #ffe4b5; /* Orange tint */
+            --data-qa: #e2e8f0; /* Light gray */
+        }
+        
+        * {
+            font-feature-settings: 'tnum';
+        }
+        
+        body {
+            font-family: var(--font-sans);
+            background: var(--voc-bg-main);
+            color: var(--voc-text);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        /* Header */
+        .voc-header {
+            background: var(--voc-primary);
+            color: white;
+            padding: 0.875rem 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .voc-header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .user-info {
+            font-size: 0.875rem;
+            opacity: 0.95;
+        }
+        
+        /* Function Button Bar */
+        .function-bar {
+            background: white;
+            border-bottom: 1px solid var(--voc-border);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        
+        .btn-function {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+        
+        .btn-primary-voc {
+            background: var(--voc-primary);
+            border: 1px solid var(--voc-primary);
+            color: white;
+        }
+        
+        .btn-primary-voc:hover {
+            background: var(--voc-primary-dark);
+            border-color: var(--voc-primary-dark);
+            transform: translateY(-1px);
+        }
+        
+        .btn-outline-voc {
+            background: white;
+            border: 1px solid var(--voc-border);
+            color: var(--voc-text);
+        }
+        
+        .btn-outline-voc:hover {
+            background: var(--voc-bg-main);
+            border-color: var(--voc-primary);
+            color: var(--voc-primary);
+        }
+        
+        /* Status Legend */
+        .status-legend {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            font-size: 0.8125rem;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .status-dot.red { background: var(--status-red); }
+        .status-dot.orange { background: var(--status-orange); }
+        .status-dot.yellow { background: var(--status-yellow); }
+        .status-dot.green { background: var(--status-green); }
+        .status-dot.gray { background: var(--status-gray); }
+        
+        /* Update Info Bar */
+        .update-bar {
+            background: white;
+            border-bottom: 1px solid var(--voc-border);
+            padding: 0.625rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8125rem;
+            color: var(--voc-text-muted);
+        }
+        
+        .countdown {
+            font-family: var(--font-mono);
+            color: var(--voc-primary);
+            font-weight: 600;
+        }
+        
+        /* Main Table Container */
+        .table-container {
+            padding: 1.5rem;
+            max-height: calc(100vh - 240px);
+            overflow-y: auto;
+        }
+        
+        /* Dashboard Table */
+        .dashboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-size: 0.8125rem;
+        }
+        
+        .dashboard-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--voc-bg-main);
+        }
+        
+        .dashboard-table th {
+            padding: 0.625rem 0.75rem;
+            text-align: center;
+            font-weight: 600;
+            color: var(--voc-text);
+            border: 1px solid var(--voc-border);
+            background: var(--voc-bg-main);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            white-space: nowrap;
+        }
+        
+        .dashboard-table td {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--voc-border);
+            text-align: center;
+            font-family: var(--font-mono);
+        }
+        
+        /* Section Headers */
+        .section-header {
+            background: #f1f5f9 !important;
+            font-weight: 600;
+            color: var(--voc-text);
+            font-size: 0.6875rem;
+        }
+        
+        /* Plant Cell - merged rows */
+        .plant-cell {
+            font-weight: 700;
+            font-size: 0.875rem;
+            background: var(--voc-bg-main);
+            font-family: var(--font-sans);
+            vertical-align: middle;
+        }
+        
+        .plant-cell.has-red {
+            background: var(--status-red-bg);
+            color: var(--status-red);
+        }
+        
+        /* Item name - left aligned */
+        .item-name {
+            text-align: left;
+            font-family: var(--font-sans);
+            font-weight: 500;
+        }
+        
+        /* Specification boundary markers */
+        .spec-boundary {
+            border-left: 3px solid var(--voc-primary) !important;
+        }
+        
+        .recv-boundary {
+            border-right: 3px solid var(--voc-primary) !important;
+        }
+        
+        /* Data source backgrounds */
+        .data-scada {
+            background: var(--data-scada);
+        }
+        
+        .data-cwms {
+            background: var(--data-cwms);
+        }
+        
+        .data-qa {
+            background: var(--data-qa);
+        }
+        
+        /* Status row coloring */
+        tr.status-red {
+            background: var(--status-red-bg);
+        }
+        
+        tr.status-orange {
+            background: var(--status-orange-bg);
+        }
+        
+        tr.status-yellow {
+            background: var(--status-yellow-bg);
+        }
+        
+        tr.status-green {
+            background: var(--status-green-bg);
+        }
+        
+        tr.status-gray {
+            background: var(--status-gray-bg);
+        }
+        
+        /* Status values - bold when abnormal */
+        .value-oos {
+            font-weight: 700;
+            color: var(--status-red);
+        }
+        
+        .value-ooc {
+            font-weight: 700;
+            color: var(--status-orange);
+        }
+        
+        .value-alert {
+            font-weight: 600;
+            color: #d97706;
+        }
+        
+        /* N.D. / No Data */
+        .no-data {
+            color: var(--status-gray);
+            font-style: italic;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 4px,
+                rgba(148,163,184,0.1) 4px,
+                rgba(148,163,184,0.1) 8px
+            );
+        }
+        
+        /* History link */
+        .history-link {
+            color: var(--voc-primary);
+            text-decoration: none;
+            font-size: 0.75rem;
+            font-family: var(--font-sans);
+        }
+        
+        .history-link:hover {
+            text-decoration: underline;
+        }
+        
+        /* Remarks */
+        .remark {
+            font-size: 0.75rem;
+            color: var(--voc-text-muted);
+            font-family: var(--font-sans);
+            font-style: italic;
+        }
+        
+        /* Scrollbar styling */
+        .table-container::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        .table-container::-webkit-scrollbar-track {
+            background: var(--voc-bg-main);
+        }
+        
+        .table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 5px;
+        }
+        
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="voc-header">
+        <div class="d-flex align-items-center justify-content-between">
+            <h1>廠務法規許可值標準化管控平台</h1>
+            <div class="user-info">
+                <span class="me-3">登入者：王小明 (M12345)</span>
+                <a href="#" class="text-white text-decoration-none">登出</a>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Function Button Bar -->
+    <div class="function-bar">
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary-voc btn-function">法規許可值維護</button>
+            <button class="btn btn-outline-voc btn-function">廠區隔離申請</button>
+            <button class="btn btn-outline-voc btn-function">簽核</button>
+            <button class="btn btn-outline-voc btn-function">異常件數查詢</button>
+            <button class="btn btn-outline-voc btn-function">我的申請</button>
+        </div>
+        
+        <div class="status-legend">
+            <div class="status-item">
+                <div class="status-dot red"></div>
+                <span>嚴重超標 (OOS)</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot orange"></div>
+                <span>警告 (OOC)</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot yellow"></div>
+                <span>預警 (Alert)</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot green"></div>
+                <span>正常</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot gray"></div>
+                <span>無資料</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Update Info Bar -->
+    <div class="update-bar">
+        <div>
+            <button class="btn btn-sm btn-outline-danger" style="font-size: 0.75rem; padding: 0.25rem 0.625rem;">
+                停止派報
+            </button>
+        </div>
+        <div>
+            <span class="me-3">資料來源：</span>
+            <span style="background: var(--data-scada); padding: 0.125rem 0.5rem; border-radius: 3px; margin-right: 0.5rem;">SCADA</span>
+            <span style="background: var(--data-cwms); padding: 0.125rem 0.5rem; border-radius: 3px; margin-right: 0.5rem;">CWMS</span>
+            <span style="background: var(--data-qa); padding: 0.125rem 0.5rem; border-radius: 3px; margin-right: 1rem;">QA手測</span>
+            <span class="me-2">更新時間：2026-05-16 14:30:00</span>
+            <span>距離下次更新：<span class="countdown">14:25</span></span>
+        </div>
+    </div>
+    
+    <!-- Main Table -->
+    <div class="table-container">
+        <table class="dashboard-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 60px;">廠區</th>
+                    <th rowspan="2" style="width: 100px;">項目</th>
+                    <th rowspan="2" style="width: 60px;">單位</th>
+                    <th rowspan="2" class="spec-boundary" style="width: 80px;">法規<br>許可值<br>(LAW)</th>
+                    <th colspan="4" class="section-header">SPEC（三階文件）</th>
+                    <th rowspan="2" class="recv-boundary" style="width: 70px;">允收值<br>(recv)</th>
+                    <th colspan="3" class="section-header">SCADA 自動量測</th>
+                    <th colspan="2" class="section-header">CWMS</th>
+                    <th rowspan="2" class="data-scada" style="width: 90px;">最新讀值</th>
+                    <th rowspan="2" style="width: 70px;">狀態</th>
+                    <th rowspan="2" style="width: 90px;">歷史曲線</th>
+                    <th rowspan="2" style="width: 120px;">備註</th>
+                </tr>
+                <tr>
+                    <th style="width: 70px;">OOS</th>
+                    <th style="width: 70px;">OOC</th>
+                    <th style="width: 70px;">Alert</th>
+                    <th style="width: 70px;">recv</th>
+                    <th style="width: 65px;">OOS-HH</th>
+                    <th style="width: 65px;">OOC-H</th>
+                    <th style="width: 65px;">Alert</th>
+                    <th style="width: 65px;">OOS-HH</th>
+                    <th style="width: 65px;">OOC-H</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- K1 Plant - Has Red Status -->
+                <tr class="status-red">
+                    <td rowspan="5" class="plant-cell has-red">K1</td>
+                    <td class="item-name">COD</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">100</td>
+                    <td>80</td>
+                    <td>70</td>
+                    <td>60</td>
+                    <td>65</td>
+                    <td class="recv-boundary">75</td>
+                    <td>82</td>
+                    <td>72</td>
+                    <td>62</td>
+                    <td>85</td>
+                    <td>75</td>
+                    <td class="data-scada value-oos">85.3</td>
+                    <td><div class="status-dot red"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark">連續 3 次超標</td>
+                </tr>
+                <tr class="status-orange">
+                    <td class="item-name">SS</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">30</td>
+                    <td>25</td>
+                    <td>22</td>
+                    <td>18</td>
+                    <td>20</td>
+                    <td class="recv-boundary">23</td>
+                    <td>26</td>
+                    <td>23</td>
+                    <td>19</td>
+                    <td>27</td>
+                    <td>24</td>
+                    <td class="data-scada value-ooc">23.8</td>
+                    <td><div class="status-dot orange"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark">與 SPEC 不一致</td>
+                </tr>
+                <tr class="status-yellow">
+                    <td class="item-name">pH</td>
+                    <td>pH</td>
+                    <td class="spec-boundary">6.0-9.0</td>
+                    <td>6.5-8.5</td>
+                    <td>6.8-8.2</td>
+                    <td>7.0-8.0</td>
+                    <td>7.0-8.0</td>
+                    <td class="recv-boundary">6.5-8.5</td>
+                    <td>6.5-8.5</td>
+                    <td>6.8-8.2</td>
+                    <td>7.0-8.0</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="data-scada value-alert">8.05</td>
+                    <td><div class="status-dot yellow"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark"></td>
+                </tr>
+                <tr class="status-green">
+                    <td class="item-name">NH3-N</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">10</td>
+                    <td>8</td>
+                    <td>7</td>
+                    <td>5</td>
+                    <td>6</td>
+                    <td class="recv-boundary">7.5</td>
+                    <td>8.5</td>
+                    <td>7.5</td>
+                    <td>5.5</td>
+                    <td>9</td>
+                    <td>8</td>
+                    <td class="data-scada">4.2</td>
+                    <td><div class="status-dot green"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark"></td>
+                </tr>
+                <tr class="status-gray">
+                    <td class="item-name">TP</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">2.0</td>
+                    <td>1.5</td>
+                    <td>1.2</td>
+                    <td>1.0</td>
+                    <td>1.1</td>
+                    <td class="recv-boundary">1.3</td>
+                    <td>1.6</td>
+                    <td>1.3</td>
+                    <td>1.1</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="data-scada no-data">N.D</td>
+                    <td><div class="status-dot gray"></div></td>
+                    <td></td>
+                    <td class="remark">設備保養中</td>
+                </tr>
+                
+                <!-- K3 Plant - Normal Status -->
+                <tr class="status-green">
+                    <td rowspan="4" class="plant-cell">K3</td>
+                    <td class="item-name">COD</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">100</td>
+                    <td>80</td>
+                    <td>70</td>
+                    <td>60</td>
+                    <td>65</td>
+                    <td class="recv-boundary">75</td>
+                    <td>82</td>
+                    <td>72</td>
+                    <td>62</td>
+                    <td>85</td>
+                    <td>75</td>
+                    <td class="data-cwms">52.1</td>
+                    <td><div class="status-dot green"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark"></td>
+                </tr>
+                <tr class="status-green">
+                    <td class="item-name">SS</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">30</td>
+                    <td>25</td>
+                    <td>22</td>
+                    <td>18</td>
+                    <td>20</td>
+                    <td class="recv-boundary">23</td>
+                    <td>26</td>
+                    <td>23</td>
+                    <td>19</td>
+                    <td>27</td>
+                    <td>24</td>
+                    <td class="data-cwms">15.3</td>
+                    <td><div class="status-dot green"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark"></td>
+                </tr>
+                <tr class="status-green">
+                    <td class="item-name">pH</td>
+                    <td>pH</td>
+                    <td class="spec-boundary">6.0-9.0</td>
+                    <td>6.5-8.5</td>
+                    <td>6.8-8.2</td>
+                    <td>7.0-8.0</td>
+                    <td>7.0-8.0</td>
+                    <td class="recv-boundary">6.5-8.5</td>
+                    <td>6.5-8.5</td>
+                    <td>6.8-8.2</td>
+                    <td>7.0-8.0</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="data-scada">7.32</td>
+                    <td><div class="status-dot green"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark"></td>
+                </tr>
+                <tr class="status-green">
+                    <td class="item-name">NH3-N</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">10</td>
+                    <td>8</td>
+                    <td>7</td>
+                    <td>5</td>
+                    <td>6</td>
+                    <td class="recv-boundary">7.5</td>
+                    <td>8.5</td>
+                    <td>7.5</td>
+                    <td>5.5</td>
+                    <td>9</td>
+                    <td>8</td>
+                    <td class="data-qa">3.8</td>
+                    <td><div class="status-dot green"></div></td>
+                    <td></td>
+                    <td class="remark">QA 手測</td>
+                </tr>
+                
+                <!-- K5 Plant -->
+                <tr class="status-yellow">
+                    <td rowspan="3" class="plant-cell">K5</td>
+                    <td class="item-name">COD</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">100</td>
+                    <td>80</td>
+                    <td>70</td>
+                    <td>60</td>
+                    <td>65</td>
+                    <td class="recv-boundary">75</td>
+                    <td>82</td>
+                    <td>72</td>
+                    <td>62</td>
+                    <td>85</td>
+                    <td>75</td>
+                    <td class="data-scada value-alert">68.5</td>
+                    <td><div class="status-dot yellow"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark">趨勢上升中</td>
+                </tr>
+                <tr class="status-green">
+                    <td class="item-name">SS</td>
+                    <td>mg/L</td>
+                    <td class="spec-boundary">30</td>
+                    <td>25</td>
+                    <td>22</td>
+                    <td>18</td>
+                    <td>20</td>
+                    <td class="recv-boundary">23</td>
+                    <td>26</td>
+                    <td>23</td>
+                    <td>19</td>
+                    <td>27</td>
+                    <td>24</td>
+                    <td class="data-scada">12.1</td>
+                    <td><div class="status-dot green"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark"></td>
+                </tr>
+                <tr class="status-green">
+                    <td class="item-name">pH</td>
+                    <td>pH</td>
+                    <td class="spec-boundary">6.0-9.0</td>
+                    <td>6.5-8.5</td>
+                    <td>6.8-8.2</td>
+                    <td>7.0-8.0</td>
+                    <td>7.0-8.0</td>
+                    <td class="recv-boundary">6.5-8.5</td>
+                    <td>6.5-8.5</td>
+                    <td>6.8-8.2</td>
+                    <td>7.0-8.0</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="data-scada">7.58</td>
+                    <td><div class="status-dot green"></div></td>
+                    <td><a href="#" class="history-link">歷史曲線</a></td>
+                    <td class="remark"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script>
+        // Auto-refresh countdown
+        let seconds = 14 * 60 + 25;
+        
+        function updateCountdown() {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            document.querySelector('.countdown').textContent = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            
+            if (seconds > 0) {
+                seconds--;
+            } else {
+                // Auto-refresh page
+                location.reload();
+            }
+        }
+        
+        setInterval(updateCountdown, 1000);
+    </script>
+</body>
+</html>
