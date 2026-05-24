@@ -48,6 +48,29 @@ def get_raingutter_list(db: Session) -> List[RainGutterItem]:
             RainGutterItem(plantno="K9", item="RainGutter_2", sum24h="12.5", rvalue="0", status="G", remark="正常")
         ]
 
+def get_current_anomalies(db: Session) -> list:
+    """
+    取得目前儀表板上紅燈／橙燈的項目，供預警紀錄 Modal 顯示。
+    直接讀 VOC_SCADA_WEB.light 欄位（JOB 寫入），無需重跑燈號計算。
+    """
+    sql = text("""
+        SELECT W.plantno,
+               REPLACE(REPLACE(W.item, 'COD2', 'COD'), 'pH1', 'pH') AS item,
+               W.rvalue, W.cdatetime, W.light
+        FROM  [VOC].[dbo].[VOC_SCADA_WEB] W
+        JOIN  [VOC].[dbo].[VOC_plant]     P ON W.plantno = P.plantno AND P.isShow = 1
+        WHERE W.light IN ('R', 'O')
+          AND (W.broken IS NULL OR W.broken = 0)
+        ORDER BY W.light, P.sort, W.item
+    """)
+    try:
+        rows = db.execute(sql).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.warning(f"[get_current_anomalies] DB 查詢失敗: {e}")
+        return []
+
+
 def trigger_water_notify(req: WaterUrgentRequest, bg_tasks: BackgroundTasks):
     """
     移植 dbVOC.SendMail_水質異常通知 與 dbVOC.SendMail_改排水通知

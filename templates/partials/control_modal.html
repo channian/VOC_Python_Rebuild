@@ -1,32 +1,125 @@
-<div class="modal-header border-0 pb-0">
-    <h4 class="modal-title fw-bold text-danger">🚧 廠區隔離設定 (Control)</h4>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-</div>
-<div class="modal-body py-4">
-    <p class="text-muted">此處列出目前遭受隔離的廠區與項目，可手動解除隔離。</p>
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>廠區</th>
-                    <th>隔離項目</th>
-                    <th>隔離時間</th>
-                    <th>原因</th>
-                    <th class="text-center">操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- 這裡未來可填入真實資料，目前放示意或空狀態 -->
-                <tr>
-                    <td colspan="5" class="text-center text-success py-4">
-                        ✅ 目前全廠區皆無隔離狀態
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+<div style="padding: 1.5rem;">
+
+  <!-- 標題列 -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">廠區隔離管理</h4>
+    <button onclick="document.getElementById('voc-modal').close()"
+            style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
+  </div>
+
+  <!-- ── 目前有效隔離 ─────────────────────────────── -->
+  <h6 style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--voc-text-muted); margin-bottom:.5rem;">目前有效隔離</h6>
+
+  {% if active_isolations %}
+  <div style="overflow-x:auto; margin-bottom:1.5rem;">
+    <table class="dashboard-table" style="font-size:0.8rem;">
+      <thead>
+        <tr>
+          <th>申請單號</th>
+          <th>廠區</th>
+          <th>申請人</th>
+          <th>原因</th>
+          <th>開始時間</th>
+          <th>結束時間</th>
+          <th>備註</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for iso in active_isolations %}
+        <tr class="row-O">
+          <td style="font-family:var(--font-mono);">{{ iso.ccno }}</td>
+          <td style="font-weight:700;">{{ iso.plantno }}</td>
+          <td>{{ iso.empstr }}</td>
+          <td style="text-align:left;">{{ iso.mdfdesc }}</td>
+          <td style="font-family:var(--font-mono);">{{ iso.stime.strftime('%m/%d %H:%M') if iso.stime else '' }}</td>
+          <td style="font-family:var(--font-mono);">{{ iso.etime.strftime('%m/%d %H:%M') if iso.etime else '' }}</td>
+          <td style="text-align:left; color:var(--voc-text-muted); font-size:0.75rem;">{{ iso.remark or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center; padding:1rem 0 1.5rem; color:var(--voc-text-muted); font-size:0.85rem;">
+    ✅ 目前全廠區無有效隔離
+  </div>
+  {% endif %}
+
+  <!-- ── 新增隔離申請 ─────────────────────────────── -->
+  <h6 style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--voc-text-muted); margin-bottom:.75rem;">新增隔離申請</h6>
+
+  <form id="control-form"
+        hx-post="/control/create"
+        hx-target="#control-result"
+        hx-swap="innerHTML"
+        style="display:grid; gap:.75rem;">
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+
+      <!-- 廠區 -->
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">廠區</label>
+        <select name="plantno" required
+                style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+          <option value="">— 選擇廠區 —</option>
+          {% for p in plant_list %}
+          <option value="{{ p.plantno }}" data-plantid="{{ p.plantid }}">{{ p.plantno }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- 隔離項目 -->
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">隔離項目</label>
+        <input name="item" type="text" required placeholder="例：VOC, pH"
+               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+      </div>
+
+      <!-- 開始時間 -->
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">開始時間</label>
+        <input name="stime" type="datetime-local" required
+               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+      </div>
+
+      <!-- 結束時間 -->
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">結束時間</label>
+        <input name="etime" type="datetime-local" required
+               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+      </div>
+
     </div>
-</div>
-<div class="modal-footer border-0 bg-light rounded-bottom-3 d-flex justify-content-between">
-    <button class="btn btn-outline-danger fw-semibold px-4">➕ 新增手動隔離</button>
-    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">關閉</button>
+
+    <!-- 原因 -->
+    <div>
+      <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">隔離原因</label>
+      <input name="mdfdesc" type="text" required placeholder="例：儀器異常調校"
+             style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+    </div>
+
+    <!-- 備註 -->
+    <div>
+      <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">備註（選填）</label>
+      <input name="remark" type="text" placeholder=""
+             style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+    </div>
+
+    <!-- 注意事項 -->
+    <div style="background:var(--status-yellow-bg); border-radius:6px; padding:.6rem .75rem; font-size:0.75rem; color:var(--voc-text-muted);">
+      ⚠️ 隔離時間上限：pH 類 1 小時，其他項目 4 小時。申請需主管簽核後生效。
+    </div>
+
+    <!-- 送出按鈕 -->
+    <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+      <button type="button" onclick="document.getElementById('voc-modal').close()"
+              class="btn-voc btn-voc-outline">取消</button>
+      <button type="submit" class="btn-voc btn-voc-primary">送出申請</button>
+    </div>
+
+  </form>
+
+  <!-- 送出結果回饋區 -->
+  <div id="control-result" style="margin-top:.75rem;"></div>
+
 </div>

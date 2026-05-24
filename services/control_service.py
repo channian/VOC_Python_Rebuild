@@ -88,6 +88,48 @@ def get_my_applies(db: Session, cempno: str, sdate: str = "", edate: str = "", p
                             fstatus="待簽核", ctime=datetime.now())
         ]
 
+def get_active_isolations(db: Session) -> list:
+    """
+    取得目前時間點仍在有效期內的隔離記錄（fstatusid=3 已核准）。
+    供 control_modal 首頁區塊顯示「目前有效隔離」。
+    """
+    sql = text("""
+        SELECT M.ccid, M.ccno, P.plantno,
+               M.cempno + '-' + M.cempname AS empstr,
+               M.mdfdesc, M.stime, M.etime, M.remark
+        FROM  [VOC].[dbo].[VOC_closectl] M
+        JOIN  [VOC].[dbo].[VOC_plant]    P ON M.plantid = P.plantid
+        WHERE M.fstatusid = 3
+          AND M.stime <= GETDATE()
+          AND M.etime >= GETDATE()
+        ORDER BY M.stime
+    """)
+    try:
+        rows = db.execute(sql).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[get_active_isolations] DB 查詢失敗: {e}")
+        return []
+
+
+def get_plant_list(db: Session) -> list:
+    """
+    取得所有顯示中廠區清單，供隔離申請表單的下拉選單使用。
+    """
+    sql = text("""
+        SELECT plantid, plantno
+        FROM  [VOC].[dbo].[VOC_plant]
+        WHERE isShow = 1
+        ORDER BY sort
+    """)
+    try:
+        rows = db.execute(sql).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[get_plant_list] DB 查詢失敗: {e}")
+        return []
+
+
 def get_control_tags(db: Session, ccid: int) -> List[ControlTagResponse]:
     """ 移植舊版 dbVOC.List隔離廠區項目() """
     sql_base = """

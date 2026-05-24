@@ -1,29 +1,62 @@
-<div class="modal-header border-0 pb-0">
-    <h4 class="modal-title fw-bold" style="color: #667eea;">🛡️ 系統設定與權限管理 (Admin)</h4>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-</div>
-<div class="modal-body py-4">
-    <div class="row g-4">
-        <div class="col-md-6">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-body">
-                    <h5 class="card-title fw-bold">👥 帳號權限管理</h5>
-                    <p class="card-text text-muted small">設定各使用者針對不同廠區與模組的存取權限 (ACL)。</p>
-                    <button class="btn btn-outline-primary btn-sm rounded-pill px-3">進入管理</button>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-body">
-                    <h5 class="card-title fw-bold">🌐 系統環境參數</h5>
-                    <p class="card-text text-muted small">LDAP 伺服器、SMTP 伺服器與 SMS 簡訊機連接狀態維護。</p>
-                    <button class="btn btn-outline-primary btn-sm rounded-pill px-3">環境設定</button>
-                </div>
-            </div>
-        </div>
+<div style="padding: 1.5rem;">
+
+  <!-- 標題列 -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">系統管理</h4>
+    <button onclick="document.getElementById('voc-modal').close()"
+            style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
+  </div>
+
+  <div style="background:var(--status-yellow-bg); border-radius:6px; padding:.6rem .75rem; font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:1.25rem;">
+    ⚠️ Phase 3 完成 LDAP 整合後，此頁面將顯示完整的帳號權限管理功能。
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+
+    <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
+      <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">帳號權限管理</h5>
+      <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
+        設定各使用者針對廠區與功能模組的存取權限（12 個角色）。
+      </p>
+      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" disabled>
+        Phase 3 後開放
+      </button>
     </div>
-</div>
-<div class="modal-footer border-0">
-    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">關閉</button>
+
+    <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
+      <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">系統環境參數</h5>
+      <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
+        LDAP 伺服器、SMTP 伺服器、簡訊機連線狀態。
+      </p>
+      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" disabled>
+        Phase 3 後開放
+      </button>
+    </div>
+
+    <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
+      <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">廠區 / 項目管理</h5>
+      <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
+        新增廠區或監控項目（TAG），設定後儀表板自動新增列。
+      </p>
+      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" disabled>
+        Phase 4 後開放
+      </button>
+    </div>
+
+    <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
+      <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">OpenAPI 文件</h5>
+      <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
+        FastAPI 自動產生的 API 測試介面，供開發與除錯使用。
+      </p>
+      <a href="/docs" target="_blank" class="btn-voc btn-voc-primary" style="font-size:0.75rem; text-decoration:none; display:inline-block;">
+        開啟 /docs
+      </a>
+    </div>
+
+  </div>
+
+  <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+    <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
+  </div>
+
 </div>
