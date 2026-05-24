@@ -23,7 +23,7 @@
 
 <!-- ══════════════════════════════════════════════════════════
      Header — 頂端標題列
-     Phase 3：{{ current_user.name }} / {{ current_user.dept }} 由 LDAP 提供
+     Phase 3：current_user.name / current_user.dept 由 LDAP 提供
   ══════════════════════════════════════════════════════════ -->
 <header class="voc-header d-flex align-items-center justify-content-between">
   <h1 class="mb-0">廠務法規許可標準化管控平台</h1>
@@ -34,7 +34,7 @@
 </header>
 
 <!-- ══════════════════════════════════════════════════════════
-     功能按鈕列 — Phase 3 依權限顯示 {% if has_perm(user, 'xxx') %}
+     功能按鈕列 — Phase 3 依權限顯示（屆時加 if has_perm 判斷）
   ══════════════════════════════════════════════════════════ -->
 <div class="function-bar">
   <div class="d-flex flex-wrap gap-2">
@@ -66,7 +66,7 @@
             onclick="document.getElementById('voc-modal').showModal()">
       簽核管理
     </button>
-    <!-- Phase 3: {% if has_perm(user, 'admin') %} -->
+    {# Phase 3: if has_perm(user, 'admin') #}
     <button class="btn-voc btn-voc-primary"
             hx-get="/ui/acl"
             hx-target="#modal-container"
@@ -74,7 +74,7 @@
             onclick="document.getElementById('voc-modal').showModal()">
       系統管理
     </button>
-    <!-- Phase 3: {% endif %} -->
+    {# Phase 3: endif #}
   </div>
 
   <!-- 燈號說明 -->
