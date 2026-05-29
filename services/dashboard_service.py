@@ -235,7 +235,7 @@ def _annotate_plant_groups(rows: List[DashboardRow]) -> List[DashboardRow]:
     """
     from collections import defaultdict
 
-    # 第一遍：統計每個廠區的列數 + 是否有紅燈
+    # 第一遍：統計每個廠區的資料列數 + 是否有紅燈
     plant_count: dict[str, int]  = defaultdict(int)
     plant_red:   dict[str, bool] = defaultdict(bool)
     for r in rows:
@@ -243,11 +243,21 @@ def _annotate_plant_groups(rows: List[DashboardRow]) -> List[DashboardRow]:
         if r.light_status == "R":
             plant_red[r.plantno] = True
 
+    # 統計廠區「內部」的 emptycell 分隔行數（非第一列才算）。
+    # 這些分隔行會在 template 插入額外 <tr>，必須計入 rowspan，
+    # 否則廠區 <td rowspan> 提早用完，後續欄位往左位移。
+    plant_inner_empty: dict[str, int] = defaultdict(int)
+    first_seen: set[str] = set()
+    for r in rows:
+        if r.plantno in first_seen and r.emptycell:
+            plant_inner_empty[r.plantno] += 1
+        first_seen.add(r.plantno)
+
     # 第二遍：標注每列
     seen: set[str] = set()
     for r in rows:
         if r.plantno not in seen:
-            r.plant_rowspan = plant_count[r.plantno]
+            r.plant_rowspan = plant_count[r.plantno] + plant_inner_empty[r.plantno]
             r.show_plant    = True
             seen.add(r.plantno)
         else:

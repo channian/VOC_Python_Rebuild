@@ -148,7 +148,12 @@
     {# emptycell：VOC_EmptyCell 標記此列為空白分隔，直接渲染空列 #}
     {% if row.emptycell %}
     <tr style="height:8px;background:var(--voc-bg-main);">
+      {# 廠區內部的分隔行：廠區欄已被 rowspan 佔用，只能 span 其餘 10 欄 #}
+      {% if row.show_plant %}
       <td colspan="11" style="border:none;padding:0;"></td>
+      {% else %}
+      <td colspan="10" style="border:none;padding:0;"></td>
+      {% endif %}
     </tr>
     {% endif %}
 
