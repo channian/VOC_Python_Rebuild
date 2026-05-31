@@ -130,6 +130,23 @@ def get_plant_list(db: Session) -> list:
         return []
 
 
+def get_plant_items(db: Session, plantno: str) -> list:
+    """取得指定廠區的所有監控項目，供隔離申請 checkbox 使用"""
+    sql = text("""
+        SELECT S.item, S.source AS sourceid, I.unit
+        FROM  [VOC].[dbo].[VOC_SPEC] S
+        JOIN  [VOC].[dbo].[VOC_item] I ON S.item = I.item
+        WHERE S.plantno = :plantno
+        ORDER BY S.seqno
+    """)
+    try:
+        rows = db.execute(sql, {"plantno": plantno}).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[get_plant_items] DB 查詢失敗: {e}")
+        return []
+
+
 def get_control_tags(db: Session, ccid: int) -> List[ControlTagResponse]:
     """ 移植舊版 dbVOC.List隔離廠區項目() """
     sql_base = """

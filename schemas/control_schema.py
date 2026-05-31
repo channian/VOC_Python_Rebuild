@@ -22,7 +22,7 @@ class ControlCreate(BaseModel):
         if self.stime < now: raise ValueError("開始時間不可小於系統時間!")
         if self.stime > self.etime: raise ValueError("開始時間不可大於結束時間!")
         ts = self.etime - self.stime
-        if ts.total_seconds() > 3600: raise ValueError("隔離廠區項目時間不得超過1小時!")
+        if ts.total_seconds() > 14400: raise ValueError("隔離廠區項目時間不得超過4小時!")
         if not self.items: raise ValueError("尚未選擇要隔離的廠區項目!")
         return self
 

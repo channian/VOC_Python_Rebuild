@@ -48,32 +48,29 @@
   <!-- ── 新增隔離申請 ─────────────────────────────── -->
   <h6 style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--voc-text-muted); margin-bottom:.75rem;">新增隔離申請</h6>
 
-  <form id="control-form"
-        hx-post="/control/create"
-        hx-target="#control-result"
-        hx-swap="innerHTML"
-        style="display:grid; gap:.75rem;">
+  <form id="control-form" style="display:grid; gap:.75rem;">
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
 
       <!-- 廠區 -->
       <div>
         <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">廠區</label>
-        <select name="plantno" required
-                style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+        <select name="plantno" id="plantno-select" required
+                hx-get="/ui/control/items"
+                hx-target="#item-checkboxes"
+                hx-trigger="change"
+                onchange="document.getElementById('plantid-hidden').value = this.options[this.selectedIndex].dataset.plantid || ''"
+                style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text); background:white;">
           <option value="">— 選擇廠區 —</option>
           {% for p in plant_list %}
           <option value="{{ p.plantno }}" data-plantid="{{ p.plantid }}">{{ p.plantno }}</option>
           {% endfor %}
         </select>
+        <input type="hidden" id="plantid-hidden" name="plantid">
       </div>
 
-      <!-- 隔離項目 -->
-      <div>
-        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">隔離項目</label>
-        <input name="item" type="text" required placeholder="例：VOC, pH"
-               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
-      </div>
+      <!-- 空格：讓時間欄位在下方對齊 -->
+      <div></div>
 
       <!-- 開始時間 -->
       <div>
@@ -91,6 +88,14 @@
 
     </div>
 
+    <!-- 隔離項目（HTMX 動態載入） -->
+    <div>
+      <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">隔離項目</label>
+      <div id="item-checkboxes" style="min-height:2rem;">
+        <p style="font-size:0.8rem; color:var(--voc-text-muted); margin:.25rem 0;">請先選擇廠區</p>
+      </div>
+    </div>
+
     <!-- 原因 -->
     <div>
       <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">隔離原因</label>
@@ -101,7 +106,7 @@
     <!-- 備註 -->
     <div>
       <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">備註（選填）</label>
-      <input name="remark" type="text" placeholder=""
+      <input name="remark" type="text"
              style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
     </div>
 
@@ -114,7 +119,8 @@
     <div style="display:flex; gap:.5rem; justify-content:flex-end;">
       <button type="button" onclick="document.getElementById('voc-modal').close()"
               class="btn-voc btn-voc-outline">取消</button>
-      <button type="submit" class="btn-voc btn-voc-primary">送出申請</button>
+      <button type="button" onclick="submitIsolationForm()"
+              class="btn-voc btn-voc-primary">送出申請</button>
     </div>
 
   </form>
@@ -123,3 +129,69 @@
   <div id="control-result" style="margin-top:.75rem;"></div>
 
 </div>
+
+<script>
+function submitIsolationForm() {
+  const plantno  = document.getElementById('plantno-select').value;
+  const plantid  = parseInt(document.getElementById('plantid-hidden').value);
+  const form     = document.getElementById('control-form');
+  const resultEl = document.getElementById('control-result');
+
+  if (!plantid) {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">請選擇廠區</div>';
+    return;
+  }
+
+  const checked = Array.from(document.querySelectorAll('.item-checkbox:checked'));
+  if (!checked.length) {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">請至少勾選一個隔離項目</div>';
+    return;
+  }
+
+  const stime   = form.querySelector('[name="stime"]').value;
+  const etime   = form.querySelector('[name="etime"]').value;
+  const mdfdesc = form.querySelector('[name="mdfdesc"]').value.trim();
+
+  if (!stime || !etime || !mdfdesc) {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">請填寫所有必填欄位</div>';
+    return;
+  }
+
+  const payload = {
+    plantid: plantid,
+    mdfdesc: mdfdesc,
+    stime:   stime,
+    etime:   etime,
+    remark:  form.querySelector('[name="remark"]').value,
+    items:   checked.map(cb => ({
+      plantno:  plantno,
+      item:     cb.dataset.item,
+      sourceid: cb.dataset.sourceid
+    }))
+  };
+
+  fetch('/control/create', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload)
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      resultEl.innerHTML = '<div style="color:var(--status-green);font-size:0.85rem;padding:.4rem 0;">✅ ' + data.message + '</div>';
+      // 1.5 秒後重新載入 modal，更新有效隔離清單
+      setTimeout(() => {
+        htmx.ajax('GET', '/ui/control', { target: '#modal-container', swap: 'innerHTML' });
+      }, 1500);
+    } else {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => e.msg).join('；')
+        : (data.detail || '送出失敗');
+      resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">❌ ' + msg + '</div>';
+    }
+  })
+  .catch(() => {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">❌ 網路錯誤，請重試</div>';
+  });
+}
+</script>

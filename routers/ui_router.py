@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from database import get_voc_db
 from services.flow_service import get_todo_applies
 from services.spec_service import list_specs
-from services.control_service import get_active_isolations, get_plant_list
+from services.control_service import get_active_isolations, get_plant_list, get_plant_items
 from services.warning_service import get_current_anomalies
 
 router = APIRouter(prefix="/ui", tags=["Frontend UI HTML Responses"])
@@ -32,6 +32,17 @@ def render_control_modal(request: Request, db: Session = Depends(get_voc_db)):
             "active_isolations": get_active_isolations(db),
             "plant_list":        get_plant_list(db),
         }
+    )
+
+
+@router.get("/control/items")
+def render_control_items(request: Request, plantno: str = "", db: Session = Depends(get_voc_db)):
+    """HTMX：廠區選擇後動態載入可隔離項目 checkbox"""
+    items = get_plant_items(db, plantno) if plantno else []
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/control_items.html",
+        context={"items": items, "plantno": plantno}
     )
 
 
