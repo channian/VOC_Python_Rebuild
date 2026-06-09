@@ -7,28 +7,42 @@ from schemas.spec_schema import SpecCreate, SpecUpdate, SpecResponse, SpecBase
 
 def list_specs(db: Session, plantno: str = "", item: str = "") -> List[SpecResponse]:
     """ 查詢舊版 dbVOC.List規格值資料 """
-    query = db.query(VocSpec.plantno, VocSpec.item, VocSpec.LAW, VocSpec.OOS, VocSpec.OOC, VocSpec.alert, VocSource.source).outerjoin(
-        VocSource, VocSpec.source == VocSource.sourceid
-    )
+    query = db.query(
+        VocSpec.plantno, VocSpec.item, VocSpec.LAW, VocSpec.OOS, VocSpec.OOC, VocSpec.alert,
+        VocSpec.source.label('sourceid'),
+        VocSource.source
+    ).outerjoin(VocSource, VocSpec.source == VocSource.sourceid)
     try:
         if plantno:
             query = query.filter(VocSpec.plantno == plantno)
         if item:
             query = query.filter(VocSpec.item == item)
-            
         result = query.all()
     except Exception as e:
         print(f"DB Query Error: {e}")
         result = []
-        
-    # Mock fallback, in case real db isn't connected and returns empty
+
     if not result:
         return [
-            SpecResponse(plantno="K1", item="VOC", LAW="100", OOS="80", OOC="60", alert="50", source="SCADA (SQL)", tagname="K1_VOC"),
-            SpecResponse(plantno="K2", item="pH", LAW="6-9", OOS="6.5-8.5", OOC="7-8", alert="7.2-7.8", source="CIM (Oracle)", tagname="K2_pH"),
+            SpecResponse(plantno="K1", item="VOC", LAW="100", OOS="80", OOC="60", alert="50", source="SCADA (SQL)", sourceid=1, tagname="K1_VOC"),
+            SpecResponse(plantno="K2", item="pH", LAW="6-9", OOS="6.5-8.5", OOC="7-8", alert="7.2-7.8", source="CIM (Oracle)", sourceid=2, tagname="K2_pH"),
         ]
-        
+
     return [SpecResponse.model_validate(row) for row in result]
+
+
+def get_sources(db: Session) -> list:
+    """取得資料來源清單，供規格維護表單下拉選單使用"""
+    try:
+        rows = db.query(VocSource.sourceid, VocSource.source).all()
+        return [{"sourceid": r.sourceid, "source": r.source} for r in rows]
+    except Exception as e:
+        print(f"[get_sources] DB 查詢失敗: {e}")
+        return [
+            {"sourceid": 1, "source": "SCADA (SQL)"},
+            {"sourceid": 2, "source": "CWMS"},
+            {"sourceid": 3, "source": "QA 手測"},
+        ]
 
 def create_spec(db: Session, current_user_empno: str, data: SpecCreate) -> bool:
     try:

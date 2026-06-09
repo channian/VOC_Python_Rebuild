@@ -21,22 +21,29 @@
           <th>操作</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="spec-tbody">
         {% for item in specs %}
-        <tr>
+        <tr data-plantno="{{ item.plantno }}"
+            data-item="{{ item.item }}"
+            data-sourceid="{{ item.sourceid or '' }}"
+            data-law="{{ item.LAW or '' }}"
+            data-oos="{{ item.OOS or '' }}"
+            data-ooc="{{ item.OOC or '' }}"
+            data-alert="{{ item.alert or '' }}">
           <td style="font-weight:700;">{{ item.plantno }}</td>
           <td class="item-name">{{ item.item }}</td>
-          <td>
+          <td class="spec-cell-source">
             <span style="font-size:0.7rem; padding:.15rem .4rem; border-radius:3px; background:var(--data-scada); color:var(--voc-text);">
               {{ item.source or '—' }}
             </span>
           </td>
-          <td class="spec-boundary">{{ item.LAW or '—' }}</td>
-          <td style="color:var(--status-red); font-weight:600;">{{ item.OOS or '—' }}</td>
-          <td style="color:var(--status-orange); font-weight:600;">{{ item.OOC or '—' }}</td>
-          <td style="color:var(--status-yellow); font-weight:600;">{{ item.alert or '—' }}</td>
-          <td>
-            <button class="btn-voc btn-voc-outline" style="font-size:0.7rem; padding:.2rem .5rem;">編輯</button>
+          <td class="spec-boundary spec-cell-law">{{ item.LAW or '—' }}</td>
+          <td class="spec-cell-oos" style="color:var(--status-red); font-weight:600;">{{ item.OOS or '—' }}</td>
+          <td class="spec-cell-ooc" style="color:var(--status-orange); font-weight:600;">{{ item.OOC or '—' }}</td>
+          <td class="spec-cell-alert" style="color:var(--status-yellow); font-weight:600;">{{ item.alert or '—' }}</td>
+          <td class="spec-cell-action">
+            <button class="btn-voc btn-voc-outline" style="font-size:0.7rem; padding:.2rem .5rem;"
+                    onclick="specEdit(this.closest('tr'))">編輯</button>
           </td>
         </tr>
         {% else %}
@@ -48,8 +55,93 @@
     </table>
   </div>
 
-  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+  <div id="spec-result" style="margin-top:.5rem; min-height:1.5rem;"></div>
+
+  <div style="display:flex; justify-content:flex-end; margin-top:.5rem;">
     <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
   </div>
 
 </div>
+
+<script>
+const SPEC_SOURCES = {{ sources | tojson }};
+const INPUT_S = 'width:75px;padding:.2rem .35rem;border:1px solid var(--voc-border);border-radius:4px;font-size:0.78rem;box-sizing:border-box;';
+
+function specEdit(tr) {
+  const d = tr.dataset;
+
+  // Source select
+  let opts = SPEC_SOURCES.map(s =>
+    `<option value="${s.sourceid}"${s.sourceid == d.sourceid ? ' selected' : ''}>${s.source}</option>`
+  ).join('');
+  tr.querySelector('.spec-cell-source').innerHTML =
+    `<select style="padding:.2rem .3rem;border:1px solid var(--voc-border);border-radius:4px;font-size:0.78rem;">${opts}</select>`;
+
+  // Value inputs
+  tr.querySelector('.spec-cell-law').innerHTML   = `<input type="text" value="${d.law}"   style="${INPUT_S}">`;
+  tr.querySelector('.spec-cell-oos').innerHTML   = `<input type="text" value="${d.oos}"   style="${INPUT_S}">`;
+  tr.querySelector('.spec-cell-ooc').innerHTML   = `<input type="text" value="${d.ooc}"   style="${INPUT_S}">`;
+  tr.querySelector('.spec-cell-alert').innerHTML = `<input type="text" value="${d.alert}" style="${INPUT_S}">`;
+
+  tr.querySelector('.spec-cell-action').innerHTML =
+    `<button class="btn-voc btn-voc-primary" style="font-size:0.7rem;padding:.2rem .45rem;margin-right:.2rem;"
+             onclick="specSave(this.closest('tr'))">儲存</button>` +
+    `<button class="btn-voc btn-voc-outline"  style="font-size:0.7rem;padding:.2rem .45rem;"
+             onclick="specCancel(this.closest('tr'))">取消</button>`;
+}
+
+function specCancel(tr) {
+  const d = tr.dataset;
+  const srcObj = SPEC_SOURCES.find(s => s.sourceid == d.sourceid);
+
+  tr.querySelector('.spec-cell-source').innerHTML =
+    `<span style="font-size:0.7rem;padding:.15rem .4rem;border-radius:3px;background:var(--data-scada);color:var(--voc-text);">${srcObj ? srcObj.source : '—'}</span>`;
+
+  tr.querySelector('.spec-cell-law').textContent   = d.law   || '—';
+  tr.querySelector('.spec-cell-oos').textContent   = d.oos   || '—';
+  tr.querySelector('.spec-cell-ooc').textContent   = d.ooc   || '—';
+  tr.querySelector('.spec-cell-alert').textContent = d.alert || '—';
+
+  tr.querySelector('.spec-cell-action').innerHTML =
+    `<button class="btn-voc btn-voc-outline" style="font-size:0.7rem;padding:.2rem .5rem;"
+             onclick="specEdit(this.closest('tr'))">編輯</button>`;
+}
+
+function specSave(tr) {
+  const d = tr.dataset;
+  const resultEl = document.getElementById('spec-result');
+
+  const sourceId = parseInt(tr.querySelector('.spec-cell-source select').value);
+  const law   = tr.querySelector('.spec-cell-law input').value.trim();
+  const oos   = tr.querySelector('.spec-cell-oos input').value.trim();
+  const ooc   = tr.querySelector('.spec-cell-ooc input').value.trim();
+  const alert = tr.querySelector('.spec-cell-alert input').value.trim();
+
+  fetch('/spec/update', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ plantno: d.plantno, item: d.item, LAW: law, OOS: oos, OOC: ooc, alert: alert, source_id: sourceId, remark: '' })
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      tr.dataset.sourceid = sourceId;
+      tr.dataset.law   = law;
+      tr.dataset.oos   = oos;
+      tr.dataset.ooc   = ooc;
+      tr.dataset.alert = alert;
+      specCancel(tr);
+      resultEl.innerHTML = `<div style="color:var(--status-green);font-size:0.8rem;">✅ ${d.plantno} / ${d.item} 規格已更新</div>`;
+      setTimeout(() => { resultEl.innerHTML = ''; }, 3000);
+    } else {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => e.msg).join('；')
+        : (data.detail || '儲存失敗');
+      resultEl.innerHTML = `<div style="color:var(--status-red);font-size:0.8rem;">❌ ${msg}</div>`;
+    }
+  })
+  .catch(() => {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">❌ 網路錯誤，請重試</div>';
+  });
+}
+</script>

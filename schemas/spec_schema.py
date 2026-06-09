@@ -73,8 +73,9 @@ class SpecResponse(BaseModel):
     OOS: str
     OOC: str
     alert: str
-    source: str # 對應來源名稱
+    source: str    # 來源顯示名稱
+    sourceid: Optional[int] = None
     tagname: Optional[str] = None
-    
+
     class Config:
         from_attributes = True

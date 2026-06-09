@@ -3,7 +3,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from database import get_voc_db
 from services.flow_service import get_todo_applies
-from services.spec_service import list_specs
+from services.spec_service import list_specs, get_sources
 from services.control_service import get_active_isolations, get_plant_list, get_plant_items
 from services.warning_service import get_current_anomalies
 
@@ -52,7 +52,7 @@ def render_spec_modal(request: Request, db: Session = Depends(get_voc_db)):
     return templates.TemplateResponse(
         request=request,
         name="partials/spec_modal.html",
-        context={"specs": list_specs(db)}
+        context={"specs": list_specs(db), "sources": get_sources(db)}
     )
 
 
