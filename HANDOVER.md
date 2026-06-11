@@ -11,7 +11,8 @@
 ASP.NET Web Forms 舊系統的 Python FastAPI 重構版。
 
 功能：監控工廠各廠區的廢水／空污排放數值（pH、VOC、COD、SS 等），
-依三層門檻（OOS > OOC > Alert）自動計算燈號，超標時發送 Email / SMS 通知。
+依三層門檻（OOS > OOC > Alert）自動計算燈號，超標時發送 Email 通知。
+（通知管道決策 2026-06-11：SMS 已停用不移植、PushPlus 暫不實作，只留 Email）
 
 舊系統：`dbVOC.cs`（4,931 行單一 C# class，全部業務邏輯在裡面）
 新系統：本 repo，FastAPI + SQLAlchemy + Jinja2 + HTMX
@@ -33,15 +34,16 @@ ASP.NET Web Forms 舊系統的 Python FastAPI 重構版。
 | 倒數計時器（每 15 分鐘刷新）| ✅ |
 | voc.css 設計系統 | ✅ |
 
-### ✅ Phase 2 — Modal 功能面板（基礎完成，部分待延伸）
+### ✅ Phase 2 — Modal 功能面板
 
 | Modal | 狀態 | 說明 |
 |---|---|---|
-| 廠區隔離 | ✅ 基礎 | 顯示有效隔離清單 + 申請表單（廠區下拉）|
-| 規格維護 | ✅ 唯讀 | 顯示 SPEC 表，編輯按鈕 UI 存在但邏輯未接 |
+| 廠區隔離 | ✅ 完成 | 有效隔離清單 + 申請表單（廠區下拉 → HTMX 動態載入項目 checkbox → JSON POST `/control/create`）|
+| 規格維護 | ✅ 完成 | inline 編輯：每列「編輯」→ 欄位轉 input/select →「儲存」POST `/spec/update` |
+| QA 手測值 | ✅ 完成 | Phase 4 提前完成。列出 source=QA 項目，輸入數值或 N.D 寫入 `VOC_SCADA_WEB.rvalue` |
 | 預警紀錄 | ✅ 基礎 | 顯示目前紅/橙燈項目 |
 | 簽核管理 | ✅ 基礎 | 顯示待簽核清單，核准/退回按鈕已有 HTMX |
-| 系統管理 | 🔲 卡片 | Phase 3 LDAP 完成後才有意義 |
+| 系統管理 | 🔲 卡片 | AD/LDAP 已決定延後到最後處理 |
 
 ### 🔲 Phase 3 — LDAP 登入 + 權限控制（未實作）
 
@@ -50,18 +52,31 @@ ASP.NET Web Forms 舊系統的 Python FastAPI 重構版。
 - `current_user` 沒有傳進 template context（template 已預留位置用 `{# #}` 標記）
 - AD / LDAP 整合說明在 `docs/ad_integration_guide.md`
 
-### 🔲 Phase 4 — 其他頁面（未實作）
+### 🔶 Phase 4 — 其他頁面（進行中）
 
-- QA 手測值輸入（舊版 EditQA.aspx）
-- 派送名單維護（舊版 EditMailList.aspx）
-- 異常件數查詢（舊版 VOChistory.aspx）
-- 異常原因回覆（舊版 VOCreason.aspx）
-- 異常報表匯出（舊版 VOCreport.aspx）
-- 廠區 / 項目動態新增管理（`tag_mapping` table Admin UI）
+- ✅ QA 手測值輸入（舊版 EditQA.aspx）— `qa_service.py` / `qa_router.py` / `qa_modal.html`
+- 🔲 派送名單維護（舊版 EditMailList.aspx）
+- 🔲 異常件數查詢（舊版 VOChistory.aspx）
+- 🔲 異常原因回覆（舊版 VOCreason.aspx）
+- 🔲 異常報表匯出（舊版 VOCreport.aspx）
+- 🔲 廠區 / 項目動態新增管理（`tag_mapping` table Admin UI）
+- 🔲 異常 Email 通知（移植 SendMail.cs 的 VOC 報表，詳見 `docs/JOB確認清單.md` 第七節）
 
 ### 🔲 Phase 5 — JOB 遷移（暫緩，待架構決策）
 
 見下方「架構層面的未決事項」。
+舊 JOB 原始碼（dbVOC.cs / Program.cs / SendMail.cs）已分析完畢，
+重點結論都整理在 `docs/JOB確認清單.md`（Q4-Q11/Q13/Q15/Q16 已確認 + 第七節通知流程）。
+
+---
+
+## 已知問題（待修，動相關功能前先看）
+
+| # | 問題 | 位置 | 說明 |
+|---|---|---|---|
+| 1 | ccno 流水號寫死 `001` | `control_service.create_control()` | `ccno = f"{today}001"`，同一天第二張隔離申請單會撞號，要改為查當日最大流水號 +1 |
+| 2 | VOC 項目 SCADA 比對例外未實作 | `dashboard_service._spec_mismatch()` | 舊 JOB 規則：**VOC 項目**若 SCADA OOS < SPEC OOS，不視為設定不一致（不亮橙燈）。Python 版沒有這個例外，會誤亮橙燈 |
+| 3 | Tag 名稱比對靜默失敗（舊 JOB 行為，新 JOB 要避免） | 舊 dbVOC.cs | `VOC_SCADA_TagList.Name` 與 Historian tagname 不符時直接跳過不報錯 → 讀值空白。pH 一組 7 個 tag 風險最高。新 JOB 必須加上「比對不到就告警」 |
 
 ---
 
@@ -155,7 +170,14 @@ onclick="document.getElementById('voc-modal').close()"
 **目前決策**：先照舊 MSSQL schema 完成重構，架構變更後續再討論。
 在此之前，`models/spec_model.py` 的 `VocScadaWeb` 對應舊 MSSQL schema，不要改。
 
-18 個 JOB 確認問題見 `docs/JOB確認清單.md`，尚未全部確認。
+18 個 JOB 確認問題見 `docs/JOB確認清單.md`。
+2026-06-11 已從舊 JOB 原始碼確認 11 題，剩 7 題（Q1-Q3, Q12, Q14, Q17-Q18）為架構決策。
+
+**舊 JOB 架構速查**（來自 Program.cs）：
+- `SCADA_VOC` 指令每 15 分鐘：連 10+ 台 iFIX Historian（K12 有 3 台 IH4/5/6；K11 另有 Oracle WWT 雙來源）
+  → `UpdateVOCData()` → `InsertVOCHistValue()` → 00:00 跑日平均
+- `GETCWMS` 指令：HTTP JSON API 取 CWMS 值（K14B, K5, K7, K11, K22, K21）
+- `VOC` 指令：異常 Email 派報（首發/再發判斷、K14B 跨廠通報，詳見 JOB確認清單第七節）
 
 ---
 
@@ -179,14 +201,16 @@ VOC_Python_Rebuild/
 │   ├── dashboard_service.py     # 燈號計算核心（_calculate_light, _spec_mismatch）
 │   ├── control_service.py       # 廠區隔離（get_active_isolations, get_plant_list）
 │   ├── spec_service.py          # 規格維護（list_specs, create_spec, update_spec）
+│   ├── qa_service.py            # QA 手測值（list_qa_items, update_qa_value）
 │   ├── warning_service.py       # 異常查詢（get_current_anomalies）
 │   ├── flow_service.py          # 簽核流程（get_todo_applies）
-│   └── notify_service.py        # Email / 簡訊發送
+│   └── notify_service.py        # Email 發送（SMS 已停用移除）
 │
 ├── routers/
 │   ├── home_router.py           # GET /home → home.html
 │   ├── ui_router.py             # GET /ui/* → partials（HTMX 片段）
 │   ├── control_router.py        # POST /control/create 等
+│   ├── qa_router.py             # POST /qa/update
 │   ├── spec_router.py           # SPEC CRUD API
 │   ├── flow_router.py           # 簽核 API
 │   ├── warning_router.py        # 預警 API
@@ -196,7 +220,9 @@ VOC_Python_Rebuild/
 │   ├── home.html                # 首頁：rowspan + 燈號 + 倒數計時
 │   ├── partials/
 │   │   ├── control_modal.html   # 廠區隔離（有效清單 + 申請表單）
-│   │   ├── spec_modal.html      # 規格維護（唯讀表格）
+│   │   ├── control_items.html   # 隔離項目 checkbox（HTMX 片段）
+│   │   ├── spec_modal.html      # 規格維護（inline 編輯）
+│   │   ├── qa_modal.html        # QA 手測值輸入
 │   │   ├── warning_modal.html   # 預警（目前紅/橙燈）
 │   │   ├── flow_modal.html      # 簽核管理
 │   │   └── acl_modal.html       # 系統管理（Phase 3 卡片）
@@ -271,18 +297,19 @@ python main.py
 
 ## 九、下一步建議
 
-**最近要做的：**
+**已完成（2026-06-11 前）：** 廠區隔離申請接通、規格維護 inline 編輯、QA 手測值輸入。
 
-1. **Phase 2 延伸** — 廠區隔離申請表單的後端接通
-   - `control_router.POST /control/create` 已有，但 form 的 `plantid` 目前需從 `plantno` 反查
-   - 隔離項目選擇目前是文字輸入，理想是 HTMX 動態載入該廠區的項目 checkbox
+**接下來的順序（AD/LDAP 已決定延到最後）：**
 
-2. **Phase 2 延伸** — 規格維護的編輯功能
-   - `spec_service.update_spec()` 已實作，需補 inline edit 的 modal 或 row-expand
-
-3. **Phase 3** — LDAP 登入
+1. **派送名單維護**（EditMailList.aspx）— 也是異常 Email 通知的前置（GetMailList 的資料來源）
+2. **異常件數查詢**（VOChistory.aspx）
+3. **異常原因回覆**（VOCreason.aspx）
+4. **異常報表匯出**（VOCreport.aspx）
+5. **異常 Email 通知移植**（SendMail.cs → Python，只做 Email，SMS/Push 不做）
+6. **已知問題修復**：ccno 流水號、VOC 項目 `_spec_mismatch()` 例外（見上方「已知問題」）
+7. **最後：AD/LDAP 登入**
    - `docs/ad_integration_guide.md` 有詳細說明
-   - 完成後把 `home_router.py` 的 `db: Session = Depends(get_voc_db)` 加上 user 驗證
+   - 完成後把 `home_router.py` 加上 user 驗證
    - Template 裡的 `{# Phase 3: if has_perm(user, 'admin') #}` 換成真實 `{% if %}`
 
 **架構決策（需要與用戶確認後才能動）：**

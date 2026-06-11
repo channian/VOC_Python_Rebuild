@@ -6,6 +6,7 @@ from services.flow_service import get_todo_applies
 from services.spec_service import list_specs, get_sources
 from services.control_service import get_active_isolations, get_plant_list, get_plant_items
 from services.warning_service import get_current_anomalies
+from services.qa_service import list_qa_items
 
 router = APIRouter(prefix="/ui", tags=["Frontend UI HTML Responses"])
 templates = Jinja2Templates(directory="templates")
@@ -53,6 +54,16 @@ def render_spec_modal(request: Request, db: Session = Depends(get_voc_db)):
         request=request,
         name="partials/spec_modal.html",
         context={"specs": list_specs(db), "sources": get_sources(db)}
+    )
+
+
+@router.get("/qa")
+def render_qa_modal(request: Request, db: Session = Depends(get_voc_db)):
+    """渲染 QA 手測值輸入 Modal — 僅列出 source=QA 的項目"""
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/qa_modal.html",
+        context={"qa_items": list_qa_items(db)}
     )
 
 

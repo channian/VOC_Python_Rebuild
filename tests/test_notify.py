@@ -7,7 +7,7 @@ app = FastAPI()
 
 @app.post("/notify")
 def trigger_notify(background_tasks: BackgroundTasks):
-    add_notification_task(background_tasks, "Test Subj", "Test Message", ["test@example.com"], "0912345678")
+    add_notification_task(background_tasks, "Test Subj", "Test Message", ["test@example.com"])
     return {"status": "ok"}
 
 client = TestClient(app)

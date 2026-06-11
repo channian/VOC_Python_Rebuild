@@ -53,6 +53,13 @@
       規格維護
     </button>
     <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/qa"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      QA手測值
+    </button>
+    <button class="btn-voc btn-voc-outline"
             hx-get="/ui/warning"
             hx-target="#modal-container"
             hx-swap="innerHTML"
