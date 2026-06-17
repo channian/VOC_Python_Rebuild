@@ -9,7 +9,7 @@ dashboard_service.py — 儀表板資料查詢與燈號計算
 燈號規則（與舊版 Home.aspx.cs 一致）：
   R（紅）: rvalue >= OOS
   O（橙）: OOC <= rvalue < OOS  ，或 SCADA/CWMS 管制值 ≠ SPEC 設定值
-  Y（黃）: Alert < rvalue < OOC ，或 rvalue > recv（允收值）
+  Y（黃）: Alert < rvalue < OOC ，或 rvalue > recv（允收值，0 視為未設定不比對）
   G（綠）: 其他（正常）
   -（無）: 斷訊 / 保養中 / N.D / 無資料
 """
@@ -106,7 +106,8 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
         return "Y", False
 
     # ── 黃燈（條件 2）：讀值超過允收值 ──────────────────────────────────
-    if recv is not None and rvalue > recv:
+    # recv = 0 視為「未設定」，不觸發黃燈（DB 預設 0 ≠ 真正有意義的允收值）
+    if recv is not None and recv > 0 and rvalue > recv:
         return "Y", False
 
     # ── 綠燈：正常 ───────────────────────────────────────────────────────
