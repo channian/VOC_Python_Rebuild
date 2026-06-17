@@ -9,7 +9,7 @@ dashboard_service.py — 儀表板資料查詢與燈號計算
 燈號規則（與舊版 Home.aspx.cs 一致）：
   R（紅）: rvalue >= OOS
   O（橙）: OOC <= rvalue < OOS  ，或 SCADA/CWMS 管制值 ≠ SPEC 設定值
-  Y（黃）: Alert < rvalue < OOC
+  Y（黃）: 保留（目前無觸發條件；alert/recv 僅用於 Email 通知，不影響燈號）
   G（綠）: 其他（正常）
   -（無）: 斷訊 / 保養中 / N.D / 無資料
 """
@@ -77,9 +77,9 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
     if rvalue is None:
         return "-", True
 
-    oos   = _safe_float(row.get("oos"))
-    ooc   = _safe_float(row.get("ooc"))
-    alert = _safe_float(row.get("alert_spec"))
+    oos = _safe_float(row.get("oos"))
+    ooc = _safe_float(row.get("ooc"))
+
     # ── 紅燈：讀值 >= OOS ────────────────────────────────────────────────
     if oos is not None and rvalue >= oos:
         return "R", False
@@ -99,10 +99,10 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
     ):
         return "O", False
 
-    # ── 黃燈：讀值落在 Alert ~ OOC 之間 ────────────────────────────────────
-    # alert = 0 / NULL 視為「預警值未設定」，不觸發黃燈
-    if alert is not None and alert > 0 and ooc is not None and alert < rvalue < ooc:
-        return "Y", False
+    # ── 黃燈 ───────────────────────────────────────────────────────────────
+    # 注意：alert（預警值）在舊系統 Home.aspx.cs 只用於 Email 通知，
+    # 儀表板燈號不以 Alert < rvalue < OOC 觸發黃燈。
+    # recv（允收值）亦同。保留 'Y' 判斷路徑供日後確認業務邏輯後補充。
 
     # ── 綠燈：正常 ───────────────────────────────────────────────────────
     return "G", False
