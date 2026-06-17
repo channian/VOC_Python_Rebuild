@@ -99,8 +99,9 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
     ):
         return "O", False
 
-    # ── 黃燈（條件 1）：讀值落在 Alert ~ OOC 之間 ────────────────────────
-    if alert is not None and ooc is not None and alert < rvalue < ooc:
+    # ── 黃燈：讀值落在 Alert ~ OOC 之間 ────────────────────────────────────
+    # alert = 0 / NULL 視為「預警值未設定」，不觸發黃燈
+    if alert is not None and alert > 0 and ooc is not None and alert < rvalue < ooc:
         return "Y", False
 
     # ── 綠燈：正常 ───────────────────────────────────────────────────────
