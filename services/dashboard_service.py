@@ -49,8 +49,11 @@ def _spec_mismatch(scada_val: Optional[str], spec_val: Optional[str]) -> bool:
     不一致代表有人改了其中一邊但忘了同步 → 橙燈。
 
     只有兩邊都是有效正數時才比對，避免誤判。
-    容差 0.01：SCADA 浮點儲存可能有精度誤差（如 0.4999 vs 0.5），
-    差異 < 0.01 視為相同，不觸發橙燈。
+
+    舊系統（Home.aspx.cs）做法：ChangeData(text, 2) 先把所有欄位四捨五入到
+    小數2位（ToString("#0.00")），再用 MTDBbase.ToDecimal 比對。
+    Python 對應：round(s, 2) != round(p, 2)。
+    例：SCADA 0.4999 → 0.50 == SPEC 0.5 → 0.50 → 相同 → 不觸發橙燈。
     """
     if not _is_valid_threshold(scada_val) or not _is_valid_threshold(spec_val):
         return False
@@ -58,7 +61,7 @@ def _spec_mismatch(scada_val: Optional[str], spec_val: Optional[str]) -> bool:
     p = _safe_float(spec_val)
     if s is None or p is None:
         return False
-    return abs(s - p) > 0.01
+    return round(s, 2) != round(p, 2)
 
 
 def _calculate_light(row: dict) -> tuple[str, bool]:
