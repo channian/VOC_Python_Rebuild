@@ -9,7 +9,7 @@ dashboard_service.py — 儀表板資料查詢與燈號計算
 燈號規則（與舊版 Home.aspx.cs 一致）：
   R（紅）: rvalue >= OOS
   O（橙）: OOC <= rvalue < OOS  ，或 SCADA/CWMS 管制值 ≠ SPEC 設定值
-  Y（黃）: 保留（目前無觸發條件；alert/recv 僅用於 Email 通知，不影響燈號）
+  Y（黃）: Alert < rvalue < OOC（且 alert > 0），或 rvalue > recv（且 recv > 0）
   G（綠）: 其他（正常）
   -（無）: 斷訊 / 保養中 / N.D / 無資料
 """
@@ -23,10 +23,18 @@ from schemas.dashboard_schema import DashboardRow
 _INVALID_THRESHOLD = {"-", "N/A", "建置中", "異常", "保養中", ""}
 
 def _is_valid_threshold(val: Optional[str]) -> bool:
-    """管制值若為這些文字，代表 SCADA 尚未建點或無法讀取，不納入比對"""
+    """
+    管制值若為這些文字或數值 0，代表 SCADA 尚未建點或未設定，不納入比對。
+    特別注意：SCADA 未設定時通常寫入 "0"，必須排除，否則會與 SPEC 值
+    產生誤判的不同步橙燈（例如 SCADA alert="0" vs SPEC alert="0.5"）。
+    """
     if val is None:
         return False
-    return str(val).strip() not in _INVALID_THRESHOLD
+    stripped = str(val).strip()
+    if stripped in _INVALID_THRESHOLD:
+        return False
+    num = _safe_float(stripped)
+    return num is not None and num > 0
 
 def _safe_float(val, default: float = None) -> Optional[float]:
     """安全轉型為 float，失敗回傳 default"""
@@ -99,10 +107,17 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
     ):
         return "O", False
 
-    # ── 黃燈 ───────────────────────────────────────────────────────────────
-    # 注意：alert（預警值）在舊系統 Home.aspx.cs 只用於 Email 通知，
-    # 儀表板燈號不以 Alert < rvalue < OOC 觸發黃燈。
-    # recv（允收值）亦同。保留 'Y' 判斷路徑供日後確認業務邏輯後補充。
+    # ── 黃燈（條件 1）：讀值落在 Alert ~ OOC 之間 ────────────────────────
+    # alert = 0 / NULL 視為「未設定」，不觸發（SCADA 預設值 0 不代表真實門檻）
+    alert = _safe_float(row.get("alert_spec"))
+    if alert is not None and alert > 0 and ooc is not None and alert < rvalue < ooc:
+        return "Y", False
+
+    # ── 黃燈（條件 2）：讀值超過允收值 ──────────────────────────────────
+    # recv = 0 視為「未設定」，不觸發
+    recv = _safe_float(row.get("recv"))
+    if recv is not None and recv > 0 and rvalue > recv:
+        return "Y", False
 
     # ── 綠燈：正常 ───────────────────────────────────────────────────────
     return "G", False
