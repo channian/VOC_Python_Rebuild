@@ -24,17 +24,14 @@ _INVALID_THRESHOLD = {"-", "N/A", "建置中", "異常", "保養中", ""}
 
 def _is_valid_threshold(val: Optional[str]) -> bool:
     """
-    管制值若為這些文字或數值 0，代表 SCADA 尚未建點或未設定，不納入比對。
-    特別注意：SCADA 未設定時通常寫入 "0"，必須排除，否則會與 SPEC 值
-    產生誤判的不同步橙燈（例如 SCADA alert="0" vs SPEC alert="0.5"）。
+    管制值若為這些文字，代表 SCADA 尚未建點或無法讀取，不納入比對。
+    注意：數值 "0" 不在排除清單中（與舊系統 Home.aspx.cs 一致）——
+    若 SCADA 存 "0" 而 SPEC 有真實值，屬於「未建點」或「設定不一致」，
+    應顯示橙燈提醒，而非靜默略過。
     """
     if val is None:
         return False
-    stripped = str(val).strip()
-    if stripped in _INVALID_THRESHOLD:
-        return False
-    num = _safe_float(stripped)
-    return num is not None and num > 0
+    return str(val).strip() not in _INVALID_THRESHOLD
 
 def _safe_float(val, default: float = None) -> Optional[float]:
     """安全轉型為 float，失敗回傳 default"""
