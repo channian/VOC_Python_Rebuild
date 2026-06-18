@@ -75,8 +75,23 @@ ASP.NET Web Forms 舊系統的 Python FastAPI 重構版。
 | # | 問題 | 位置 | 說明 |
 |---|---|---|---|
 | 1 | ccno 流水號寫死 `001` | `control_service.create_control()` | `ccno = f"{today}001"`，同一天第二張隔離申請單會撞號，要改為查當日最大流水號 +1 |
-| 2 | VOC 項目 SCADA 比對例外未實作 | `dashboard_service._spec_mismatch()` | 舊 JOB 規則：**VOC 項目**若 SCADA OOS < SPEC OOS，不視為設定不一致（不亮橙燈）。Python 版沒有這個例外，會誤亮橙燈 |
+| 2 | ~~VOC 項目 SCADA 比對例外未實作~~ ✅ 已修 | `dashboard_service._bounds_mismatch()` | 已實作：`voc_exception` 參數，VOC 項目 SCADA OOS/OOC 比 SPEC 嚴（更低）時不亮橙。回歸測試 `test_voc_item_scada_exception` |
 | 3 | Tag 名稱比對靜默失敗（舊 JOB 行為，新 JOB 要避免） | 舊 dbVOC.cs | `VOC_SCADA_TagList.Name` 與 Historian tagname 不符時直接跳過不報錯 → 讀值空白。pH 一組 7 個 tag 風險最高。新 JOB 必須加上「比對不到就告警」 |
+
+### 燈號邏輯重構紀錄（2026-06-18，已取得完整 Home.aspx.cs 原始碼後對齊）
+
+逐行核對舊 `Home.aspx.cs` 的 `GetData(gvRow)` 後修正三處與舊系統的落差：
+
+1. **雙邊規格（pH / K21 溫度）**：舊碼 `Split('-')` 取上界 `[1]` 比對。
+   新版用 `_parse_bounds()` 格式驅動解析 `'6-9' → (6.0, 9.0)`，單/雙邊自動相容。
+   **修正前 pH/溫度因 `_safe_float('6-9')=None` 永遠顯示綠燈（嚴重 bug）。**
+2. **SCADA 精度**：舊碼比對前先 `ChangeData(text, 2)` 四捨五入到小數 2 位。
+   新版 `_bounds_mismatch` 用 `round(x, 2)`，避免 SCADA `0.4999` vs SPEC `0.5` 誤亮橙。
+3. **VOC 例外**：見上方已知問題 #2。
+
+**⚠️ 待用戶確認的舊系統行為**：雙邊規格（pH/溫度）的燈號**只比上界**（`[1]`），
+舊碼完全不檢查下界。意即 pH 過低（偏酸）在舊系統也顯示綠燈。
+新版忠實沿用此行為。若要改為「過低也示警」需用戶確認後再加（屬功能增強，非 bug 修復）。
 
 ---
 
@@ -95,6 +110,10 @@ Alert < rvalue < OOC  →  'Y'（黃）
 rvalue > recv（允收值）→  'Y'（黃）
 其他  →  'G'（綠）
 ```
+
+> 門檻一律經 `_parse_bounds()` 取「高界」，單邊（`1.16`）與雙邊（pH/溫度 `6-9`）皆相容。
+> SCADA/SPEC 比對先 `round(x, 2)` 對齊舊系統四捨五入。VOC 項目有 SCADA 更嚴例外。
+> 詳見上方「燈號邏輯重構紀錄」。
 
 **SCADA vs SPEC 比對**：
 SCADA 系統會把自己設的警報值（OOS_HH / OOC_H / alert）存在 `VOC_SCADA_WEB`。
@@ -198,7 +217,7 @@ VOC_Python_Rebuild/
 │   └── spec_schema.py           # SpecResponse（LAW/OOS/OOC/alert 欄位）
 │
 ├── services/
-│   ├── dashboard_service.py     # 燈號計算核心（_calculate_light, _spec_mismatch）
+│   ├── dashboard_service.py     # 燈號計算核心（_calculate_light, _parse_bounds, _bounds_mismatch）
 │   ├── control_service.py       # 廠區隔離（get_active_isolations, get_plant_list）
 │   ├── spec_service.py          # 規格維護（list_specs, create_spec, update_spec）
 │   ├── qa_service.py            # QA 手測值（list_qa_items, update_qa_value）
@@ -306,7 +325,7 @@ python main.py
 3. **異常原因回覆**（VOCreason.aspx）
 4. **異常報表匯出**（VOCreport.aspx）
 5. **異常 Email 通知移植**（SendMail.cs → Python，只做 Email，SMS/Push 不做）
-6. **已知問題修復**：ccno 流水號、VOC 項目 `_spec_mismatch()` 例外（見上方「已知問題」）
+6. **已知問題修復**：ccno 流水號（VOC 項目 SCADA 例外已於 2026-06-18 修復）
 7. **最後：AD/LDAP 登入**
    - `docs/ad_integration_guide.md` 有詳細說明
    - 完成後把 `home_router.py` 加上 user 驗證

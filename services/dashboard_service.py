@@ -19,19 +19,11 @@ from sqlalchemy import text
 from typing import List, Optional
 from schemas.dashboard_schema import DashboardRow
 
-# ── 判斷某個 SCADA/CWMS 管制值是否「有效」（可以拿來比對）──────────────
+# ── 無效門檻值：SCADA 尚未建點或無法讀取，不納入比對 ──────────────────
+# 注意：數值 "0" 不在此清單中（與舊系統 Home.aspx.cs 一致）——
+# 若 SCADA 存 "0" 而 SPEC 有真實值，屬「未建點/設定不一致」，應亮橙燈提醒。
 _INVALID_THRESHOLD = {"-", "N/A", "建置中", "異常", "保養中", ""}
 
-def _is_valid_threshold(val: Optional[str]) -> bool:
-    """
-    管制值若為這些文字，代表 SCADA 尚未建點或無法讀取，不納入比對。
-    注意：數值 "0" 不在排除清單中（與舊系統 Home.aspx.cs 一致）——
-    若 SCADA 存 "0" 而 SPEC 有真實值，屬於「未建點」或「設定不一致」，
-    應顯示橙燈提醒，而非靜默略過。
-    """
-    if val is None:
-        return False
-    return str(val).strip() not in _INVALID_THRESHOLD
 
 def _safe_float(val, default: float = None) -> Optional[float]:
     """安全轉型為 float，失敗回傳 default"""
@@ -40,25 +32,57 @@ def _safe_float(val, default: float = None) -> Optional[float]:
     except (ValueError, TypeError):
         return default
 
-def _spec_mismatch(scada_val: Optional[str], spec_val: Optional[str]) -> bool:
-    """
-    比對 SCADA 系統自設的管制值 vs SPEC 三階文件的設定值是否一致。
-    不一致代表有人改了其中一邊但忘了同步 → 橙燈。
 
-    只有兩邊都是有效正數時才比對，避免誤判。
-
-    舊系統（Home.aspx.cs）做法：ChangeData(text, 2) 先把所有欄位四捨五入到
-    小數2位（ToString("#0.00")），再用 MTDBbase.ToDecimal 比對。
-    Python 對應：round(s, 2) != round(p, 2)。
-    例：SCADA 0.4999 → 0.50 == SPEC 0.5 → 0.50 → 相同 → 不觸發橙燈。
+def _parse_bounds(val: Optional[str]) -> Optional[tuple]:
     """
-    if not _is_valid_threshold(scada_val) or not _is_valid_threshold(spec_val):
+    解析門檻值為 (低界, 高界)。
+
+    - 單邊規格（多數項目）： '1.16' → (1.16, 1.16)
+    - 雙邊規格（pH、K21 溫度）： '6-9' → (6.0, 9.0)
+    - 無效值（'-' / 'N/A' / '建置中' / 空字串等）→ None
+
+    對應舊系統 Home.aspx.cs：單邊直接 ToDecimal；雙邊先 Split('-') 取陣列。
+    格式驅動，不需判斷項目名稱——值含 '-' 即雙邊，否則單邊，
+    自然涵蓋「溫度只有 K21 是雙邊、其餘廠單邊」的差異。
+    燈號比對一律使用「高界」[1]（與舊碼一致）。
+    """
+    if val is None:
+        return None
+    s = str(val).strip()
+    if s in _INVALID_THRESHOLD:
+        return None
+    parts = s.split('-')
+    # 雙邊規格 'low-high'（開頭非空，避免把負號誤判成分隔）
+    if len(parts) >= 2 and parts[0] != '':
+        lo = _safe_float(parts[0])
+        hi = _safe_float(parts[1])
+        if lo is None or hi is None:
+            return None
+        return (lo, hi)
+    v = _safe_float(s)
+    if v is None:
+        return None
+    return (v, v)
+
+
+def _bounds_mismatch(scada_val, spec_val, voc_exception: bool = False) -> bool:
+    """
+    比對 SCADA/CWMS 管制值 vs SPEC 設定值是否一致（不一致 → 橙燈）。
+
+    - 先四捨五入到小數 2 位再比，對齊舊系統 ChangeData(text, 2)，
+      避免 SCADA 浮點精度（如 0.4999 vs 0.5）誤判。
+    - 雙邊規格（pH/溫度）低界、高界都要相符才算一致。
+    - voc_exception=True（僅用於 VOC 項目的 SCADA OOS/OOC 比對）：
+      若 SCADA 高界 < SPEC 高界，視為「SCADA 設得更嚴」可接受，不亮橙燈。
+    - 任一邊無效（'-'/'建置中'等）→ 不比對。
+    """
+    sb = _parse_bounds(scada_val)
+    pb = _parse_bounds(spec_val)
+    if sb is None or pb is None:
         return False
-    s = _safe_float(scada_val)
-    p = _safe_float(spec_val)
-    if s is None or p is None:
+    if voc_exception and sb[1] < pb[1]:
         return False
-    return round(s, 2) != round(p, 2)
+    return round(sb[0], 2) != round(pb[0], 2) or round(sb[1], 2) != round(pb[1], 2)
 
 
 def _calculate_light(row: dict) -> tuple[str, bool]:
@@ -73,9 +97,16 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
       0 → 正常
       1 → 斷訊（SCADA Tag 品質異常）
       2 → 保養中 / 隔離中（由 Web 端隔離申請觸發）
+
+    門檻比對說明：
+      - 所有門檻經 _parse_bounds 取「高界」，自動相容單邊與雙邊（pH/溫度 '6-9'）。
+      - VOC 項目：SCADA OOS/OOC 比 SPEC 嚴（更低）時不算不一致（不亮橙燈）。
+      - 比對順序 R → O(範圍) → O(不一致) → Y → G，對齊舊 Home.aspx.cs
+        last-wins 的等效優先序（紅 > 橙 > 黃）。
     """
     rvalue_raw: str = str(row.get("rvalue_raw") or "").strip()
     broken: int     = int(row.get("broken") or 0)
+    item: str       = str(row.get("item") or "")
 
     # ── 無資料 / 斷訊 / 保養中 ──────────────────────────────────────────
     NON_NUMERIC = {"斷訊", "異常", "保養中", "N.D", "<0.05", "<0.02", "<0.01", ""}
@@ -87,8 +118,14 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
     if rvalue is None:
         return "-", True
 
-    oos = _safe_float(row.get("oos"))
-    ooc = _safe_float(row.get("ooc"))
+    # 取各門檻高界（單邊 = 數值本身，雙邊 pH/溫度 = 上限）
+    oos_b = _parse_bounds(row.get("oos"))
+    ooc_b = _parse_bounds(row.get("ooc"))
+    oos = oos_b[1] if oos_b else None
+    ooc = ooc_b[1] if ooc_b else None
+
+    # VOC 項目：SCADA 管制值比 SPEC 嚴（更低）時不算不一致
+    is_voc = "VOC" in item
 
     # ── 紅燈：讀值 >= OOS ────────────────────────────────────────────────
     if oos is not None and rvalue >= oos:
@@ -101,24 +138,24 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
     # ── 橙燈（條件 2）：SCADA/CWMS 管制值與 SPEC 設定值不一致 ─────────────
     # 意義：有人改了 SPEC 但忘了同步到 SCADA 或反過來
     if (
-        _spec_mismatch(row.get("scada_oos"),   row.get("oos"))   or
-        _spec_mismatch(row.get("scada_ooc"),   row.get("ooc"))   or
-        _spec_mismatch(row.get("scada_alert"), row.get("alert_spec")) or
-        _spec_mismatch(row.get("cwms_oos"),    row.get("oos"))   or
-        _spec_mismatch(row.get("cwms_ooc"),    row.get("ooc"))
+        _bounds_mismatch(row.get("scada_oos"),   row.get("oos"), voc_exception=is_voc) or
+        _bounds_mismatch(row.get("scada_ooc"),   row.get("ooc"), voc_exception=is_voc) or
+        _bounds_mismatch(row.get("scada_alert"), row.get("alert_spec")) or
+        _bounds_mismatch(row.get("cwms_oos"),    row.get("oos")) or
+        _bounds_mismatch(row.get("cwms_ooc"),    row.get("ooc"))
     ):
         return "O", False
 
     # ── 黃燈（條件 1）：讀值落在 Alert ~ OOC 之間 ────────────────────────
-    # alert = 0 / NULL 視為「未設定」，不觸發（SCADA 預設值 0 不代表真實門檻）
-    alert = _safe_float(row.get("alert_spec"))
-    if alert is not None and alert > 0 and ooc is not None and alert < rvalue < ooc:
+    alert_b = _parse_bounds(row.get("alert_spec"))
+    alert = alert_b[1] if alert_b else None
+    if alert is not None and ooc is not None and alert < rvalue < ooc:
         return "Y", False
 
     # ── 黃燈（條件 2）：讀值超過允收值 ──────────────────────────────────
-    # recv = 0 視為「未設定」，不觸發
-    recv = _safe_float(row.get("recv"))
-    if recv is not None and recv > 0 and rvalue > recv:
+    recv_b = _parse_bounds(row.get("recv"))
+    recv = recv_b[1] if recv_b else None
+    if recv is not None and rvalue > recv:
         return "Y", False
 
     # ── 綠燈：正常 ───────────────────────────────────────────────────────
