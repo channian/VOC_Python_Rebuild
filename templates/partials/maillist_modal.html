@@ -1,0 +1,191 @@
+<div style="padding: 1.5rem;">
+
+  <!-- 標題列 -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">派送名單維護</h4>
+    <button onclick="document.getElementById('voc-modal').close()"
+            style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
+  </div>
+
+  <p style="font-size:0.78rem; color:var(--voc-text-muted); margin:0 0 1rem;">
+    異常 Email 通知的收件名單。<strong>TO</strong>=主要收件人，<strong>CC</strong>=副本收件人。
+  </p>
+
+  <!-- 名單表格 -->
+  <div style="overflow-x:auto; margin-bottom:1.5rem;">
+    <table class="dashboard-table" style="font-size:0.8rem;" id="maillist-table">
+      <thead>
+        <tr>
+          <th>廠區</th>
+          <th>工號</th>
+          <th>Email</th>
+          <th style="text-align:center;">類型</th>
+          <th style="text-align:center;">狀態</th>
+          <th style="text-align:center;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in maillist %}
+        <tr id="ml-row-{{ row.seqno }}">
+          <td style="font-weight:700;">{{ row.plantno }}</td>
+          <td style="color:var(--voc-text-muted);">{{ row.empno or '—' }}</td>
+          <td style="font-family:var(--font-mono); font-size:0.75rem;">{{ row.email }}</td>
+          <td style="text-align:center;">
+            <span style="
+              display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:0.72rem; font-weight:700;
+              {% if row.mailtype == 'TO' %}background:var(--status-red); color:#fff;
+              {% else %}background:var(--voc-bg-alt); color:var(--voc-text);{% endif %}
+            ">{{ row.mailtype }}</span>
+          </td>
+          <td style="text-align:center;">
+            <span style="font-size:0.72rem; color:{% if row.isEnable %}var(--status-green){% else %}var(--voc-text-muted){% endif %};">
+              {{ '啟用' if row.isEnable else '停用' }}
+            </span>
+          </td>
+          <td style="text-align:center;">
+            <button class="btn-voc btn-voc-outline"
+                    style="font-size:0.7rem; padding:.15rem .5rem; color:var(--status-red); border-color:var(--status-red);"
+                    onclick="mlDelete({{ row.seqno }}, '{{ row.plantno }}', '{{ row.email }}')">刪除</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr id="ml-empty">
+          <td colspan="6" style="text-align:center; padding:2rem; color:var(--voc-text-muted);">尚無派送名單</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 新增表單 -->
+  <div style="background:var(--voc-bg-alt); border:1px solid var(--voc-border); border-radius:6px; padding:1rem;">
+    <p style="font-size:0.8rem; font-weight:600; margin:0 0 .75rem; color:var(--voc-text);">新增收件人</p>
+    <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-end;">
+      <div>
+        <label style="font-size:0.72rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">廠區</label>
+        <select id="ml-plantno" style="padding:.3rem .5rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem; min-width:80px;">
+          <option value="">— 選廠區 —</option>
+          {% for p in plants %}
+          <option value="{{ p }}">{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.72rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">工號（選填）</label>
+        <input id="ml-empno" type="text" placeholder="E001234"
+               style="width:90px; padding:.3rem .5rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+      </div>
+      <div>
+        <label style="font-size:0.72rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">Email</label>
+        <input id="ml-email" type="email" placeholder="user@company.com"
+               style="width:200px; padding:.3rem .5rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+      </div>
+      <div>
+        <label style="font-size:0.72rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">類型</label>
+        <select id="ml-mailtype" style="padding:.3rem .5rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+          <option value="TO">TO（主）</option>
+          <option value="CC">CC（副本）</option>
+        </select>
+      </div>
+      <button class="btn-voc btn-voc-primary" style="font-size:0.8rem;" onclick="mlAdd()">新增</button>
+    </div>
+    <div id="ml-result" style="margin-top:.5rem; min-height:1.25rem;"></div>
+  </div>
+
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+    <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
+  </div>
+
+</div>
+
+<script>
+function mlAdd() {
+  const resultEl  = document.getElementById('ml-result');
+  const plantno   = document.getElementById('ml-plantno').value.trim();
+  const empno     = document.getElementById('ml-empno').value.trim();
+  const email     = document.getElementById('ml-email').value.trim();
+  const mailtype  = document.getElementById('ml-mailtype').value;
+
+  if (!plantno) { resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">請選擇廠區</div>'; return; }
+  if (!email)   { resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">Email 不可為空</div>'; return; }
+
+  fetch('/maillist/add', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ plantno, empno, email, mailtype })
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      resultEl.innerHTML = '<div style="color:var(--status-green);font-size:0.8rem;">✅ ' + data.message + '</div>';
+      // 動態插入新列到表格
+      const tbody  = document.querySelector('#maillist-table tbody');
+      const empty  = document.getElementById('ml-empty');
+      if (empty) empty.remove();
+      const seqno  = data.seqno;
+      const badge  = mailtype === 'TO'
+        ? 'background:var(--status-red);color:#fff;'
+        : 'background:var(--voc-bg-alt);color:var(--voc-text);';
+      const tr = document.createElement('tr');
+      tr.id = 'ml-row-' + seqno;
+      tr.innerHTML = `
+        <td style="font-weight:700;">${plantno}</td>
+        <td style="color:var(--voc-text-muted);">${empno || '—'}</td>
+        <td style="font-family:var(--font-mono);font-size:0.75rem;">${email}</td>
+        <td style="text-align:center;"><span style="display:inline-block;padding:.1rem .45rem;border-radius:4px;font-size:0.72rem;font-weight:700;${badge}">${mailtype}</span></td>
+        <td style="text-align:center;"><span style="font-size:0.72rem;color:var(--status-green);">啟用</span></td>
+        <td style="text-align:center;">
+          <button class="btn-voc btn-voc-outline"
+                  style="font-size:0.7rem;padding:.15rem .5rem;color:var(--status-red);border-color:var(--status-red);"
+                  onclick="mlDelete(${seqno}, '${plantno}', '${email}')">刪除</button>
+        </td>`;
+      tbody.appendChild(tr);
+      // 清空表單
+      document.getElementById('ml-plantno').value = '';
+      document.getElementById('ml-empno').value   = '';
+      document.getElementById('ml-email').value   = '';
+      setTimeout(() => { resultEl.innerHTML = ''; }, 3000);
+    } else {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => e.msg).join('；')
+        : (data.detail || '新增失敗');
+      resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">❌ ' + msg + '</div>';
+    }
+  })
+  .catch(() => {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">❌ 網路錯誤，請重試</div>';
+  });
+}
+
+function mlDelete(seqno, plantno, email) {
+  const resultEl = document.getElementById('ml-result');
+  if (!confirm(`確定刪除 ${plantno} / ${email} ？`)) return;
+
+  fetch('/maillist/delete', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ seqno })
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      const tr = document.getElementById('ml-row-' + seqno);
+      if (tr) tr.remove();
+      const tbody = document.querySelector('#maillist-table tbody');
+      if (!tbody.querySelector('tr')) {
+        tbody.innerHTML = '<tr id="ml-empty"><td colspan="6" style="text-align:center;padding:2rem;color:var(--voc-text-muted);">尚無派送名單</td></tr>';
+      }
+      resultEl.innerHTML = '<div style="color:var(--status-green);font-size:0.8rem;">✅ ' + data.message + '</div>';
+      setTimeout(() => { resultEl.innerHTML = ''; }, 3000);
+    } else {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => e.msg).join('；')
+        : (data.detail || '刪除失敗');
+      resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">❌ ' + msg + '</div>';
+    }
+  })
+  .catch(() => {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">❌ 網路錯誤，請重試</div>';
+  });
+}
+</script>

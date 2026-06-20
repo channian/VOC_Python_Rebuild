@@ -7,6 +7,7 @@ from services.spec_service import list_specs, get_sources
 from services.control_service import get_active_isolations, get_plant_list, get_plant_items
 from services.warning_service import get_current_anomalies
 from services.qa_service import list_qa_items
+from services.maillist_service import list_maillist, get_plant_list as get_mail_plant_list
 
 router = APIRouter(prefix="/ui", tags=["Frontend UI HTML Responses"])
 templates = Jinja2Templates(directory="templates")
@@ -74,6 +75,19 @@ def render_warning_modal(request: Request, db: Session = Depends(get_voc_db)):
         request=request,
         name="partials/warning_modal.html",
         context={"anomalies": get_current_anomalies(db)}
+    )
+
+
+@router.get("/maillist")
+def render_maillist_modal(request: Request, db: Session = Depends(get_voc_db)):
+    """渲染派送名單維護 Modal"""
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/maillist_modal.html",
+        context={
+            "maillist": list_maillist(db),
+            "plants":   get_mail_plant_list(db),
+        }
     )
 
 

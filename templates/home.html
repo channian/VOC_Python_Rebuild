@@ -67,6 +67,13 @@
       預警紀錄
     </button>
     <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/maillist"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      派送名單
+    </button>
+    <button class="btn-voc btn-voc-outline"
             hx-get="/ui/flow"
             hx-target="#modal-container"
             hx-swap="innerHTML"
