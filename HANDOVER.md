@@ -72,11 +72,18 @@ ASP.NET Web Forms 舊系統的 Python FastAPI 重構版。
 
 ## 已知問題（待修，動相關功能前先看）
 
+> 2026-06-21：取得舊網頁端原始碼後，**完整落差清單見 `docs/legacy_source_analysis.md` 第五節**。下表為摘要。
+
 | # | 問題 | 位置 | 說明 |
 |---|---|---|---|
-| 1 | ccno 流水號寫死 `001` | `control_service.create_control()` | `ccno = f"{today}001"`，同一天第二張隔離申請單會撞號，要改為查當日最大流水號 +1 |
-| 2 | ~~VOC 項目 SCADA 比對例外未實作~~ ✅ 已修 | `dashboard_service._bounds_mismatch()` | 已實作：`voc_exception` 參數，VOC 項目 SCADA OOS/OOC 比 SPEC 嚴（更低）時不亮橙。回歸測試 `test_voc_item_scada_exception` |
-| 3 | Tag 名稱比對靜默失敗（舊 JOB 行為，新 JOB 要避免） | 舊 dbVOC.cs | `VOC_SCADA_TagList.Name` 與 Historian tagname 不符時直接跳過不報錯 → 讀值空白。pH 一組 7 個 tag 風險最高。新 JOB 必須加上「比對不到就告警」 |
+| 1 | ccno 流水號寫死 `001` | `control_service.create_control()` | 同日撞號。舊系統查當日 `MAX(ccno)` 後 3 碼 +1 補零（交易內）|
+| 2 | ~~VOC 項目 SCADA 比對例外未實作~~ ✅ 已修 | `dashboard_service._bounds_mismatch()` | 已實作 `voc_exception` 參數。回歸測試 `test_voc_item_scada_exception` |
+| 3 | Tag 名稱比對靜默失敗（舊 JOB 行為，新 JOB 要避免） | 舊 dbVOC.cs | 名稱不符直接跳過不報錯 → 讀值空白。新 JOB 必須「比對不到就告警」 |
+| 4 | 🔴 **ACL 權限全開** | `acl_service.check_permission` | 直接 return True，無權限管控。須實作 `sys_acluserrole + sys_aclrolerights` 位元檢查 |
+| 5 | 🔴 **隔離自動核准** | `control_service.create_control` | `b_pass→fstatusid=3` 跳過簽核；舊系統免簽核已停用、一律走簽核 |
+| 6 | 🔴 **隔離時間上限錯** | `control_schema.py` / `control_service.py` | Python 用 4hr，舊系統一律 1 小時 |
+| 7 | 🟠 **派送名單需重寫** | `maillist_*` | 真實 schema 主鍵 `(plantno,rpttype,empno)`，欄位差異大 |
+| 8 | 🟠 規格簽核流程 / 廠區 ACL 過濾 / SPEC 驗證 / item 別名 缺失 | `spec_service` / `control_service` | 詳見分析文件第五節 #5~#7 |
 
 ### 燈號邏輯重構紀錄（2026-06-18，已取得完整 Home.aspx.cs 原始碼後對齊）
 

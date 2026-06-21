@@ -50,10 +50,11 @@ rvalue > recv（允收值）        → 'Y'（黃）
 ## broken 欄位
 `0`=正常、`1`=斷訊（JOB 寫）、`2`=保養中/隔離中（Web 寫）。Web 與 JOB 不可互蓋。
 
-## ⚠️ 沒有舊原始碼
-repo 內**沒有任何舊 C# 原始碼**（`*.cs` 0 件），`docs/` 全是分析/推測。
-凡是要忠實還原舊行為（燈號、Email 名單、報表）時，**需請使用者貼對應 `.cs` 或實際 DB schema 再實作**，
-不要憑 docs 推測就當定論。已知範例：燈號邏輯是靠使用者貼 `Home.aspx.cs` 才修正三個 bug。
+## 舊原始碼（2026-06-21 已取得網頁端）
+- `legacy/` 內有 32 個舊 `.cs`（dbVOC.cs + 各 .aspx.cs），精讀結果見 **`docs/legacy_source_analysis.md`**。
+- 要還原舊行為時**先查 `legacy/` 與該分析文件**，不要再憑 `docs/` 的舊推測當定論。
+- ⚠️ **仍缺外部排程 JOB 原始碼**：`SendMail_廠務法規許可值標準化管控報表`、`GetMsg1`、`CheckMAILlog`（首發/再發判斷）、`MTFlowBase`（簽核框架，狀態值除否決=8 外未確認）。
+  做「異常 Email 通知移植」與「完整簽核流程」前需請使用者補貼。
 
 ## 開發 / 測試
 ```
@@ -63,8 +64,12 @@ python main.py                    # 本地啟動 → http://localhost:8000/home
 - 新功能盡量寫**不依賴 DB 的純邏輯測試**（DB 端無 ODBC driver，連線會失敗屬正常）。
 
 ## 已知待辦（動相關功能前先看）
-- **派送名單 schema 是推測**（`VOC_Mail_List`）：email 直存或 empno+AD 解析未確認，需對照舊碼/DB。
-- **ccno 流水號寫死 `001`**（`control_service.create_control()`），同日會撞號。
+> 完整落差清單見 `docs/legacy_source_analysis.md` 第五節。重點：
+- **派送名單需重寫**：真實 `VOC_Mail_List` 主鍵 `(plantno,rpttype,empno)`，欄位含 rpttype/empname/notesid/mail/SM/signgrp/Mail1/SM1，先前 commit 的版本錯誤。
+- 🔴 **ACL 權限全開**（`acl_service.check_permission` 直接 return True）。
+- 🔴 **隔離自動核准** bug（`control_service` 的 `b_pass→fstatusid=3` 應移除，舊系統一律走簽核）。
+- 🔴 **隔離時間上限**：Python 用 4hr，舊系統一律 1 小時。
+- 🔴 **ccno 流水號寫死 `001`**，同日撞號 → 改查當日 MAX 後 3 碼 +1（交易內）。
 - AD/LDAP 登入延後到最後（`docs/ad_integration_guide.md`）。
 
 ## Git
