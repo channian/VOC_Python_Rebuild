@@ -80,6 +80,20 @@
             onclick="document.getElementById('voc-modal').showModal()">
       簽核管理
     </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/history"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      異常查詢
+    </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/ui/reason"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      異常回覆
+    </button>
     {# Phase 3: if has_perm(user, 'admin') #}
     <button class="btn-voc btn-voc-primary"
             hx-get="/ui/acl"

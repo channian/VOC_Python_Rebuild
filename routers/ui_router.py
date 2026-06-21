@@ -11,6 +11,10 @@ from services.maillist_service import (
     list_maillist, get_plant_list as get_mail_plant_list,
     get_rpttype_list, is_mail_disabled,
 )
+from services.history_service import (
+    list_plants as get_hist_plants, list_items as get_hist_items,
+    list_voclog, default_date_range, validate_date_range,
+)
 
 router = APIRouter(prefix="/ui", tags=["Frontend UI HTML Responses"])
 templates = Jinja2Templates(directory="templates")
@@ -93,6 +97,70 @@ def render_maillist_modal(request: Request, db: Session = Depends(get_voc_db)):
             "rpttypes":  get_rpttype_list(db),
             "disabled":  is_mail_disabled(db),
         }
+    )
+
+
+@router.get("/history")
+def render_history_modal(
+    request: Request,
+    plant: str = "", item: str = "",
+    sdate: str = "", edate: str = "",
+    mt: bool = False,
+    db: Session = Depends(get_voc_db),
+):
+    """渲染異常件數查詢 Modal（對應舊系統 VOChistory.aspx）"""
+    if not sdate or not edate:
+        sdate, edate = default_date_range()
+    logs, error = [], ""
+    try:
+        validate_date_range(sdate, edate)
+        logs = list_voclog(db, plant, item, sdate, edate, mt)
+    except ValueError as e:
+        error = str(e)
+    except Exception as e:
+        error = f"查詢失敗：{e}"
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/history_modal.html",
+        context={
+            "plants": get_hist_plants(db),
+            "items":  get_hist_items(db, plant),
+            "plant": plant, "item": item,
+            "sdate": sdate, "edate": edate, "mt": mt,
+            "logs": logs, "error": error,
+        },
+    )
+
+
+@router.get("/reason")
+def render_reason_modal(
+    request: Request,
+    plant: str = "", item: str = "",
+    sdate: str = "", edate: str = "",
+    mt: bool = False,
+    db: Session = Depends(get_voc_db),
+):
+    """渲染異常原因回覆 Modal（對應舊系統 VOCreason.aspx）"""
+    if not sdate or not edate:
+        sdate, edate = default_date_range()
+    logs, error = [], ""
+    try:
+        validate_date_range(sdate, edate)
+        logs = list_voclog(db, plant, item, sdate, edate, mt)
+    except ValueError as e:
+        error = str(e)
+    except Exception as e:
+        error = f"查詢失敗：{e}"
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/reason_modal.html",
+        context={
+            "plants": get_hist_plants(db),
+            "items":  get_hist_items(db, plant),
+            "plant": plant, "item": item,
+            "sdate": sdate, "edate": edate, "mt": mt,
+            "logs": logs, "error": error,
+        },
     )
 
 

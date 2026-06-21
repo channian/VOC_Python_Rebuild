@@ -1,0 +1,197 @@
+<div style="padding: 1.5rem;">
+
+  {# 標題列 #}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">異常原因回覆</h4>
+    <button onclick="document.getElementById('voc-modal').close()"
+            style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
+  </div>
+
+  <p style="font-size:0.78rem; color:var(--voc-text-muted); margin:0 0 .85rem;">
+    按「回覆」填寫原因後儲存。已回覆的記錄仍可補充修改。
+  </p>
+
+  {# 篩選表單 #}
+  <form hx-get="/ui/reason"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-end; margin-bottom:1rem;">
+
+    <div>
+      <label class="reason-lbl">廠區</label>
+      <select name="plant" id="reason-plant" class="reason-in"
+              onchange="reasonLoadItems(this.value)">
+        <option value="">— 全部廠區 —</option>
+        {% for p in plants %}<option value="{{ p }}" {% if p == plant %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="reason-lbl">項目</label>
+      <select name="item" id="reason-item" class="reason-in">
+        <option value="">— 全部項目 —</option>
+        {% for i in items %}<option value="{{ i }}" {% if i == item %}selected{% endif %}>{{ i }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="reason-lbl">開始日期</label>
+      <input type="text" name="sdate" value="{{ sdate }}" class="reason-in" placeholder="yyyy/MM/dd" style="width:7.5rem;">
+    </div>
+
+    <div>
+      <label class="reason-lbl">結束日期</label>
+      <input type="text" name="edate" value="{{ edate }}" class="reason-in" placeholder="yyyy/MM/dd" style="width:7.5rem;">
+    </div>
+
+    <div style="display:flex; align-items:center; gap:.3rem; padding-bottom:.15rem;">
+      <input type="checkbox" id="reason-mt" name="mt" value="true" {% if mt %}checked{% endif %}
+             style="cursor:pointer;">
+      <label for="reason-mt" style="font-size:0.78rem; cursor:pointer;">MT 廠全部</label>
+    </div>
+
+    <button type="submit" class="btn-voc btn-voc-primary" style="font-size:0.8rem;">查詢</button>
+  </form>
+
+  {% if error %}
+  <div style="color:var(--status-red); font-size:0.8rem; margin-bottom:.75rem;">⚠️ {{ error }}</div>
+  {% endif %}
+
+  <div id="reason-msg" style="min-height:1.2rem; margin-bottom:.4rem;"></div>
+
+  {% if logs %}
+  <div style="overflow-x:auto;">
+    <table class="dashboard-table" style="font-size:0.78rem;" id="reason-table">
+      <thead>
+        <tr>
+          <th style="width:2.5rem;">No</th>
+          <th>廠區</th>
+          <th>異常時間</th>
+          <th>異常訊息</th>
+          <th>回覆人／時間</th>
+          <th style="min-width:12rem;">原因說明</th>
+          <th style="width:4rem; text-align:center;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in logs %}
+        <tr id="reason-row-{{ row.logid }}"
+            data-logid="{{ row.logid }}"
+            data-reason="{{ row.reason or '' }}">
+          <td style="text-align:center; color:var(--voc-text-muted); font-family:var(--font-mono); font-size:0.72rem;">{{ row.no }}</td>
+          <td style="font-weight:700; white-space:nowrap;">{{ row.plantno }}</td>
+          <td style="font-family:var(--font-mono); font-size:0.73rem; white-space:nowrap;">{{ row.cdatetime }}</td>
+          <td>{{ row.msg }}</td>
+          <td id="reason-emp-{{ row.logid }}" style="font-size:0.72rem; color:var(--voc-text-muted); white-space:nowrap;">
+            {% if row.emp %}{{ row.emp }}{% if row.rdatetime %}<br>{{ row.rdatetime }}{% endif %}{% else %}—{% endif %}
+          </td>
+          <td id="reason-txt-{{ row.logid }}"
+              style="color:{% if row.reason %}var(--voc-text){% else %}var(--voc-text-muted){% endif %}; font-size:0.77rem;">
+            {{ row.reason or '（未填）' }}
+          </td>
+          <td style="text-align:center;">
+            <button class="btn-voc btn-voc-outline"
+                    style="font-size:0.68rem; padding:.12rem .4rem;"
+                    onclick="reasonEdit({{ row.logid }})">回覆</button>
+          </td>
+        </tr>
+        {# 編輯列（預設隱藏，點按「回覆」後顯示） #}
+        <tr id="reason-edit-{{ row.logid }}" style="display:none; background:var(--voc-bg-alt);">
+          <td colspan="7" style="padding:.6rem 1rem;">
+            <div style="display:flex; gap:.6rem; align-items:flex-start;">
+              <textarea id="reason-ta-{{ row.logid }}"
+                        style="flex:1; min-height:3.5rem; padding:.35rem .45rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.78rem; resize:vertical;"
+                        placeholder="請填寫原因說明…">{{ row.reason or '' }}</textarea>
+              <div style="display:flex; flex-direction:column; gap:.3rem;">
+                <button class="btn-voc btn-voc-primary" style="font-size:0.78rem;"
+                        onclick="reasonSave({{ row.logid }})">儲存</button>
+                <button class="btn-voc btn-voc-outline" style="font-size:0.78rem;"
+                        onclick="reasonCancel({{ row.logid }})">取消</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:0.72rem; color:var(--voc-text-muted); margin:.4rem 0 0;">共 {{ logs | length }} 筆</p>
+  {% elif not error %}
+  <div style="text-align:center; padding:2rem 0; color:var(--voc-text-muted); font-size:0.85rem;">
+    目前查詢區間無異常記錄
+  </div>
+  {% endif %}
+
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+    <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
+  </div>
+
+</div>
+
+<style>
+  .reason-lbl { font-size:0.7rem; color:var(--voc-text-muted); display:block; margin-bottom:.15rem; }
+  .reason-in  { padding:.28rem .4rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.78rem; }
+</style>
+
+<script>
+function reasonMsg(text, ok) {
+  document.getElementById('reason-msg').innerHTML =
+    '<div style="font-size:0.8rem; color:' + (ok ? 'var(--status-green)' : 'var(--status-red)') + ';">' +
+    (ok ? '✅ ' : '❌ ') + text + '</div>';
+  if (ok) setTimeout(() => { document.getElementById('reason-msg').innerHTML = ''; }, 3000);
+}
+
+function reasonLoadItems(plant) {
+  fetch('/history/items?plant=' + encodeURIComponent(plant))
+    .then(r => r.json())
+    .then(items => {
+      const sel = document.getElementById('reason-item');
+      sel.innerHTML = '<option value="">— 全部項目 —</option>';
+      items.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = i;
+        sel.appendChild(opt);
+      });
+    })
+    .catch(() => {});
+}
+
+function reasonEdit(logid) {
+  {# 收合其他展開的編輯列 #}
+  document.querySelectorAll('[id^="reason-edit-"]').forEach(el => {
+    if (el.id !== 'reason-edit-' + logid) el.style.display = 'none';
+  });
+  const editRow = document.getElementById('reason-edit-' + logid);
+  editRow.style.display = editRow.style.display === 'none' ? '' : 'none';
+}
+
+function reasonCancel(logid) {
+  document.getElementById('reason-edit-' + logid).style.display = 'none';
+}
+
+function reasonSave(logid) {
+  const reason = document.getElementById('reason-ta-' + logid).value;
+  fetch('/history/reply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ logid: logid, reason: reason })
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      reasonMsg(data.message, true);
+      {# 即時更新原因欄位顯示 #}
+      const txtCell = document.getElementById('reason-txt-' + logid);
+      txtCell.textContent = reason.trim() || '（未填）';
+      txtCell.style.color = reason.trim() ? 'var(--voc-text)' : 'var(--voc-text-muted)';
+      document.getElementById('reason-edit-' + logid).style.display = 'none';
+    } else {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => e.msg).join('；')
+        : (data.detail || '儲存失敗');
+      reasonMsg(msg, false);
+    }
+  })
+  .catch(() => reasonMsg('網路錯誤，請重試', false));
+}
+</script>
