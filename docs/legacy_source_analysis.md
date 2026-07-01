@@ -15,16 +15,21 @@
 | `SendMail_廠務法規許可值標準化管控報表` | 每 15 分鐘定時派報主流程 | 異常 Email 通知無法忠實移植 |
 | `GetDataRed` | JOB 端異常判斷 | （網頁端對應 `GetData()`，可參考）|
 | `GetMsg1` / `CheckMAILlog` | **首發 vs 再發判斷**、防當日重複 | 首發/再發邏輯只能推測 |
-| `MTFlowBase`（簽核框架）| `Sign`/`GetFlowStatus`/`Proc建立簽核流程` | 簽核狀態值（除否決=8）無法確認 |
+| `MTFlowBase`（簽核框架外殼）| enum 定義、方法簽章 | ✅ **2026-07-01 已取得**，見下方更新 |
+| `dbSignFlow`（簽核框架實作本體）| `CreateNewFlow`/`Sign`/`GetFlowStatus`/`SendMail通知` 的**實際邏輯** | ❌ 仍缺，`MTFlowBase` 每個方法都只是 `using (dbSignFlow db = new dbSignFlow()) return db.XXX(...)` 的殼，真正邏輯在 `dbSignFlow.cs` |
 
-➡️ **做「異常 Email 通知移植」與「完整簽核流程」前，需請使用者再貼這幾支。**
+➡️ **做「異常 Email 通知移植」與「完整簽核流程」前，仍需 `SendMail_廠務法規許可值標準化管控報表`、`GetDataRed`、`GetMsg1`/`CheckMAILlog`、`dbSignFlow.cs` 這幾支。**
 
-**2026-07-01 補充**：使用者已提供 `legacy/SendMail.cs`（`MTLibrary.SendMail.寄送Mail通知()`）。
+**2026-07-01 補充 1**：使用者已提供 `legacy/SendMail.cs`（`MTLibrary.SendMail.寄送Mail通知()`）。
 這是**最底層的 SMTP 寄送工具函式**（subject/body/收件人清單 → 呼叫 `SmtpMessage` 寄出），
-被 `MTFlowBase.SendMail通知()` 等上層方法呼叫。**這不是**上表任何一項缺失方法本身——
-`GetDataRed`、`GetMsg1`/`CheckMAILlog`、`SendMail_廠務法規許可值標準化管控報表`、
-`MTFlowBase` 內部邏輯（`Sign`/`GetFlowStatus`/`Proc建立簽核流程`/`SendMail通知`本體）
-仍未取得，上表 4 項待補清單維持不變。
+被 `MTFlowBase.SendMail通知()` 等上層方法呼叫。這不是缺失方法本身，只是底層工具。
+
+**2026-07-01 補充 2**：使用者已提供 `legacy/MTFlowBase.cs`。**重大發現：`FlowStatus` enum 真實數值與目前
+Python 程式碼假設的不同**，見下方「簽核狀態值」章節——`control_service.py`/`flow_service.py`
+目前把「核准」寫死成 `fstatusid=3`，但真實值是 **`7`**，這是一個需要立即修正的資料正確性 bug
+（否決=8 是巧合猜對，待簽核目前預設用 1 但真實是 0）。
+但 `MTFlowBase` 本身只是薄殼，實際簽核邏輯（`CreateNewFlow` 如何決定關卡、`Sign` 如何推進流程）
+在 `dbSignFlow.cs`，這支還沒拿到，多級簽核流程的細節仍無法完整移植。
 
 ---
 
@@ -141,8 +146,34 @@ Select TOP 1 ccno From VOC_closectl Where ccno like 'yyyyMMdd%' Order by ccno de
 ```
 取後 3 碼 +1 補零（`yyyyMMdd001`→`002`…），無則 `yyyyMMdd000` 起算。須包在交易內避免併發撞號。
 
-### 簽核狀態值（僅否決=8 為確證，其餘待 MTFlowBase）
-待簽核 / 簽核中 / 核准 / 否決(8)。多級簽核流程 Python 未實作（簡化成單關卡核准3/否決8）。
+### 簽核狀態值（2026-07-01 由 `MTFlowBase.cs` 確認，取代先前推測）
+
+```csharp
+public enum FlowStatus
+{
+    待簽核 = 0,
+    簽核中 = 1,
+    核准   = 7,   // ⚠️ Python 目前寫死用 3，是錯的！
+    否決   = 8,   // 之前推測對了
+    取消   = 12,
+};
+```
+
+**🔴 資料正確性 bug（新發現，建議與「已知 4 個 bug」同批修正）**：
+
+| 檔案:行 | 現況（錯） | 應改為 |
+|---|---|---|
+| `services/control_service.py:27` | `fstatusid = 1`（待簽核預設值）| `fstatusid = 0` |
+| `services/control_service.py:28` | `fstatusid = 3`（自動核准，此邏輯本身也該移除，見已知 bug #2）| 若真的要核准應為 `7` |
+| `services/control_service.py:102` | `WHERE M.fstatusid = 3`（查詢已核准隔離）| `WHERE M.fstatusid = 7` |
+| `services/flow_service.py:54-55` | `# 1: 核准 -> fstatusid = 3` | 核准應為 `7` |
+| `services/flow_service.py:66` | `fstatusid == 3` 判斷是否核准 | 應改判斷 `== 7` |
+
+另外 `SignAction`（簽核動作下拉選單，跟 `FlowStatus` 是不同 enum）：`核准=1`／`否決=9`／`分享=10`（`取消=8` 已被舊系統註解停用）。
+`MsgType.法遵平台簽核 = 6`（VOC 平台簽核通知對應的訊息類型代碼，供 `SendMail通知()` 使用）。
+
+多級簽核流程本身（`CreateNewFlow` 怎麼決定關卡數、`Sign` 怎麼推進到下一關）仍在缺失的 `dbSignFlow.cs` 裡，
+Python 端目前仍是簡化成單關卡核准/否決，尚無法完整移植多級簽核。
 
 ---
 
