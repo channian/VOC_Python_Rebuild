@@ -6,25 +6,27 @@
 
 ---
 
-## 〇、缺失的原始碼（重構前必須補）
+## 〇、缺失的原始碼 → 2026-07-01 已全部補齊 ✅
 
-`legacy/` 內是**網頁端**程式（dbVOC.cs + 各 .aspx.cs）。以下屬於**外部排程 JOB / Windows Service**，原本全檔 grep 確認**不存在**，目前狀態：
+`legacy/` 內原本只有**網頁端**程式（dbVOC.cs + 各 .aspx.cs）。經過 2026-07-01 一連串補件，
+**外部排程 JOB / Windows Service 的所有相關程式碼現已全部取得**：
 
-| 缺失方法 | 用途 | 狀態 |
+| 曾缺失方法 | 用途 | 狀態 |
 |---|---|---|
 | `MTFlowBase`（簽核框架外殼）| enum 定義、方法簽章 | ✅ 已取得 |
 | `dbSignFlow`（簽核框架實作本體）| `CreateNewFlow`/`Sign`/`GetFlowStatus`/`SendMail通知` 的實際邏輯 | ✅ 已取得，見「簽核流程完整還原」 |
-| `Job.SendMail`（JOB 端寄信類別）| `SendMail_廠務法規許可值標準化管控報表()` 等派報主流程 | ✅ **2026-07-01 已取得**，見下方「JOB 派報流程還原」 |
-| `dbVOC.GetMsg` / `GetMsg1` / `GetMsg2` | 組信件文字、**首發 vs 再發判斷**（`GetMsg1(..., "status")`）| ❌ **仍缺**——`Job.SendMail` 有呼叫，但方法本體在 `dbVOC.cs`，我們拿到的 `legacy/dbVOC.cs` 版本沒有這幾支 |
-| `dbVOC.GetDataRed` | 判斷該筆讀值是否要列入派報（紅/橙/黃/保養中）| ❌ **仍缺**，同上原因 |
-| `dbVOC.CheckMAILlog` | 見下方，用於 IH 主機/Tag 斷訊通知的「當天是否已發送」判斷 | ❌ 仍缺方法本體，但**已知其契約**：`CheckMAILlog(BU, msg)` 回傳 `1`=今天已發過、`0`=尚未發過 |
-| `dbVOC.GetData()`（無參數）| JOB 撈全廠即時資料（列數與 Home.aspx 的 `GetData(plantno,cdatetime)` 相近但欄位更多，含未四捨五入的原始值於 col+21）| ❌ 仍缺 |
+| `Job.SendMail`（JOB 端寄信類別）| `SendMail_廠務法規許可值標準化管控報表()` 等派報主流程 | ✅ 已取得，見「JOB 派報流程完整還原」 |
+| `Job.dbVOC.GetMsg` / `GetMsg1` / `GetMsg2` | 組信件文字、**首發 vs 再發判斷**（`GetMsg1(..., "status")`）| ✅ **2026-07-01 已取得**（`legacy/Job_dbVOC.cs`）|
+| `Job.dbVOC.GetDataRed` | 判斷該筆讀值是否要列入派報、決定燈號、寫入 msg/msg1/msg2 | ✅ **2026-07-01 已取得**，完整邏輯見下方「GetDataRed 完整還原」 |
+| `Job.dbVOC.GetData()`（無參數）| JOB 撈全廠即時資料 | ✅ **2026-07-01 已取得** |
+| `dbVOC.CheckMAILlog` | IH 主機/Tag 斷訊通知的「當天是否已發送」判斷 | ⚠️ 仍未取得本體，但已知契約：回傳 `1`=今天已發過、`0`=尚未發過；**與 VOC 主派報無關**（只用在 IH 斷線通知），不影響核心移植 |
 
-➡️ **簽核框架、JOB 派報的「外層流程」都已還原（見下方兩節）。真正卡住重構的只剩 `dbVOC.cs` 裡這幾支計算/組字串方法**：
-`GetMsg`／`GetMsg1`／`GetMsg2`／`GetDataRed`／`GetData()`（無參數版本）／`CheckMAILlog`。
-這些方法很可能是 `dbVOC.cs` 較新版本裡才加入的（我們拿到的 `legacy/dbVOC.cs` 快照沒有涵蓋），
-**建議直接跟使用者要「dbVOC.cs 裡 GetMsg/GetMsg1/GetMsg2/GetDataRed/CheckMAILlog 這幾個方法的完整程式碼」**，
-不需要再要整份 JOB 專案。
+**重要澄清**：先前以為 `GetMsg`/`GetMsg1`/`GetMsg2`/`GetDataRed`/`GetData()` 屬於網頁端 `dbVOC.cs`（namespace 空白，MTLibrary 專案），
+所以在該檔案 grep 不到；**實際上這些方法屬於另一個同名但不同 namespace 的類別 `Job.dbVOC`**（JOB 專案自己的 DB 存取類別），
+現已存檔在 `legacy/Job_dbVOC.cs`。網頁端 `dbVOC.cs` 與 JOB 端 `Job.dbVOC.cs` 是兩份平行但獨立維護的檔案，均操作同一顆 VOC 資料庫。
+
+➡️ **至此，異常 Email 派報所需的全部程式碼（除了不影響核心的 `CheckMAILlog` 本體）都已到位，
+可以開始完整移植 `notify_service.py` 了。**
 
 **2026-07-01 補充 1**：`legacy/SendMail.cs`（`MTLibrary.SendMail.寄送Mail通知()`）——最底層 SMTP 寄送工具，
 被 `MTFlowBase.SendMail通知()`／`Job.SendMail` 內部呼叫，非缺失方法本身。
@@ -92,6 +94,67 @@ JOB 每 15 分鐘執行 `Job.SendMail.SendMail_廠務法規許可值標準化管
 - 揭露 `CheckMAILlog(BU, msg)` 契約：回傳 `int`，`1`=今天已發送過（跳過）、`0`=尚未發送（繼續寄信+`InsertMAIL`）
 - 這兩支通知對象是 `dbPMS`（另一個系統的 DB class）不是 `dbVOC`，**與 VOC_MAIL_Log 無直接關係**，
   但若新架構拿掉 IH Historian（HANDOVER.md 提到的方向），這兩個通知可能整個不需要了
+
+---
+
+## GetDataRed 完整還原（2026-07-01，由 `legacy/Job_dbVOC.cs` 確認）
+
+`Job.dbVOC.GetDataRed(DataRow row, DateTime dt2)` 是派報主流程「每一筆讀值」的核心判斷函式，
+對每個 `(plantno, item)` 組合執行，回傳逗號分隔的派報代碼字串（空字串代表這筆不用派報）。
+
+### 首發/再發判斷（決定 `first` 變數）
+
+1. 查 `Get前筆派報資料(plantno, item)`：找 `VOC_MAIL_Log` 裡同廠區、`msg1 LIKE '%|item|%'` 的最後一筆
+2. 無記錄 → `first=1`（首發）
+3. 有記錄但距今 **超過 4 小時**（`ts.Days>=1 || ts.Hours>4 || (ts.Hours==4 && ts.Minutes>0)`）→ `first=1`（首發，逾時視為新事件）
+4. 有記錄且在 4 小時內 → 先假設 `first=0`（再發），但底下**每一種異常條件**還會各自用
+   `msg0.IndexOf(該條件的訊息片段) < 0` 再次檢查——**只要現在的異常內容跟上一筆記錄的內容不同，就會把 first 改回 1**。
+   也就是說「4 小時內」不是無腦不重發，而是「4 小時內只要異常內容沒變就不重發，內容變了照樣算首發」。
+
+### 每個燈號條件的判斷（依「一般水/空項目」vs「pH/溫度雙邊規格項目」分兩branch，邏輯對稱）
+
+| 條件 | light | sRed 代碼格式 | 說明 |
+|---|---|---|---|
+| `Alert < 讀值 < SPEC-OOC` | 2(黃) | `{水/空}Alert-{廠}` | |
+| `讀值 > 允收值(Recv)` | 2(黃) | `{水/空}Alert-{廠}` | 與上面共用同一個 sRed 代碼 |
+| `CWMS-OOS_HH ≠ SPEC-OOS`（含斷訊/保養中特例）| 4(橙，保養中不算) | `{水/空}管制值不/斷訊/保養中-{廠}` | |
+| `CWMS-OOC_H ≠ SPEC-OOC` | 同上 | 同上 | |
+| `SCADA-Alert/OOS_HH/OOC_H ≠ SPEC 對應值` | 4(橙) | 同上 | VOC 項目有例外：SCADA 比 SPEC**更嚴格（更低）**時不算不一致（`voc_exception`，Python 已實作） |
+| `SPEC-OOC <= 讀值 < SPEC-OOS` | 4(橙，僅水/VOC項目判斷 sRed) | `{水/空}OOC{0/15/30}-{廠}` | 見下方「0/15/30 escalation」 |
+| `讀值 >= SPEC-OOS` | 1(紅) | `{水/空}OOS{0/15/30}-{廠}` | 同上 |
+| 讀值為空且管制值也都空 | 1(紅，僅 broken=0 才進 sRed) | `{水/空}OOS-{廠}`+`{水/空}OOC-{廠}` | 代表整組資料都缺失 |
+
+pH/溫度雙邊規格項目（`OOS`/`OOC`/`Alert` 等欄位存 `"下限-上限"` 格式，用 `Split('-')` 取 `[1]` 即上限）判斷邏輯完全相同，
+只是所有比較值都先取上界——**這證實了 Python 現有的「雙邊規格取上界比對」邏輯是對的**。
+
+### 0/15/30 分鐘 escalation（`ArrOOCS = {"", "15", "30"}`）
+
+OOC 和 OOS 這兩個條件比較特別：在 4 小時的「再發不重複」窗口內，**如果訊息內容完全一樣，仍然會在
+第 15 分鐘、第 30 分鐘各再派報一次**（用 `msg0.IndexOf(sData1 + sOOCS)` 檢查是否已經在 0/15/30 分這幾個時間點各發過一次），
+發滿 3 次（`cnt==3`）後才真正停止，直到 4 小時整個週期重置。這是舊系統對「持續惡化中的異常」額外加強提醒的機制，
+Python 移植時要注意這不是單純的「4 小時內不重發」。
+
+### `row["status"]` 何時等於「首發」
+
+`if (first == 1 && sRed != "") row["status"] = "首發"`——**只有真的判定為首發、且這筆有異常要派報時才寫入**，
+否則欄位維持初始值（`GetData()` 建的空白 `space(4)`）。`GetMsg1(dtb, plantno, r, "status")` 後續拿這欄位
+做 `IndexOf("首發")>-1` 判斷，找不到就當「再發」——這解釋了為什麼 status 沒特別設也能正常判斷（預設就是「再發」語意）。
+
+### `msg` / `msg1` / `msg2` 三欄位的真實用途（澄清先前的推測）
+
+- **`msg`**：human-readable，格式 `"{item}：{條件敘述}({數值})；"` 逐條累加，供信件內文與 `VOC_MAIL_Log.msg` 存檔
+- **`msg1`**：`"|{item}|：{條件敘述}"` 格式，**這是拿來跟下一輪比對「內容有沒有變」的比對鍵**，存進 `VOC_MAIL_Log.msg1`，
+  也是 `VOChistory`/`VOCreason` 查詢時 `msg1 LIKE '%|item|%'` 做件數統計的依據
+- **`msg2`（Python 端稱 `msg3` 變數）**：`msg1` 的子集合，**排除「(保養中)」相關的項目**，存進 `VOC_MAIL_Log.msg2`。
+  這證實了 CLAUDE.md「MT 旗標」的既有理解是對的方向：`msg2 LIKE '%|item|%'` 天然排除了保養中項目，
+  所以 MT 未勾選時用 `msg2` 比對「較嚴格」——**msg2 不是布林旗標，而是排除保養中後的訊息文字**，
+  但對「MT 勾選與否」的篩選行為結果是一致的，`history_service.py` 現有的查詢邏輯不用改。
+
+### 派報後統一動作
+
+`UpdateData(plantno, item, light)`——不管有沒有觸發派報，**每筆資料每次執行都會把算出來的 `light` 寫回
+`VOC_SCADA_WEB`/`VOC_SCADA_HIST`**。這點呼應 CLAUDE.md「不可違反的技術決策 #1」：舊系統會把 JOB 算好的燈號存回 DB，
+但 Python 新系統刻意選擇不讀這個存好的 `light` 欄位、每次重新計算——這個決策依然正確，不用改。
 
 ---
 
@@ -298,7 +361,8 @@ MTFlowBase.Proc建立簽核流程(fruleid, ccid/formid, empno, plantno, rtype, h
 2. 做**異常查詢/回覆/報表**（VOC_MAIL_Log 結構已確認；報表注意別用實體暫存表）。
 3. 回頭修**已實作模組落差**第 1~4 項（權限、自動核准、時間上限、ccno），**加上新發現的 fstatusid 核准值 3→7 修正**。
 4. **完整簽核流程移植**——`dbSignFlow.cs` 已取得，邏輯已完全還原（見上方「簽核流程完整還原」），現在可以做。
-5. **異常 Email 通知**——JOB 外層流程已還原（見「JOB 派報流程完整還原」），HTML 信件版型/收件名單/K14B跨廠通報/
-   `InsertMAIL`簽章都已確認，可以先把架構搭起來；但「文字內容」與「首發/再發判斷」仍需 `dbVOC.cs` 裡
-   `GetDataRed`/`GetMsg`/`GetMsg1`/`GetMsg2`/`CheckMAILlog`/`GetData()`（無參數版本）這幾支才能 100% 忠實移植——
-   建議直接跟使用者要這幾個方法的程式碼（不用整個 JOB 專案）。
+5. **異常 Email 通知**——✅ **2026-07-01 全部程式碼到位，可以完整移植了**。JOB 外層流程（見「JOB 派報流程完整還原」）
+   與核心判斷邏輯（見「GetDataRed 完整還原」）都已還原：HTML 信件版型、收件名單、K14B 跨廠通報、`InsertMAIL` 簽章、
+   燈號判斷規則、首發/再發判斷（含 4 小時重置 + 0/15/30 分鐘 escalation）、msg/msg1/msg2 欄位真實用途皆已確認。
+   唯一不影響核心的缺口是 `CheckMAILlog` 本體（僅用於 IH 主機/Tag 斷訊通知，非 VOC 主派報必要）。
+   SMS/PushPlus 派送部分維持先前決策（不移植）。
