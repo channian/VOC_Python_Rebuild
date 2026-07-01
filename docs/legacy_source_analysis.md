@@ -15,10 +15,11 @@
 | `SendMail_廠務法規許可值標準化管控報表` | 每 15 分鐘定時派報主流程 | 異常 Email 通知無法忠實移植 |
 | `GetDataRed` | JOB 端異常判斷 | （網頁端對應 `GetData()`，可參考）|
 | `GetMsg1` / `CheckMAILlog` | **首發 vs 再發判斷**、防當日重複 | 首發/再發邏輯只能推測 |
-| `MTFlowBase`（簽核框架外殼）| enum 定義、方法簽章 | ✅ **2026-07-01 已取得**，見下方更新 |
-| `dbSignFlow`（簽核框架實作本體）| `CreateNewFlow`/`Sign`/`GetFlowStatus`/`SendMail通知` 的**實際邏輯** | ❌ 仍缺，`MTFlowBase` 每個方法都只是 `using (dbSignFlow db = new dbSignFlow()) return db.XXX(...)` 的殼，真正邏輯在 `dbSignFlow.cs` |
+| `MTFlowBase`（簽核框架外殼）| enum 定義、方法簽章 | ✅ **2026-07-01 已取得** |
+| `dbSignFlow`（簽核框架實作本體）| `CreateNewFlow`/`Sign`/`GetFlowStatus`/`SendMail通知` 的**實際邏輯** | ✅ **2026-07-01 已取得**，見下方「簽核流程完整還原」 |
 
-➡️ **做「異常 Email 通知移植」與「完整簽核流程」前，仍需 `SendMail_廠務法規許可值標準化管控報表`、`GetDataRed`、`GetMsg1`/`CheckMAILlog`、`dbSignFlow.cs` 這幾支。**
+➡️ **簽核框架已完整還原（見下方）。剩下真正卡住的只有異常 Email 派報 JOB 本體：
+`SendMail_廠務法規許可值標準化管控報表`、`GetDataRed`、`GetMsg1`/`CheckMAILlog` 這 3 支。**
 
 **2026-07-01 補充 1**：使用者已提供 `legacy/SendMail.cs`（`MTLibrary.SendMail.寄送Mail通知()`）。
 這是**最底層的 SMTP 寄送工具函式**（subject/body/收件人清單 → 呼叫 `SmtpMessage` 寄出），
@@ -172,8 +173,61 @@ public enum FlowStatus
 另外 `SignAction`（簽核動作下拉選單，跟 `FlowStatus` 是不同 enum）：`核准=1`／`否決=9`／`分享=10`（`取消=8` 已被舊系統註解停用）。
 `MsgType.法遵平台簽核 = 6`（VOC 平台簽核通知對應的訊息類型代碼，供 `SendMail通知()` 使用）。
 
-多級簽核流程本身（`CreateNewFlow` 怎麼決定關卡數、`Sign` 怎麼推進到下一關）仍在缺失的 `dbSignFlow.cs` 裡，
-Python 端目前仍是簡化成單關卡核准/否決，尚無法完整移植多級簽核。
+---
+
+### 簽核流程完整還原（2026-07-01，由 `dbSignFlow.cs` 確認）
+
+`dbSignFlow.cs` 是給**全公司多個系統共用**的簽核引擎（CCTV、AffectManage、PLC…都用同一套），
+`CreateNewFlow` 有 3 個多載對應不同系統的簽核模式。**VOC 平台只用其中最簡單的一種**：
+
+```csharp
+// dbVOC.cs 呼叫方式（隔離廠區項目維護 / 法規許可值與規格值維護 都走這個多載）：
+MTFlowBase.Proc建立簽核流程(fruleid, ccid/formid, empno, plantno, rtype, hashkey, showinfo)
+  → dbSignFlow.CreateNewFlow(fruleid, fid, empno, string plantno, string rtype, hashkey, showinfo)
+```
+
+**這個多載是「一階群組簽核」（2019/02/27 新增），VOC 完全不牽涉多級主管爬升、不牽涉職稱判斷**：
+
+1. **找簽核人**：`Get簽核人員(plantno, rtype, empno)`：
+   ```sql
+   Select Distinct M.empno
+   From [VOC].[dbo].[VOC_Mail_List] M
+   Join [UTIDB].[dbo].[Employee] E On M.empno=E.empno And E.isLeave=0
+   Where M.plantno=@plantno And M.RptType in (@rtype) And M.empno!=@empno And M.SignGrp=1
+   ```
+   **簽核人清單就是 `VOC_Mail_List` 裡 `SignGrp=1` 的人**（同廠區、同 `rpttype`、排除申請人自己、排除離職員工）。
+   這證實了先前重寫 `maillist_service.py` 時 `signgrp` 欄位的用途——它不只是「要不要收信」，
+   **同時也是「這個人是不是這個廠區/報表類型的簽核人」**。
+
+2. **`rtype` 傳入格式**（`dbVOC.cs` 組字串範例）：
+   ```csharp
+   string stype = (item.IndexOf("VOC") > -1 ? "空" : "水") + "保養中";
+   rtype += (rtype == "" ? "'" : ",'") + stype + "'";
+   // → rtype = "'水保養中'" 或 "'水保養中','空保養中'"
+   ```
+   直接字串拼進 `RptType in (...)`，即帶引號、逗號分隔的 SQL IN 清單（**注意：這是字串拼接，有 SQL injection 風險，
+   Python 版必須參數化**）。代表 `VOC_Mail_List.rpttype` 除了「水質異常」「水Alert」等派報類型外，
+   **還有「水保養中」「空保養中」這種專門給隔離申請簽核用的類型**，需要在派送名單維護時一併支援。
+
+3. **建立流程**：全部簽核人都插入同一個 `fstep=1`（不分層級），`base_flow.fstatusid` 初始為 `簽核中(1)`。
+
+4. **核准/否決（`Sign()`，VOC 用這支不用 `Sign1()`）**：
+   - 檢查身份：`ftype=2`（人員）時只比對 `empid` 是否等於簽核人清單裡的其中一筆
+   - 更新該筆 `base_flowd.signactionid/signtime`
+   - 查詢 `next fstep = MIN(fstep) WHERE flowid=@flowid AND fstep > 目前fstep`——因為所有人都在 `fstep=1`，
+     不存在 `fstep>1` 的資料，**所以 `nextfstep` 一定找不到，流程立刻關閉**
+   - ⚠️ **關鍵結論：VOC 是「任一位 `SignGrp=1` 的人先簽，流程就立刻結束」（OR 邏輯），不是要全部簽核人都同意（AND 邏輯）**。
+     核准 → `fstatusid=核准(7)`；否決 → `fstatusid=否決(8)`。沒有多級關卡、沒有主管爬升，比原本猜測的簡單很多。
+
+5. **簽核通知信**（`SendMail通知()` → `Send簽核通知()`）：主旨格式
+   `"{msgtype}{核准/退件}通知 [{ccno或formno}] (Security C)"`，本文含表單類別/內容摘要/提交時間/提交人，
+   附「進行簽核」或「進行查看」連結；最終呼叫 `SendMail.寄送Mail通知()`（已取得，見上方）寄出。
+   `MsgType.法遵平台簽核 = 6`。
+
+**結論：`services/flow_service.py`、`services/control_service.py` 現在可以完整移植 VOC 的簽核邏輯了**——
+不需要 `dbSignFlow.cs` 裡其他系統專用的部分（`職稱ID`、主管爬升 `Get員工主管id`、CCTV/PLC 相關的 `Get簽核人員` 多載）。
+唯一還缺的是「異常 Email 派報」JOB 本體（`SendMail_廠務法規許可值標準化管控報表`/`GetDataRed`/`GetMsg1`/`CheckMAILlog`），
+這是完全不同的另一套邏輯，不在 `dbSignFlow.cs` 裡。
 
 ---
 
@@ -181,5 +235,7 @@ Python 端目前仍是簡化成單關卡核准/否決，尚無法完整移植多
 
 1. 先**重寫派送名單**（schema 已完全確認，無外部相依）。
 2. 做**異常查詢/回覆/報表**（VOC_MAIL_Log 結構已確認；報表注意別用實體暫存表）。
-3. 回頭修**已實作模組落差**第 1~4 項（權限、自動核准、時間上限、ccno）— 屬正確性 bug。
-4. **異常 Email 通知** + **完整簽核流程** → 需先向使用者索取缺失的 JOB 與 MTFlowBase 原始碼。
+3. 回頭修**已實作模組落差**第 1~4 項（權限、自動核准、時間上限、ccno），**加上新發現的 fstatusid 核准值 3→7 修正**。
+4. **完整簽核流程移植**——`dbSignFlow.cs` 已取得，邏輯已完全還原（見上方「簽核流程完整還原」），現在可以做。
+5. **異常 Email 通知**——仍卡住，需先向使用者索取 JOB 本體：
+   `SendMail_廠務法規許可值標準化管控報表`、`GetDataRed`、`GetMsg1`/`CheckMAILlog`。
