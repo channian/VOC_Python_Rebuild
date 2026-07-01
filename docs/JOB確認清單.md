@@ -4,6 +4,11 @@
 >
 > 2026-06-11 更新：已分析舊 JOB 原始碼（dbVOC.cs、Program.cs、SendMail.cs），
 > Q4～Q11、Q13、Q15、Q16 已從程式碼確認。剩餘 7 題為架構決策，需與業務端確認。
+>
+> 2026-07-01 更新：異常 Email 派報所需程式碼（`GetDataRed`/`GetMsg`系列）全部取得，
+> 詳見 `docs/legacy_source_analysis.md`。第二階段資料傳輸架構方向已確認：
+> Kepware(A，既有系統) → 新VOC資料庫(B，schema未定案)，轉拋 JOB 由本專案負責撰寫，
+> 見第六節補充。
 
 ---
 
@@ -73,6 +78,26 @@ K11 另有 INSQL/Oracle WWT 第二來源（`UpdateVOCData2()`）。新 JOB 必�
 | 17 | 新 Python Web 過渡期間讀 MSSQL 還是 PostgreSQL？ | 決定 Web 重構優先序 | ⬜ 架構決策（目前先接 MSSQL） |
 | 18 | 舊 JOB 和新 JOB 會同時跑嗎？ | 資料一致性 | ⬜ 架構決策 |
 
+### 2026-07-01 補充：資料傳輸架構方向已確認
+
+與使用者確認的第二階段（資料流與 JOB 重新移植）架構方向：
+
+- **A（來源）= 現有的 Kepware 架構**，**已經是既有、運作中的系統**（非本專案從零建置）。
+  A 端提供的是**現成資料庫可查詢**，不是要另外訂閱 OPC-UA 即時資料流。
+- **B（目的）= 新的 VOC 資料庫**，schema **尚未討論定案**（是否採用 `database_architecture_proposal.md`
+  提的 PostgreSQL 方案、或沿用 MSSQL 但重新設計 table 結構，都還沒決定）。
+- **A→B 的轉拋 JOB（橋接工作）由本專案（我們）負責撰寫**，不是等別的團隊交付。
+
+**這帶來一個重要的解耦**：`GetDataRed`/`GetMsg` 系列的異常判斷邏輯（見 `docs/legacy_source_analysis.md`
+「GetDataRed 完整還原」節）只依賴 B 資料庫裡有對應欄位（讀值、管制值、broken、時間戳），
+**跟資料是怎麼從 A 轉拋進來的完全無關**。也就是說「派報邏輯移植」與「A→B 轉拋 JOB 設計」是兩個
+可以獨立進行的工作，不需要等 B 的 schema 定案就能先把派報邏輯的 Python 版寫好並測試（用現有 MSSQL 欄位跑）。
+
+**仍待釐清、會影響 A→B 轉拋 JOB 設計的問題**（呼應上方 #1-3、#12、#14）：
+- A（Kepware 既有資料庫）的實際 schema／Tag 命名格式是什麼？
+- B 的 table 結構、欄位設計何時要開會定案？
+- PMS（提供雨水溝 24hr 累積雨量的來源）是否也要納入這次轉拋範圍？
+
 ---
 
 ## 七、異常通知（SendMail.cs 分析後新增）
@@ -104,4 +129,4 @@ K11 另有 INSQL/Oracle WWT 第二來源（`UpdateVOCData2()`）。新 JOB 必�
 
 ---
 
-*清單建立日期：2026-05-16　最後更新：2026-06-11*
+*清單建立日期：2026-05-16　最後更新：2026-07-01*
