@@ -19,6 +19,13 @@
 
 ➡️ **做「異常 Email 通知移植」與「完整簽核流程」前，需請使用者再貼這幾支。**
 
+**2026-07-01 補充**：使用者已提供 `legacy/SendMail.cs`（`MTLibrary.SendMail.寄送Mail通知()`）。
+這是**最底層的 SMTP 寄送工具函式**（subject/body/收件人清單 → 呼叫 `SmtpMessage` 寄出），
+被 `MTFlowBase.SendMail通知()` 等上層方法呼叫。**這不是**上表任何一項缺失方法本身——
+`GetDataRed`、`GetMsg1`/`CheckMAILlog`、`SendMail_廠務法規許可值標準化管控報表`、
+`MTFlowBase` 內部邏輯（`Sign`/`GetFlowStatus`/`Proc建立簽核流程`/`SendMail通知`本體）
+仍未取得，上表 4 項待補清單維持不變。
+
 ---
 
 ## 一、完整 DB schema（已確認）
