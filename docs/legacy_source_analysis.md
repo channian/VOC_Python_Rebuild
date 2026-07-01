@@ -8,29 +8,90 @@
 
 ## 〇、缺失的原始碼（重構前必須補）
 
-`legacy/` 內是**網頁端**程式（dbVOC.cs + 各 .aspx.cs）。以下屬於**外部排程 JOB / Windows Service**，全檔 grep 確認**不存在**：
+`legacy/` 內是**網頁端**程式（dbVOC.cs + 各 .aspx.cs）。以下屬於**外部排程 JOB / Windows Service**，原本全檔 grep 確認**不存在**，目前狀態：
 
-| 缺失方法 | 用途 | 影響 |
+| 缺失方法 | 用途 | 狀態 |
 |---|---|---|
-| `SendMail_廠務法規許可值標準化管控報表` | 每 15 分鐘定時派報主流程 | 異常 Email 通知無法忠實移植 |
-| `GetDataRed` | JOB 端異常判斷 | （網頁端對應 `GetData()`，可參考）|
-| `GetMsg1` / `CheckMAILlog` | **首發 vs 再發判斷**、防當日重複 | 首發/再發邏輯只能推測 |
-| `MTFlowBase`（簽核框架外殼）| enum 定義、方法簽章 | ✅ **2026-07-01 已取得** |
-| `dbSignFlow`（簽核框架實作本體）| `CreateNewFlow`/`Sign`/`GetFlowStatus`/`SendMail通知` 的**實際邏輯** | ✅ **2026-07-01 已取得**，見下方「簽核流程完整還原」 |
+| `MTFlowBase`（簽核框架外殼）| enum 定義、方法簽章 | ✅ 已取得 |
+| `dbSignFlow`（簽核框架實作本體）| `CreateNewFlow`/`Sign`/`GetFlowStatus`/`SendMail通知` 的實際邏輯 | ✅ 已取得，見「簽核流程完整還原」 |
+| `Job.SendMail`（JOB 端寄信類別）| `SendMail_廠務法規許可值標準化管控報表()` 等派報主流程 | ✅ **2026-07-01 已取得**，見下方「JOB 派報流程還原」 |
+| `dbVOC.GetMsg` / `GetMsg1` / `GetMsg2` | 組信件文字、**首發 vs 再發判斷**（`GetMsg1(..., "status")`）| ❌ **仍缺**——`Job.SendMail` 有呼叫，但方法本體在 `dbVOC.cs`，我們拿到的 `legacy/dbVOC.cs` 版本沒有這幾支 |
+| `dbVOC.GetDataRed` | 判斷該筆讀值是否要列入派報（紅/橙/黃/保養中）| ❌ **仍缺**，同上原因 |
+| `dbVOC.CheckMAILlog` | 見下方，用於 IH 主機/Tag 斷訊通知的「當天是否已發送」判斷 | ❌ 仍缺方法本體，但**已知其契約**：`CheckMAILlog(BU, msg)` 回傳 `1`=今天已發過、`0`=尚未發過 |
+| `dbVOC.GetData()`（無參數）| JOB 撈全廠即時資料（列數與 Home.aspx 的 `GetData(plantno,cdatetime)` 相近但欄位更多，含未四捨五入的原始值於 col+21）| ❌ 仍缺 |
 
-➡️ **簽核框架已完整還原（見下方）。剩下真正卡住的只有異常 Email 派報 JOB 本體：
-`SendMail_廠務法規許可值標準化管控報表`、`GetDataRed`、`GetMsg1`/`CheckMAILlog` 這 3 支。**
+➡️ **簽核框架、JOB 派報的「外層流程」都已還原（見下方兩節）。真正卡住重構的只剩 `dbVOC.cs` 裡這幾支計算/組字串方法**：
+`GetMsg`／`GetMsg1`／`GetMsg2`／`GetDataRed`／`GetData()`（無參數版本）／`CheckMAILlog`。
+這些方法很可能是 `dbVOC.cs` 較新版本裡才加入的（我們拿到的 `legacy/dbVOC.cs` 快照沒有涵蓋），
+**建議直接跟使用者要「dbVOC.cs 裡 GetMsg/GetMsg1/GetMsg2/GetDataRed/CheckMAILlog 這幾個方法的完整程式碼」**，
+不需要再要整份 JOB 專案。
 
-**2026-07-01 補充 1**：使用者已提供 `legacy/SendMail.cs`（`MTLibrary.SendMail.寄送Mail通知()`）。
-這是**最底層的 SMTP 寄送工具函式**（subject/body/收件人清單 → 呼叫 `SmtpMessage` 寄出），
-被 `MTFlowBase.SendMail通知()` 等上層方法呼叫。這不是缺失方法本身，只是底層工具。
+**2026-07-01 補充 1**：`legacy/SendMail.cs`（`MTLibrary.SendMail.寄送Mail通知()`）——最底層 SMTP 寄送工具，
+被 `MTFlowBase.SendMail通知()`／`Job.SendMail` 內部呼叫，非缺失方法本身。
 
-**2026-07-01 補充 2**：使用者已提供 `legacy/MTFlowBase.cs`。**重大發現：`FlowStatus` enum 真實數值與目前
-Python 程式碼假設的不同**，見下方「簽核狀態值」章節——`control_service.py`/`flow_service.py`
-目前把「核准」寫死成 `fstatusid=3`，但真實值是 **`7`**，這是一個需要立即修正的資料正確性 bug
-（否決=8 是巧合猜對，待簽核目前預設用 1 但真實是 0）。
-但 `MTFlowBase` 本身只是薄殼，實際簽核邏輯（`CreateNewFlow` 如何決定關卡、`Sign` 如何推進流程）
-在 `dbSignFlow.cs`，這支還沒拿到，多級簽核流程的細節仍無法完整移植。
+**2026-07-01 補充 2**：`legacy/MTFlowBase.cs` + `legacy/dbSignFlow.cs`——**重大發現：`FlowStatus` enum 真實數值
+與目前 Python 程式碼假設的不同**，見「簽核狀態值」章節——`control_service.py`/`flow_service.py` 目前把「核准」
+寫死成 `fstatusid=3`，真實值是 **`7`**（否決=8 是巧合猜對，待簽核預設值 1 應為 0）。VOC 簽核流程本身邏輯已完整
+還原，見「簽核流程完整還原」節。
+
+**2026-07-01 補充 3**：`legacy/Job_SendMail.cs`（`Job.SendMail` 類別，JOB 端所有系統共用的寄信類別，體積龐大，
+只有其中 6 支方法跟 VOC 有關）。完整還原了派報「外層流程」，見下方「JOB 派報流程還原」——包含 HTML 信件版型、
+收件名單來源、K14B 跨廠通報規則、SMS 觸發點、`InsertMAIL` 真實呼叫簽章。**但流程內部呼叫的
+`GetMsg`/`GetMsg1`/`GetMsg2`/`GetDataRed`/`GetData()` 這幾支決定「文字內容」與「首發/再發」的方法本體仍缺**，
+不影響架構設計，但影響「訊息內容」與「防重複寄信」邏輯能否 100% 忠實移植。
+
+---
+
+## JOB 派報流程完整還原（2026-07-01，由 `Job_SendMail.cs` 確認）
+
+JOB 每 15 分鐘執行 `Job.SendMail.SendMail_廠務法規許可值標準化管控報表()`，完整流程：
+
+```
+1. List隔離廠區項目() + Update隔離廠區項目(row)  ← 先把隔離中項目的 broken 標成 2（已在 dbVOC.cs 裡確認）
+2. dtb = GetData()                              ← 撈全廠即時資料（❌缺，但欄位結構與 Home.aspx GetData() 相近）
+3. 對每列資料：清理格式（逗號移除、空值補「異常」、數字四捨五入到小數2位，
+   導電度/日累積水量到整數，未四捨五入前的值另存於 col+21 供比對用）
+4. sRed = GetDataRed(row, dt2)                  ← ❌缺，回傳逗號分隔的「派報代碼」（如 "水Alert-九號放流口"）
+   把每列的 sRed 去重後累加成 DataRed（例："水Alert-九號放流口,水OOS-K7,水保養中-K5"）
+5. 若 DataRed 不為空，依廠區分組（同廠區的異常項目合併成一封信）：
+   - msg  = GetMsg(dtb, plantno, r)              ← ❌缺，人類可讀的異常描述（存進 VOC_MAIL_Log.msg）
+   - msg1 = GetMsg1(dtb, plantno, r, "msg1")      ← ❌缺，"|item|" 包裹格式（存進 VOC_MAIL_Log.msg1，供 LIKE 比對）
+   - status = GetMsg1(dtb, plantno, r, "status")  ← ❌缺，回傳含「首發」或「再發」字樣 ← **這就是首發/再發判斷本體**
+   - msg2 = GetMsg2(dtb, plantno, r)               ← ❌缺，用於 SMS 內容 + 判斷「＞允收值」觸發 K14B 跨廠通報
+   - msg3 = GetMsg1(dtb, plantno, r, "msg2")        ← ❌缺，存進 VOC_MAIL_Log.msg2（不是布林 MT 旗標，是一段文字）
+   - 組 HTML 表格信件（含燈號圖示、SCADA/CWMS/QA 三色底、法規許可值/SPEC/Alert/允收值欄）
+6. mailto = GetMailList(DataRed, plantno, "TO")   ← ✅已確認（VOC_Mail_List 查詢，見下方 GetMailList 節）
+   mailcc = GetMailList(DataRed, plantno, "CC")
+   K14B 跨廠通報：若 plantno≠K14B 且 msg2 含「＞允收值」，額外把「水Alert-K14B」的 TO 名單也 CC 進去
+   若 mailto 為空 → **直接 return 0，中止整個派報迴圈**（舊系統的既有行為，注意：這代表若某廠沒設收件人，
+   會連帶跳過後面所有廠區的信；Python 版建議修正成 continue 而非 return，除非要忠實重現這個「隱藏 bug」）
+7. 寄信：主旨 "【{首發/再發}】請確認「法遵平台」即時監控狀況 : {plantno}-{DT} (Security C)"
+8. InsertMAIL(plantno, msg, msg1, dt2, msg3)      ← ✅已確認簽章：(plantno, msg, msg1, DateTime cdatetime, msg2)
+   對應 VOC_MAIL_Log 欄位：plantno/msg/msg1/cdatetime/msg2（**msg2 存的是 GetMsg1(...,"msg2") 回傳的文字，
+   不是我們原本猜測的布林 MT 旗標**——這點需要修正 history_service.py 的既有假設，待 GetMsg1 本體到手後確認）
+9. SMS 派送（**已與使用者確認 2026-06-11 停用，不移植**，僅記錄供理解舊行為：
+   msg = "【{首發/再發}】{plantno}有異常,請儘速處理,謝謝!{msg2}"，經 GetCellPhoneList() 取號碼、
+   SendSMS.SendSMSByCHTProxy() 發送，K14B 跨廠通報同樣邏輯）
+10. PushPlus 推播（**已與使用者確認暫不實作**）：if (msg2 != "") CallPushPlus().Notice(...)
+```
+
+**雨水溝預警**（`SendMail_廠務雨水溝預警報表()`）結構完全相同，差別：
+- 用 `List隔離廠區項目_雨水溝預警()` / `GetData雨水溝預警(dt0)` / `GetDataRed雨水溝預警(row, dt2)`（獨立的一組方法）
+- K1/K9 廠區多顯示「三點連升」欄位（`datetime1/value1/datetime2/value2/datetime3/value3`），
+  對應 HANDOVER.md 提過的「雨水溝三點連升邏輯」——**證實資料是從 `GetData雨水溝預警()` 回傳列裡直接帶出，
+  不是即時查歷史表現算**，代表舊系統應該有另外的地方（可能是 JOB 寫入時）維護這三筆歷史值
+- 連結導向 `VOCreason.aspx?...&type=R`（`change` 參數）而非一般監測項目的連結
+
+**中水陸放/放流量管控**（K1/K9/K14B 專用，`SendMail_廠務中水陸放管控()` / `SendMail_廠務中水放流量管控()`）：
+- 首發/再發判斷**不是**靠 `GetMsg1(...,"status")`，而是直接比對 `Get前筆派報資料()` 回傳的上次派報時間，
+  超過 4 小時算首發——這是**另一套更簡單的判斷邏輯**，只適用這兩個特化通知，不适用一般監測項目派報
+- 這兩個通知目前**已停用 SMS 以外沒有 Email 邏輯**（中水陸放管控完全只發簡訊，不寄信）——因 SMS 已確認不移植，
+  這兩個功能等同「暫不需要移植」，除非之後改回發信
+
+**IH 主機/Tag 斷訊通知**（`SendMail_IH主機連線異常通知()` / `SendMail_IH_TAG斷訊通知()`）：
+- 揭露 `CheckMAILlog(BU, msg)` 契約：回傳 `int`，`1`=今天已發送過（跳過）、`0`=尚未發送（繼續寄信+`InsertMAIL`）
+- 這兩支通知對象是 `dbPMS`（另一個系統的 DB class）不是 `dbVOC`，**與 VOC_MAIL_Log 無直接關係**，
+  但若新架構拿掉 IH Historian（HANDOVER.md 提到的方向），這兩個通知可能整個不需要了
 
 ---
 
@@ -226,8 +287,8 @@ MTFlowBase.Proc建立簽核流程(fruleid, ccid/formid, empno, plantno, rtype, h
 
 **結論：`services/flow_service.py`、`services/control_service.py` 現在可以完整移植 VOC 的簽核邏輯了**——
 不需要 `dbSignFlow.cs` 裡其他系統專用的部分（`職稱ID`、主管爬升 `Get員工主管id`、CCTV/PLC 相關的 `Get簽核人員` 多載）。
-唯一還缺的是「異常 Email 派報」JOB 本體（`SendMail_廠務法規許可值標準化管控報表`/`GetDataRed`/`GetMsg1`/`CheckMAILlog`），
-這是完全不同的另一套邏輯，不在 `dbSignFlow.cs` 裡。
+「異常 Email 派報」JOB 本體（`SendMail_廠務法規許可值標準化管控報表`）已於 2026-07-01 取得，外層流程已還原（見「JOB 派報流程完整還原」節）；
+仍缺的只剩 `dbVOC.cs` 裡 `GetDataRed`/`GetMsg`/`GetMsg1`/`GetMsg2`/`CheckMAILlog`/`GetData()`（無參數版本）這幾支。
 
 ---
 
@@ -237,5 +298,7 @@ MTFlowBase.Proc建立簽核流程(fruleid, ccid/formid, empno, plantno, rtype, h
 2. 做**異常查詢/回覆/報表**（VOC_MAIL_Log 結構已確認；報表注意別用實體暫存表）。
 3. 回頭修**已實作模組落差**第 1~4 項（權限、自動核准、時間上限、ccno），**加上新發現的 fstatusid 核准值 3→7 修正**。
 4. **完整簽核流程移植**——`dbSignFlow.cs` 已取得，邏輯已完全還原（見上方「簽核流程完整還原」），現在可以做。
-5. **異常 Email 通知**——仍卡住，需先向使用者索取 JOB 本體：
-   `SendMail_廠務法規許可值標準化管控報表`、`GetDataRed`、`GetMsg1`/`CheckMAILlog`。
+5. **異常 Email 通知**——JOB 外層流程已還原（見「JOB 派報流程完整還原」），HTML 信件版型/收件名單/K14B跨廠通報/
+   `InsertMAIL`簽章都已確認，可以先把架構搭起來；但「文字內容」與「首發/再發判斷」仍需 `dbVOC.cs` 裡
+   `GetDataRed`/`GetMsg`/`GetMsg1`/`GetMsg2`/`CheckMAILlog`/`GetData()`（無參數版本）這幾支才能 100% 忠實移植——
+   建議直接跟使用者要這幾個方法的程式碼（不用整個 JOB 專案）。
