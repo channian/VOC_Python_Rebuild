@@ -1,62 +1,296 @@
 <div style="padding: 1.5rem;">
 
-  <!-- 標題列 -->
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
-    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">系統管理</h4>
+  {# 標題列 #}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">系統管理 — ACL 隔離權限名單維護</h4>
     <button onclick="document.getElementById('voc-modal').close()"
             style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
   </div>
 
-  <div style="background:var(--status-yellow-bg); border-radius:6px; padding:.6rem .75rem; font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:1.25rem;">
-    ⚠️ Phase 3 完成 LDAP 整合後，此頁面將顯示完整的帳號權限管理功能。
+  <p style="font-size:0.78rem; color:var(--voc-text-muted); margin:0 0 1rem;">
+    廠區隔離抑制的操作／查詢權限名單，主鍵 = 角色 × 廠區 × 工號。
+    對應舊系統 EditAclUser.aspx，僅開放管理<strong>隔離維護</strong>／<strong>隔離查詢</strong>兩種角色
+    （其他 10 種角色舊系統本身也沒有網頁介面，需直接維護資料庫）。
+  </p>
+
+  {# 篩選列 #}
+  <div style="display:flex; gap:.6rem; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap;">
+    <div>
+      <label class="acl-lbl">廠區</label>
+      <select id="acl-f-plantno" class="acl-in" onchange="aclLoadList()">
+        <option value="">全部</option>
+      </select>
+    </div>
+    <div>
+      <label class="acl-lbl">角色</label>
+      <select id="acl-f-roletype" class="acl-in" onchange="aclLoadList()">
+        <option value="">全部</option>
+      </select>
+    </div>
+    <div>
+      <label class="acl-lbl">工號</label>
+      <input id="acl-f-empno" type="text" class="acl-in" placeholder="工號" onchange="aclLoadList()">
+    </div>
+    <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" onclick="aclLoadList()">查詢</button>
   </div>
 
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+  {# 名單表格 #}
+  <div style="overflow-x:auto; margin-bottom:1.5rem;">
+    <table class="dashboard-table" style="font-size:0.78rem;" id="acl-table">
+      <thead>
+        <tr>
+          <th>廠區</th><th>角色</th><th>工號</th><th>姓名</th>
+          <th>Notes ID</th><th style="text-align:center;">水/空區分</th>
+          <th style="text-align:center;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="acl-tbody">
+        <tr id="acl-loading"><td colspan="7" style="text-align:center; padding:2rem; color:var(--voc-text-muted);">載入中…</td></tr>
+      </tbody>
+    </table>
+  </div>
 
-    <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
-      <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">帳號權限管理</h5>
-      <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
-        設定各使用者針對廠區與功能模組的存取權限（12 個角色）。
-      </p>
-      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" disabled>
-        Phase 3 後開放
-      </button>
+  {# 新增 / 編輯表單 #}
+  <div style="background:var(--voc-bg-alt); border:1px solid var(--voc-border); border-radius:6px; padding:1rem;">
+    <p id="acl-form-title" style="font-size:0.8rem; font-weight:600; margin:0 0 .75rem; color:var(--voc-text);">新增權限名單</p>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:.6rem;">
+      <div>
+        <label class="acl-lbl">廠區</label>
+        <select id="acl-plantno" class="acl-in">
+          <option value="">— 選廠區 —</option>
+        </select>
+      </div>
+      <div>
+        <label class="acl-lbl">角色</label>
+        <select id="acl-roleid" class="acl-in">
+          <option value="">— 選角色 —</option>
+        </select>
+      </div>
+      <div>
+        <label class="acl-lbl">工號</label>
+        <input id="acl-empno" type="text" class="acl-in" placeholder="工號" onchange="aclLookupEmp()">
+      </div>
+      <div>
+        <label class="acl-lbl">姓名（自動帶出）</label>
+        <input id="acl-empname" type="text" class="acl-in" placeholder="自動帶出" readonly>
+      </div>
+      <div style="grid-column:span 2;">
+        <label class="acl-lbl">Notes ID（自動帶出）</label>
+        <input id="acl-notesid" type="text" class="acl-in" placeholder="自動帶出" readonly>
+      </div>
+      <div>
+        <label class="acl-lbl">水/空區分</label>
+        <select id="acl-stype" class="acl-in">
+          <option value="1">空</option>
+          <option value="2">水</option>
+          <option value="3" selected>全區(ALL)</option>
+        </select>
+      </div>
+      <div style="grid-column:span 4;">
+        <label class="acl-lbl">備註（VOC_tranlog 記錄用，可空）</label>
+        <input id="acl-remark" type="text" class="acl-in" placeholder="備註">
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:.4rem;">
+        <button id="acl-submit" class="btn-voc btn-voc-primary" style="font-size:0.8rem;" onclick="aclSubmit()">新增</button>
+        <button id="acl-cancel" class="btn-voc btn-voc-outline" style="font-size:0.8rem; display:none;" onclick="aclResetForm()">取消</button>
+      </div>
     </div>
+    <div id="acl-result" style="margin-top:.6rem; min-height:1.25rem;"></div>
+  </div>
 
-    <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
-      <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">系統環境參數</h5>
-      <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
-        LDAP 伺服器、SMTP 伺服器、簡訊機連線狀態。
-      </p>
-      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" disabled>
-        Phase 3 後開放
-      </button>
-    </div>
-
+  {# 其他系統管理項目（非本次 ACL 範圍，維持 Phase 4 待開放狀態） #}
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1.25rem;">
     <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
       <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">廠區 / 項目管理</h5>
       <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
         新增廠區或監控項目（TAG），設定後儀表板自動新增列。
       </p>
-      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" disabled>
-        Phase 4 後開放
-      </button>
+      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem;" disabled>Phase 4 後開放</button>
     </div>
-
     <div style="border:1px solid var(--voc-border); border-radius:8px; padding:1rem;">
       <h5 style="font-size:0.875rem; font-weight:600; margin-bottom:.4rem;">OpenAPI 文件</h5>
       <p style="font-size:0.8rem; color:var(--voc-text-muted); margin-bottom:.75rem;">
         FastAPI 自動產生的 API 測試介面，供開發與除錯使用。
       </p>
-      <a href="/docs" target="_blank" class="btn-voc btn-voc-primary" style="font-size:0.75rem; text-decoration:none; display:inline-block;">
-        開啟 /docs
-      </a>
+      <a href="/docs" target="_blank" class="btn-voc btn-voc-primary" style="font-size:0.75rem; text-decoration:none; display:inline-block;">開啟 /docs</a>
     </div>
-
   </div>
 
-  <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
     <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
   </div>
-
 </div>
+
+<style>
+  .acl-lbl { font-size:0.7rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem; }
+  .acl-in  { width:100%; padding:.3rem .45rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.78rem; box-sizing:border-box; }
+</style>
+
+<script>
+let aclEditOldEmpno = null;   // 非 null = 編輯模式（保存原工號定位）
+let aclEditOldStype = null;   // 編輯模式下的原 stype（DB 原值：空/水/ALL），供 tranlog 記錄
+
+// stype 顯示轉換：DB 存 空/水/ALL，畫面上 ALL 顯示「全區」
+function aclStypeDisplay(v) { return v === 'ALL' ? '全區' : v; }
+function aclStypeTextToCode(v) { if (v === '空') return '1'; if (v === '水') return '2'; return '3'; }
+
+function aclMsg(text, ok) {
+  document.getElementById('acl-result').innerHTML =
+    '<div style="color:' + (ok ? 'var(--status-green)' : 'var(--status-red)') + ';font-size:0.8rem;">' +
+    (ok ? '✅ ' : '❌ ') + text + '</div>';
+}
+function aclClearMsg(delay) { if (delay) setTimeout(() => { document.getElementById('acl-result').innerHTML = ''; }, delay); }
+function aclVal(id) { return document.getElementById(id).value; }
+function aclSet(id, v) { document.getElementById(id).value = v; }
+
+// ── 初始化：載入廠區/角色下拉選單 + 名單 ──────────────────────────────────
+function aclInit() {
+  fetch('/acl/plants').then(r => r.json()).then(plants => {
+    const opts = plants.map(p => `<option value="${p.plantno}">${p.plantno}</option>`).join('');
+    document.getElementById('acl-f-plantno').innerHTML += opts;
+    document.getElementById('acl-plantno').innerHTML += opts;
+  }).catch(() => {});
+
+  fetch('/acl/roles').then(r => r.json()).then(roles => {
+    const filterOpts = roles.map(r => `<option value="${r.roletype}">${r.roletype}</option>`).join('');
+    document.getElementById('acl-f-roletype').innerHTML += filterOpts;
+    const formOpts = roles.map(r => `<option value="${r.roleid}">${r.roletype}</option>`).join('');
+    document.getElementById('acl-roleid').innerHTML += formOpts;
+  }).catch(() => {});
+
+  aclLoadList();
+}
+
+function aclLoadList() {
+  const params = new URLSearchParams({
+    plantno: aclVal('acl-f-plantno'),
+    roletype: aclVal('acl-f-roletype'),
+    empno: aclVal('acl-f-empno').trim(),
+  });
+  const tbody = document.getElementById('acl-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--voc-text-muted);">載入中…</td></tr>';
+  fetch('/acl/list?' + params.toString())
+    .then(r => r.json())
+    .then(rows => {
+      if (!rows.length) {
+        tbody.innerHTML = '<tr id="acl-empty"><td colspan="7" style="text-align:center; padding:2rem; color:var(--voc-text-muted);">尚無權限名單</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(row => `
+        <tr data-plantno="${row.plantno}" data-roletype="${row.roletype}" data-empno="${row.empno}" data-stype="${row.stype}">
+          <td style="font-weight:700;">${row.plantno}</td>
+          <td>${row.roletype}</td>
+          <td>${row.empno}</td>
+          <td>${row.empname || '—'}</td>
+          <td style="font-family:var(--font-mono); font-size:0.72rem;">${row.notesid || '—'}</td>
+          <td style="text-align:center;">${aclStypeDisplay(row.stype)}</td>
+          <td style="text-align:center; white-space:nowrap;">
+            <button class="btn-voc btn-voc-outline" style="font-size:0.68rem; padding:.12rem .4rem;"
+                    onclick='aclEdit(this.closest("tr"))'>編輯</button>
+            <button class="btn-voc btn-voc-outline" style="font-size:0.68rem; padding:.12rem .4rem; color:var(--status-red); border-color:var(--status-red);"
+                    onclick="aclDelete(this.closest('tr'))">刪除</button>
+          </td>
+        </tr>
+      `).join('');
+    })
+    .catch(() => {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--status-red);">查詢失敗，請重試</td></tr>';
+    });
+}
+
+function aclLookupEmp() {
+  const empno = aclVal('acl-empno').trim();
+  if (!empno) return;
+  fetch('/acl/employee/' + encodeURIComponent(empno))
+    .then(r => r.json())
+    .then(d => {
+      if (d.empname) aclSet('acl-empname', d.empname);
+      if (d.notesid) aclSet('acl-notesid', d.notesid);
+    })
+    .catch(() => {});
+}
+
+function aclResetForm() {
+  aclEditOldEmpno = null;
+  aclEditOldStype = null;
+  ['acl-plantno', 'acl-roleid', 'acl-empno', 'acl-empname', 'acl-notesid', 'acl-remark'].forEach(id => aclSet(id, ''));
+  aclSet('acl-stype', '3');
+  document.getElementById('acl-plantno').disabled = false;
+  document.getElementById('acl-roleid').disabled = false;
+  document.getElementById('acl-form-title').textContent = '新增權限名單';
+  document.getElementById('acl-submit').textContent = '新增';
+  document.getElementById('acl-cancel').style.display = 'none';
+}
+
+function aclEdit(tr) {
+  aclEditOldEmpno = tr.dataset.empno;
+  aclEditOldStype = tr.dataset.stype;
+  const cells = tr.children;
+  aclSet('acl-plantno', tr.dataset.plantno);
+  // roleid select 用文字比對 roletype 找出對應 value
+  const roleSel = document.getElementById('acl-roleid');
+  for (const opt of roleSel.options) { if (opt.textContent === tr.dataset.roletype) { roleSel.value = opt.value; break; } }
+  aclSet('acl-empno', tr.dataset.empno);
+  aclSet('acl-empname', cells[3].textContent === '—' ? '' : cells[3].textContent);
+  aclSet('acl-notesid', cells[4].textContent === '—' ? '' : cells[4].textContent);
+  aclSet('acl-stype', aclStypeTextToCode(tr.dataset.stype));
+  // 廠區 + 角色為主鍵定位，編輯時鎖定
+  document.getElementById('acl-plantno').disabled = true;
+  document.getElementById('acl-roleid').disabled = true;
+  document.getElementById('acl-form-title').textContent = '編輯權限名單（廠區／角色不可改）';
+  document.getElementById('acl-submit').textContent = '儲存';
+  document.getElementById('acl-cancel').style.display = '';
+  document.getElementById('acl-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function aclSubmit() {
+  const payload = {
+    plantno: aclVal('acl-plantno'),
+    role_id: parseInt(aclVal('acl-roleid')),
+    empno: aclVal('acl-empno').trim(),
+    stype: aclVal('acl-stype'),
+    remark: aclVal('acl-remark').trim(),
+  };
+  if (!payload.plantno) { aclMsg('請選擇廠區', false); return; }
+  if (!payload.role_id) { aclMsg('請選擇角色', false); return; }
+  if (!payload.empno)   { aclMsg('請輸入工號', false); return; }
+
+  const editing = aclEditOldEmpno !== null;
+  const url = editing ? '/acl/update' : '/acl/create';
+  if (editing) { payload.old_empno = aclEditOldEmpno; payload.old_stype = aclEditOldStype; }
+
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (ok) { aclMsg(data.message, true); aclResetForm(); aclClearMsg(3000); aclLoadList(); }
+      else {
+        const msg = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('；') : (data.detail || '操作失敗');
+        aclMsg(msg, false);
+      }
+    })
+    .catch(() => aclMsg('網路錯誤，請重試', false));
+}
+
+function aclDelete(tr) {
+  if (!confirm('確定刪除 ' + tr.dataset.plantno + ' / ' + tr.dataset.roletype + ' / ' + tr.dataset.empno + ' ？')) return;
+  // 從角色文字找回 roleid（表格只存文字，刪除 API 需要 role_id 數字）
+  const roleSel = document.getElementById('acl-roleid');
+  let roleId = null;
+  for (const opt of roleSel.options) { if (opt.textContent === tr.dataset.roletype) { roleId = parseInt(opt.value); break; } }
+  fetch('/acl/delete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      plantno: tr.dataset.plantno, role_id: roleId, empno: tr.dataset.empno,
+      stype: aclStypeTextToCode(tr.dataset.stype),
+    }),
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (ok) { aclMsg(data.message, true); aclClearMsg(3000); aclLoadList(); }
+      else { aclMsg((data.detail || '刪除失敗'), false); }
+    })
+    .catch(() => aclMsg('網路錯誤，請重試', false));
+}
+
+aclInit();
+</script>
