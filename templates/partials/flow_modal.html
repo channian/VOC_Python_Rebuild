@@ -42,19 +42,20 @@
             </span>
           </td>
           <td>
+            {# 對應 schemas/flow_schema.py SignAction：actionid 1=核准, 9=否決（legacy MTFlowBase.SignAction 真實數值） #}
             <div style="display:flex; gap:.3rem; justify-content:center;">
               <button class="btn-voc btn-voc-primary" style="font-size:0.7rem; padding:.2rem .5rem;"
                       hx-post="/flow/sign"
                       hx-ext="json-enc"
-                      hx-vals='{"form_no": "{{ item.ccno }}", "action": "approve"}'
-                      hx-on::after-request="if(event.detail.successful){ alert('簽核成功！'); location.reload(); }">
+                      hx-vals='{"ccid": {{ item.ccid }}, "flowid": {{ item.flowid }}, "actionid": 1, "comment": ""}'
+                      hx-on::after-request="if(event.detail.successful){ alert('簽核成功！'); location.reload(); } else { alert('簽核失敗，請重新整理後再試'); }">
                 核准
               </button>
               <button class="btn-voc btn-voc-danger" style="font-size:0.7rem; padding:.2rem .5rem;"
                       hx-post="/flow/sign"
                       hx-ext="json-enc"
-                      hx-vals='{"form_no": "{{ item.ccno }}", "action": "reject"}'
-                      hx-on::after-request="if(event.detail.successful){ alert('已退回！'); location.reload(); }">
+                      hx-vals='{"ccid": {{ item.ccid }}, "flowid": {{ item.flowid }}, "actionid": 9, "comment": ""}'
+                      hx-on::after-request="if(event.detail.successful){ alert('已退回！'); location.reload(); } else { alert('操作失敗，請重新整理後再試'); }">
                 退回
               </button>
             </div>

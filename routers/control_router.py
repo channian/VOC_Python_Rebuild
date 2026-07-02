@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import get_voc_db
 from schemas.control_schema import ControlCreate, ApplyListResponse, ControlTagResponse
-from services.control_service import create_control, get_my_applies, get_control_tags
+from services.control_service import create_control, submit_control, get_my_applies, get_control_tags
 from builtins import ValueError
 from typing import List
 
@@ -14,6 +14,17 @@ def apply_plant_exception(data: ControlCreate, is_commit: bool = True, db: Sessi
     try:
         success = create_control(db, current_user_empno="admin", current_user_name="系統管理員", data=data, is_commit=is_commit)
         return {"status": "success", "message": "申請已成功送出"}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="伺服器或資料庫錯誤")
+
+@router.post("/submit/{ccid}")
+def submit_plant_exception(ccid: int, db: Session = Depends(get_voc_db)):
+    """ 把先前暫存的隔離申請單正式送出簽核 (對應舊版 Proc送簽) """
+    try:
+        submit_control(db, ccid=ccid, current_user_empno="admin", current_user_name="系統管理員")
+        return {"status": "success", "message": "已送出簽核"}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:

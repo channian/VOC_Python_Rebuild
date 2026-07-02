@@ -15,9 +15,9 @@ def fetch_todos(sdate: str = "", edate: str = "", ccid: int = -1, db: Session = 
 
 @router.post("/sign")
 def sign_apply(action: SignAction, db: Session = Depends(get_voc_db)):
-    """ 送出簽核結果 (核准/否決) """
+    """ 送出簽核結果 (核准/否決)。actionid: 1=核准, 9=否決 (見 schemas/flow_schema.py) """
     try:
-        process_sign(db, action, "admin")
+        process_sign(db, action, current_user_empno="admin", current_user_name="系統管理員")
         return {"status": "success", "message": "簽核已送出"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
