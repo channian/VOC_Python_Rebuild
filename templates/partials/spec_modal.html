@@ -1,5 +1,10 @@
 <div style="padding: 1.5rem;">
 
+  {# 廠區/項目下拉選單直接從既有 specs 清單取不重複值，避免另開 API（specs/sources 皆由
+     routers/ui_router.py 的 render_spec_modal() 在初次渲染時提供，此檔不可修改該 router）。 #}
+  {% set plantnos = specs | map(attribute='plantno') | unique | list %}
+  {% set display_items = ['pH', 'COD', 'VOC', 'SS', 'BOD', 'COD2', '導電度'] %}
+
   <!-- 標題列 -->
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
     <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">規格維護</h4>
@@ -7,57 +12,162 @@
             style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
   </div>
 
-  <div style="overflow-x:auto;">
-    <table class="dashboard-table" style="font-size:0.8rem;">
-      <thead>
-        <tr>
-          <th>廠區</th>
-          <th>項目</th>
-          <th>來源</th>
-          <th class="spec-boundary">法規許可值</th>
-          <th style="color:var(--status-red);">OOS</th>
-          <th style="color:var(--status-orange);">OOC</th>
-          <th style="color:var(--status-yellow);">Alert</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="spec-tbody">
-        {% for item in specs %}
-        <tr data-plantno="{{ item.plantno }}"
-            data-item="{{ item.item }}"
-            data-sourceid="{{ item.sourceid or '' }}"
-            data-law="{{ item.LAW or '' }}"
-            data-oos="{{ item.OOS or '' }}"
-            data-ooc="{{ item.OOC or '' }}"
-            data-alert="{{ item.alert or '' }}">
-          <td style="font-weight:700;">{{ item.plantno }}</td>
-          <td class="item-name">{{ item.item }}</td>
-          <td class="spec-cell-source">
-            <span style="font-size:0.7rem; padding:.15rem .4rem; border-radius:3px; background:var(--data-scada); color:var(--voc-text);">
-              {{ item.source or '—' }}
-            </span>
-          </td>
-          <td class="spec-boundary spec-cell-law">{{ item.LAW or '—' }}</td>
-          <td class="spec-cell-oos" style="color:var(--status-red); font-weight:600;">{{ item.OOS or '—' }}</td>
-          <td class="spec-cell-ooc" style="color:var(--status-orange); font-weight:600;">{{ item.OOC or '—' }}</td>
-          <td class="spec-cell-alert" style="color:var(--status-yellow); font-weight:600;">{{ item.alert or '—' }}</td>
-          <td class="spec-cell-action">
-            <button class="btn-voc btn-voc-outline" style="font-size:0.7rem; padding:.2rem .5rem;"
-                    onclick="specEdit(this.closest('tr'))">編輯</button>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="8" style="text-align:center; padding:2rem; color:var(--voc-text-muted);">暫無資料</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <!-- 頁籤 -->
+  <div style="display:flex; gap:.4rem; margin-bottom:1rem; border-bottom:1px solid var(--voc-border);">
+    <button class="spec-tab-btn spec-tab-active" data-tab="list"   onclick="specSwitchTab('list')"   style="padding:.4rem .8rem; border:none; background:none; cursor:pointer; font-size:0.82rem; font-weight:600; border-bottom:2px solid var(--voc-primary); color:var(--voc-primary);">規格清單</button>
+    <button class="spec-tab-btn" data-tab="apply"  onclick="specSwitchTab('apply')"  style="padding:.4rem .8rem; border:none; background:none; cursor:pointer; font-size:0.82rem; font-weight:600; border-bottom:2px solid transparent; color:var(--voc-text-muted);">送簽申請</button>
+    <button class="spec-tab-btn" data-tab="myapp"  onclick="specSwitchTab('myapp')"  style="padding:.4rem .8rem; border:none; background:none; cursor:pointer; font-size:0.82rem; font-weight:600; border-bottom:2px solid transparent; color:var(--voc-text-muted);">我的規格申請單</button>
+    <button class="spec-tab-btn" data-tab="todo"   onclick="specSwitchTab('todo')"   style="padding:.4rem .8rem; border:none; background:none; cursor:pointer; font-size:0.82rem; font-weight:600; border-bottom:2px solid transparent; color:var(--voc-text-muted);">待簽核</button>
   </div>
 
-  <div id="spec-result" style="margin-top:.5rem; min-height:1.5rem;"></div>
+  <!-- ── 頁籤 1：規格清單（既有唯讀表格 + 就地編輯，維持原行為）────────────── -->
+  <div id="spec-tab-list" class="spec-tab-panel">
+    <div style="overflow-x:auto;">
+      <table class="dashboard-table" style="font-size:0.8rem;">
+        <thead>
+          <tr>
+            <th>廠區</th>
+            <th>項目</th>
+            <th>來源</th>
+            <th class="spec-boundary">法規許可值</th>
+            <th style="color:var(--status-red);">OOS</th>
+            <th style="color:var(--status-orange);">OOC</th>
+            <th style="color:var(--status-yellow);">Alert</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="spec-tbody">
+          {% for item in specs %}
+          <tr data-plantno="{{ item.plantno }}"
+              data-item="{{ item.item }}"
+              data-sourceid="{{ item.sourceid or '' }}"
+              data-law="{{ item.LAW or '' }}"
+              data-oos="{{ item.OOS or '' }}"
+              data-ooc="{{ item.OOC or '' }}"
+              data-alert="{{ item.alert or '' }}">
+            <td style="font-weight:700;">{{ item.plantno }}</td>
+            <td class="item-name">{{ item.item }}</td>
+            <td class="spec-cell-source">
+              <span style="font-size:0.7rem; padding:.15rem .4rem; border-radius:3px; background:var(--data-scada); color:var(--voc-text);">
+                {{ item.source or '—' }}
+              </span>
+            </td>
+            <td class="spec-boundary spec-cell-law">{{ item.LAW or '—' }}</td>
+            <td class="spec-cell-oos" style="color:var(--status-red); font-weight:600;">{{ item.OOS or '—' }}</td>
+            <td class="spec-cell-ooc" style="color:var(--status-orange); font-weight:600;">{{ item.OOC or '—' }}</td>
+            <td class="spec-cell-alert" style="color:var(--status-yellow); font-weight:600;">{{ item.alert or '—' }}</td>
+            <td class="spec-cell-action">
+              <button class="btn-voc btn-voc-outline" style="font-size:0.7rem; padding:.2rem .5rem;"
+                      onclick="specEdit(this.closest('tr'))">編輯</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" style="text-align:center; padding:2rem; color:var(--voc-text-muted);">暫無資料</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="spec-result" style="margin-top:.5rem; min-height:1.5rem;"></div>
+  </div>
 
-  <div style="display:flex; justify-content:flex-end; margin-top:.5rem;">
+  <!-- ── 頁籤 2：送簽申請（新增/修改/刪除）────────────────────────────────── -->
+  <div id="spec-tab-apply" class="spec-tab-panel" style="display:none;">
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:.6rem; margin-bottom:.8rem;">
+      <div>
+        <label style="font-size:0.75rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">類別</label>
+        <select id="apply-ftype" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+          <option value="I">新增</option>
+          <option value="M">修改</option>
+          <option value="D">刪除</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.75rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">廠區</label>
+        <input list="apply-plantno-list" id="apply-plantno" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+        <datalist id="apply-plantno-list">
+          {% for p in plantnos %}<option value="{{ p }}">{% endfor %}
+        </datalist>
+      </div>
+      <div>
+        <label style="font-size:0.75rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">項目（顯示名稱，如 pH／COD）</label>
+        <input list="apply-item-list" id="apply-item" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+        <datalist id="apply-item-list">
+          {% for it in display_items %}<option value="{{ it }}">{% endfor %}
+        </datalist>
+      </div>
+      <div>
+        <label style="font-size:0.75rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">來源</label>
+        <select id="apply-source" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;"></select>
+      </div>
+      <div>
+        <label style="font-size:0.75rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">法規許可值 (LAW)</label>
+        <input id="apply-law" placeholder="單邊: 100 / 雙邊: 6-9" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+      </div>
+      <div>
+        <label style="font-size:0.75rem; color:var(--status-red); display:block; margin-bottom:.2rem;">OOS</label>
+        <input id="apply-oos" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+      </div>
+      <div>
+        <label style="font-size:0.75rem; color:var(--status-orange); display:block; margin-bottom:.2rem;">OOC</label>
+        <input id="apply-ooc" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+      </div>
+      <div>
+        <label style="font-size:0.75rem; color:var(--status-yellow); display:block; margin-bottom:.2rem;">Alert</label>
+        <input id="apply-alert" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+      </div>
+      <div style="grid-column: span 4;">
+        <label style="font-size:0.75rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem;">申請說明 / 備註</label>
+        <input id="apply-remark" style="width:100%; padding:.3rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.8rem;">
+      </div>
+    </div>
+    <div style="display:flex; justify-content:flex-end;">
+      <button class="btn-voc btn-voc-primary" style="font-size:0.8rem; padding:.35rem .9rem;" onclick="specApplySubmit()">送出申請</button>
+    </div>
+    <div id="spec-apply-result" style="margin-top:.5rem; min-height:1.5rem;"></div>
+  </div>
+
+  <!-- ── 頁籤 3：我的規格申請單（ApplySPEC）───────────────────────────────── -->
+  <div id="spec-tab-myapp" class="spec-tab-panel" style="display:none;">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:.5rem;">
+      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem; padding:.25rem .6rem;" onclick="specLoadMyApplies()">重新整理</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="dashboard-table" style="font-size:0.78rem;">
+        <thead>
+          <tr>
+            <th>申請單號</th><th>類別</th><th>廠區</th><th>項目</th><th>LAW</th><th>OOS</th><th>OOC</th><th>Alert</th><th>申請人</th><th>時間</th><th>狀態</th>
+          </tr>
+        </thead>
+        <tbody id="spec-myapp-tbody">
+          <tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--voc-text-muted);">載入中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── 頁籤 4：待簽核（SignSPEC）────────────────────────────────────────── -->
+  <div id="spec-tab-todo" class="spec-tab-panel" style="display:none;">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:.5rem;">
+      <button class="btn-voc btn-voc-outline" style="font-size:0.75rem; padding:.25rem .6rem;" onclick="specLoadTodos()">重新整理</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="dashboard-table" style="font-size:0.78rem;">
+        <thead>
+          <tr>
+            <th>申請單號</th><th>類別</th><th>廠區</th><th>項目</th><th>LAW</th><th>OOS</th><th>OOC</th><th>Alert</th><th>申請人</th><th>時間</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="spec-todo-tbody">
+          <tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--voc-text-muted);">載入中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="spec-todo-result" style="margin-top:.5rem; min-height:1.5rem;"></div>
+  </div>
+
+  <div style="display:flex; justify-content:flex-end; margin-top:.8rem;">
     <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
   </div>
 
@@ -67,17 +177,36 @@
 const SPEC_SOURCES = {{ sources | tojson }};
 const INPUT_S = 'width:75px;padding:.2rem .35rem;border:1px solid var(--voc-border);border-radius:4px;font-size:0.78rem;box-sizing:border-box;';
 
+// ── 頁籤切換 ─────────────────────────────────────────────────────────────
+function specSwitchTab(tab) {
+  document.querySelectorAll('.spec-tab-panel').forEach(el => el.style.display = 'none');
+  document.getElementById('spec-tab-' + tab).style.display = '';
+  document.querySelectorAll('.spec-tab-btn').forEach(btn => {
+    const active = btn.dataset.tab === tab;
+    btn.style.borderBottomColor = active ? 'var(--voc-primary)' : 'transparent';
+    btn.style.color = active ? 'var(--voc-primary)' : 'var(--voc-text-muted)';
+  });
+  if (tab === 'myapp') specLoadMyApplies();
+  if (tab === 'todo') specLoadTodos();
+  if (tab === 'apply') specFillSourceOptions();
+}
+
+function specFillSourceOptions() {
+  const sel = document.getElementById('apply-source');
+  if (sel.options.length > 0) return;
+  sel.innerHTML = SPEC_SOURCES.map(s => `<option value="${s.sourceid}">${s.source}</option>`).join('');
+}
+
+// ── 頁籤 1：規格清單 就地編輯（既有邏輯，未更動）──────────────────────────
 function specEdit(tr) {
   const d = tr.dataset;
 
-  // Source select
   let opts = SPEC_SOURCES.map(s =>
     `<option value="${s.sourceid}"${s.sourceid == d.sourceid ? ' selected' : ''}>${s.source}</option>`
   ).join('');
   tr.querySelector('.spec-cell-source').innerHTML =
     `<select style="padding:.2rem .3rem;border:1px solid var(--voc-border);border-radius:4px;font-size:0.78rem;">${opts}</select>`;
 
-  // Value inputs
   tr.querySelector('.spec-cell-law').innerHTML   = `<input type="text" value="${d.law}"   style="${INPUT_S}">`;
   tr.querySelector('.spec-cell-oos').innerHTML   = `<input type="text" value="${d.oos}"   style="${INPUT_S}">`;
   tr.querySelector('.spec-cell-ooc').innerHTML   = `<input type="text" value="${d.ooc}"   style="${INPUT_S}">`;
@@ -138,6 +267,124 @@ function specSave(tr) {
         ? data.detail.map(e => e.msg).join('；')
         : (data.detail || '儲存失敗');
       resultEl.innerHTML = `<div style="color:var(--status-red);font-size:0.8rem;">❌ ${msg}</div>`;
+    }
+  })
+  .catch(() => {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">❌ 網路錯誤，請重試</div>';
+  });
+}
+
+// ── 頁籤 2：送簽申請 ─────────────────────────────────────────────────────
+function specApplySubmit() {
+  const resultEl = document.getElementById('spec-apply-result');
+  const payload = {
+    ftype:     document.getElementById('apply-ftype').value,
+    plantno:   document.getElementById('apply-plantno').value.trim(),
+    item:      document.getElementById('apply-item').value.trim(),
+    LAW:       document.getElementById('apply-law').value.trim(),
+    OOS:       document.getElementById('apply-oos').value.trim(),
+    OOC:       document.getElementById('apply-ooc').value.trim(),
+    alert:     document.getElementById('apply-alert').value.trim(),
+    source_id: parseInt(document.getElementById('apply-source').value),
+    remark:    document.getElementById('apply-remark').value.trim(),
+  };
+
+  fetch('/spec/apply', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload)
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      resultEl.innerHTML = `<div style="color:var(--status-green);font-size:0.8rem;">✅ ${data.message}（申請單 formid=${data.formid}）</div>`;
+      specSwitchTab('myapp');
+    } else {
+      const msg = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('；') : (data.detail || '送出失敗');
+      resultEl.innerHTML = `<div style="color:var(--status-red);font-size:0.8rem;">❌ ${msg}</div>`;
+    }
+  })
+  .catch(() => {
+    resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.8rem;">❌ 網路錯誤，請重試</div>';
+  });
+}
+
+// ── 頁籤 3：我的規格申請單 ────────────────────────────────────────────────
+function specLoadMyApplies() {
+  const tbody = document.getElementById('spec-myapp-tbody');
+  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--voc-text-muted);">載入中...</td></tr>';
+
+  fetch('/spec/applies')
+    .then(r => r.json())
+    .then(rows => {
+      if (!Array.isArray(rows) || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--voc-text-muted);">暫無申請單</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.formno}</td><td>${r.ftype_label}</td><td>${r.plantno}</td><td>${r.item}</td>
+          <td>${r.LAW ?? '—'}</td><td>${r.OOS ?? '—'}</td><td>${r.OOC ?? '—'}</td><td>${r.alert ?? '—'}</td>
+          <td>${r.empstr}</td><td>${(r.cdatetime || '').toString().replace('T', ' ').slice(0, 16)}</td><td>${r.fstatus}</td>
+        </tr>
+      `).join('');
+    })
+    .catch(() => {
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--status-red);">載入失敗</td></tr>';
+    });
+}
+
+// ── 頁籤 4：待簽核 ───────────────────────────────────────────────────────
+function specLoadTodos() {
+  const tbody = document.getElementById('spec-todo-tbody');
+  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--voc-text-muted);">載入中...</td></tr>';
+
+  fetch('/spec/todos')
+    .then(r => r.json())
+    .then(rows => {
+      if (!Array.isArray(rows) || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--voc-text-muted);">暫無待簽核事項</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.formno}</td><td>${r.ftype_label}</td><td>${r.plantno}</td><td>${r.item}</td>
+          <td>${r.LAW ?? '—'}</td><td>${r.OOS ?? '—'}</td><td>${r.OOC ?? '—'}</td><td>${r.alert ?? '—'}</td>
+          <td>${r.empstr}</td><td>${(r.cdatetime || '').toString().replace('T', ' ').slice(0, 16)}</td>
+          <td>
+            <button class="btn-voc btn-voc-primary" style="font-size:0.7rem;padding:.2rem .45rem;margin-right:.2rem;"
+                    onclick="specSignApply(${r.formid}, ${r.flowid}, 1)">核准</button>
+            <button class="btn-voc btn-voc-outline" style="font-size:0.7rem;padding:.2rem .45rem;"
+                    onclick="specSignApply(${r.formid}, ${r.flowid}, 9)">否決</button>
+          </td>
+        </tr>
+      `).join('');
+    })
+    .catch(() => {
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:1.5rem; color:var(--status-red);">載入失敗</td></tr>';
+    });
+}
+
+function specSignApply(formid, flowid, actionid) {
+  const resultEl = document.getElementById('spec-todo-result');
+  let comment = '';
+  if (actionid === 9) {
+    comment = prompt('請輸入否決原因：') || '';
+    if (comment === '') { return; }
+  }
+
+  fetch('/spec/sign', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ formid: formid, flowid: flowid, actionid: actionid, comment: comment })
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      resultEl.innerHTML = `<div style="color:var(--status-green);font-size:0.8rem;">✅ ${data.message}</div>`;
+      specLoadTodos();
+    } else {
+      resultEl.innerHTML = `<div style="color:var(--status-red);font-size:0.8rem;">❌ ${data.detail || '簽核失敗'}</div>`;
     }
   })
   .catch(() => {
