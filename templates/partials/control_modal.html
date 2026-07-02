@@ -22,6 +22,7 @@
           <th>開始時間</th>
           <th>結束時間</th>
           <th>備註</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody>
@@ -34,6 +35,18 @@
           <td style="font-family:var(--font-mono);">{{ iso.stime.strftime('%m/%d %H:%M') if iso.stime else '' }}</td>
           <td style="font-family:var(--font-mono);">{{ iso.etime.strftime('%m/%d %H:%M') if iso.etime else '' }}</td>
           <td style="text-align:left; color:var(--voc-text-muted); font-size:0.75rem;">{{ iso.remark or '' }}</td>
+          <td style="white-space:nowrap;">
+            <button type="button" class="btn-voc btn-voc-outline" style="font-size:0.7rem; padding:.2rem .5rem;"
+                    data-ccid="{{ iso.ccid }}" data-plantno="{{ iso.plantno }}" data-plantid="{{ iso.plantid }}"
+                    data-mdfdesc="{{ iso.mdfdesc }}" data-remark="{{ iso.remark or '' }}"
+                    data-stime="{{ iso.stime.strftime('%Y-%m-%dT%H:%M') if iso.stime else '' }}"
+                    data-etime="{{ iso.etime.strftime('%Y-%m-%dT%H:%M') if iso.etime else '' }}"
+                    onclick="openModifyForm(this)">修改</button>
+            <button type="button" class="btn-voc btn-voc-outline" style="font-size:0.7rem; padding:.2rem .5rem;"
+                    data-ccid="{{ iso.ccid }}" data-ccno="{{ iso.ccno }}"
+                    data-etime="{{ iso.etime.strftime('%Y-%m-%dT%H:%M') if iso.etime else '' }}"
+                    onclick="openTimeForm(this)">改時間</button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -44,6 +57,96 @@
     ✅ 目前全廠區無有效隔離
   </div>
   {% endif %}
+
+  <!-- ── 修改隔離申請（對應舊版 ModifyControl.aspx，展開表單，一律走簽核） ──── -->
+  <div id="modify-form-section" style="display:none; background:var(--voc-bg-main); border:1px solid var(--voc-border); border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
+    <h6 style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--voc-text-muted); margin-bottom:.75rem;">
+      修改隔離申請（廠區：<span id="modify-plantno-label"></span>，將建立新的修改單並送簽）
+    </h6>
+    <form id="modify-form" style="display:grid; gap:.75rem;">
+      <input type="hidden" id="modify-orgccid">
+      <input type="hidden" id="modify-plantno-hidden">
+      <input type="hidden" id="modify-plantid-hidden">
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:.75rem;">
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">開始時間</label>
+          <input id="modify-stime" type="datetime-local" required
+                 style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+        </div>
+        <div>
+          <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">結束時間</label>
+          <input id="modify-etime" type="datetime-local" required
+                 style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">隔離項目</label>
+        <div id="modify-item-checkboxes" style="min-height:2rem;">
+          <p style="font-size:0.8rem; color:var(--voc-text-muted); margin:.25rem 0;">載入中…</p>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">隔離原因</label>
+        <input id="modify-mdfdesc" type="text" required
+               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+      </div>
+
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">備註（選填）</label>
+        <input id="modify-remark" type="text"
+               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+      </div>
+
+      <div style="background:var(--status-yellow-bg); border-radius:6px; padding:.6rem .75rem; font-size:0.75rem; color:var(--voc-text-muted);">
+        ⚠️ 隔離時間上限：一律 1 小時。此修改將建立一張新的修改單並送出簽核，核准後才會回寫原單時間。
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+        <button type="button" onclick="document.getElementById('modify-form-section').style.display='none'"
+                class="btn-voc btn-voc-outline">取消</button>
+        <button type="button" onclick="submitModifyForm()" class="btn-voc btn-voc-primary">送出修改</button>
+      </div>
+    </form>
+    <div id="modify-result" style="margin-top:.75rem;"></div>
+  </div>
+
+  <!-- ── 隔離時間修改（對應舊版 ControlTime.aspx，直接改主表，不走簽核） ──── -->
+  <div id="time-form-section" style="display:none; background:var(--voc-bg-main); border:1px solid var(--voc-border); border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
+    <h6 style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--voc-text-muted); margin-bottom:.75rem;">
+      隔離時間修改（申請單號：<span id="time-ccno-label"></span>，僅限隔離時間修改權限使用）
+    </h6>
+    <form id="time-form" style="display:grid; gap:.75rem;">
+      <input type="hidden" id="time-ccid">
+      <input type="hidden" id="time-ccno">
+      <input type="hidden" id="time-orig-etime">
+
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">新結束時間</label>
+        <input id="time-etime" type="datetime-local" required
+               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+      </div>
+
+      <div>
+        <label style="font-size:0.75rem; font-weight:600; color:var(--voc-text-muted); display:block; margin-bottom:.25rem;">備註（選填）</label>
+        <input id="time-remark" type="text"
+               style="width:100%; padding:.4rem .6rem; border:1px solid var(--voc-border); border-radius:6px; font-size:0.85rem; color:var(--voc-text);">
+      </div>
+
+      <div style="background:var(--status-yellow-bg); border-radius:6px; padding:.6rem .75rem; font-size:0.75rem; color:var(--voc-text-muted);">
+        ⚠️ 此功能直接修改主表結束時間、不經過簽核流程，且新結束時間不可小於目前的結束時間（只能延長，不能縮短）。
+      </div>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+        <button type="button" onclick="document.getElementById('time-form-section').style.display='none'"
+                class="btn-voc btn-voc-outline">取消</button>
+        <button type="button" onclick="submitTimeForm()" class="btn-voc btn-voc-primary">送出</button>
+      </div>
+    </form>
+    <div id="time-result" style="margin-top:.75rem;"></div>
+  </div>
 
   <!-- ── 新增隔離申請 ─────────────────────────────── -->
   <h6 style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--voc-text-muted); margin-bottom:.75rem;">新增隔離申請</h6>
@@ -142,7 +245,8 @@ function submitIsolationForm() {
     return;
   }
 
-  const checked = Array.from(document.querySelectorAll('.item-checkbox:checked'));
+  // 只在「新增隔離申請」自己的 checkbox 容器內找勾選項，避免跟「修改」表單的 checkbox 互相干擾
+  const checked = Array.from(document.querySelectorAll('#item-checkboxes .item-checkbox:checked'));
   if (!checked.length) {
     resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">請至少勾選一個隔離項目</div>';
     return;
@@ -193,5 +297,166 @@ function submitIsolationForm() {
   .catch(() => {
     resultEl.innerHTML = '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">❌ 網路錯誤，請重試</div>';
   });
+}
+
+// ── 共用結果訊息 HTML（新增/修改/改時間 三個表單共用）───────────────────────
+function okHtml(msg) {
+  return '<div style="color:var(--status-green);font-size:0.85rem;padding:.4rem 0;">✅ ' + msg + '</div>';
+}
+function errorHtml(msg) {
+  return '<div style="color:var(--status-red);font-size:0.85rem;padding:.4rem 0;">❌ ' + msg + '</div>';
+}
+function reloadControlModalSoon() {
+  setTimeout(() => {
+    htmx.ajax('GET', '/ui/control', { target: '#modal-container', swap: 'innerHTML' });
+  }, 1500);
+}
+
+// ── 修改隔離申請（對應舊版 ModifyControl.aspx）─────────────────────────────
+function openModifyForm(btn) {
+  const ccid = btn.dataset.ccid;
+  const plantno = btn.dataset.plantno;
+
+  document.getElementById('modify-orgccid').value = ccid;
+  document.getElementById('modify-plantno-hidden').value = plantno;
+  document.getElementById('modify-plantid-hidden').value = btn.dataset.plantid || '';
+  document.getElementById('modify-plantno-label').textContent = plantno;
+  document.getElementById('modify-mdfdesc').value = btn.dataset.mdfdesc || '';
+  document.getElementById('modify-remark').value = btn.dataset.remark || '';
+  document.getElementById('modify-stime').value = btn.dataset.stime || '';
+  document.getElementById('modify-etime').value = btn.dataset.etime || '';
+  document.getElementById('modify-result').innerHTML = '';
+  document.getElementById('time-form-section').style.display = 'none';
+  document.getElementById('modify-form-section').style.display = 'block';
+
+  // 沿用「新增隔離申請」同一支 /ui/control/items 局部頁載入該廠區可隔離項目 checkbox，
+  // 載入完成後再依原單既有項目（/control/tags/{ccid}）預先勾選。
+  htmx.ajax('GET', '/ui/control/items?plantno=' + encodeURIComponent(plantno),
+    { target: '#modify-item-checkboxes', swap: 'innerHTML' }
+  ).then(() => preCheckExistingItems(ccid));
+
+  document.getElementById('modify-form-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function preCheckExistingItems(ccid) {
+  fetch('/control/tags/' + ccid)
+    .then(r => r.json())
+    .then(tags => {
+      const itemNames = new Set(tags.map(t => t.item));
+      document.querySelectorAll('#modify-item-checkboxes .item-checkbox').forEach(cb => {
+        if (itemNames.has(cb.dataset.item)) cb.checked = true;
+      });
+    })
+    .catch(() => { /* 預先勾選失敗不影響手動勾選，靜默忽略 */ });
+}
+
+function submitModifyForm() {
+  const resultEl = document.getElementById('modify-result');
+  const orgccid  = parseInt(document.getElementById('modify-orgccid').value);
+  const plantno  = document.getElementById('modify-plantno-hidden').value;
+  const plantid  = parseInt(document.getElementById('modify-plantid-hidden').value);
+
+  if (!plantid) {
+    resultEl.innerHTML = errorHtml('缺少廠區資訊，請重新開啟修改表單');
+    return;
+  }
+
+  const checked = Array.from(document.querySelectorAll('#modify-item-checkboxes .item-checkbox:checked'));
+  if (!checked.length) {
+    resultEl.innerHTML = errorHtml('請至少勾選一個隔離項目');
+    return;
+  }
+
+  const stime   = document.getElementById('modify-stime').value;
+  const etime   = document.getElementById('modify-etime').value;
+  const mdfdesc = document.getElementById('modify-mdfdesc').value.trim();
+
+  if (!stime || !etime || !mdfdesc) {
+    resultEl.innerHTML = errorHtml('請填寫所有必填欄位');
+    return;
+  }
+
+  const payload = {
+    orgccid: orgccid,
+    plantid: plantid,
+    mdfdesc: mdfdesc,
+    stime:   stime,
+    etime:   etime,
+    remark:  document.getElementById('modify-remark').value,
+    items:   checked.map(cb => ({
+      plantno:  plantno,
+      item:     cb.dataset.item,
+      sourceid: cb.dataset.sourceid
+    }))
+  };
+
+  fetch('/control/modify', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload)
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      resultEl.innerHTML = okHtml(data.message);
+      reloadControlModalSoon();
+    } else {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => e.msg).join('；')
+        : (data.detail || '送出失敗');
+      resultEl.innerHTML = errorHtml(msg);
+    }
+  })
+  .catch(() => { resultEl.innerHTML = errorHtml('網路錯誤，請重試'); });
+}
+
+// ── 隔離時間修改（對應舊版 ControlTime.aspx，直接改主表不走簽核）───────────
+function openTimeForm(btn) {
+  document.getElementById('time-ccid').value = btn.dataset.ccid;
+  document.getElementById('time-ccno').value = btn.dataset.ccno;
+  document.getElementById('time-ccno-label').textContent = btn.dataset.ccno;
+  document.getElementById('time-orig-etime').value = btn.dataset.etime || '';
+  document.getElementById('time-etime').value = btn.dataset.etime || '';
+  document.getElementById('time-remark').value = '';
+  document.getElementById('time-result').innerHTML = '';
+  document.getElementById('modify-form-section').style.display = 'none';
+  document.getElementById('time-form-section').style.display = 'block';
+  document.getElementById('time-form-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function submitTimeForm() {
+  const resultEl = document.getElementById('time-result');
+  const etime = document.getElementById('time-etime').value;
+  if (!etime) {
+    resultEl.innerHTML = errorHtml('請輸入新的結束時間');
+    return;
+  }
+
+  const payload = {
+    ccid:       parseInt(document.getElementById('time-ccid').value),
+    ccno:       document.getElementById('time-ccno').value,
+    orig_etime: document.getElementById('time-orig-etime').value,
+    etime:      etime,
+    remark:     document.getElementById('time-remark').value
+  };
+
+  fetch('/control/time', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload)
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok) {
+      resultEl.innerHTML = okHtml(data.message);
+      reloadControlModalSoon();
+    } else {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => e.msg).join('；')
+        : (data.detail || '送出失敗（可能無隔離時間修改權限）');
+      resultEl.innerHTML = errorHtml(msg);
+    }
+  })
+  .catch(() => { resultEl.innerHTML = errorHtml('網路錯誤，請重試'); });
 }
 </script>
