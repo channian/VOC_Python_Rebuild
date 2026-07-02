@@ -1,0 +1,217 @@
+<div style="padding: 1.5rem;">
+
+  {# 標題列 #}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">部門權限維護</h4>
+    <button onclick="document.getElementById('voc-modal').close()"
+            style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
+  </div>
+
+  <p style="font-size:0.78rem; color:var(--voc-text-muted); margin:0 0 1rem;">
+    部門（deptno）與廠區（plantid）對應維護，主鍵 = 廠區 × 部門代碼。
+    <strong>plantid=29 為「全廠」</strong>，指派給該 plantid 的部門不受廠區篩選限制。
+  </p>
+
+  {% if error %}
+  <div style="background:var(--status-red-bg,#fee2e2); color:var(--status-red); border-radius:6px; padding:.6rem .8rem; margin-bottom:1rem; font-size:0.8rem;">
+    ❌ {{ error }}
+  </div>
+  {% endif %}
+
+  {# 查詢篩選列 #}
+  <div style="display:flex; align-items:flex-end; gap:.6rem; margin-bottom:1rem;">
+    <div>
+      <label class="dp-lbl">廠區</label>
+      <select id="dp-query-plantid" class="dp-in">
+        <option value="">— 全部廠區 —</option>
+        {% for p in plants %}
+        <option value="{{ p.plantid }}" {% if plantid and plantid|string == p.plantid|string %}selected{% endif %}>
+          {{ p.plantno }}{{ '（全廠）' if is_all_plant(p.plantid) else '' }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="dp-lbl">部門代碼</label>
+      <input id="dp-query-deptno" class="dp-in" type="text" value="{{ deptno or '' }}" placeholder="部門代碼">
+    </div>
+    <button class="btn-voc btn-voc-outline" style="font-size:0.78rem;" onclick="dpQuery()">查詢</button>
+  </div>
+
+  {# 部門資料表格 #}
+  <div style="overflow-x:auto; margin-bottom:1.5rem;">
+    <table class="dashboard-table" style="font-size:0.78rem;" id="dept-table">
+      <thead>
+        <tr>
+          <th>廠區</th><th>部門代碼</th><th>部門名稱</th>
+          <th style="text-align:center;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in depts %}
+        <tr data-plantid="{{ row.plantid }}" data-plantno="{{ row.plantno }}" data-deptno="{{ row.deptno }}">
+          <td style="font-weight:700;">{{ row.plantno }}{{ '（全廠）' if is_all_plant(row.plantid) else '' }}</td>
+          <td style="font-family:var(--font-mono);">{{ row.deptno }}</td>
+          <td>{{ row.deptname or '—' }}</td>
+          <td style="text-align:center; white-space:nowrap;">
+            <button class="btn-voc btn-voc-outline" style="font-size:0.68rem; padding:.12rem .4rem;"
+                    onclick='dpEdit(this.closest("tr"))'>編輯</button>
+            <button class="btn-voc btn-voc-outline" style="font-size:0.68rem; padding:.12rem .4rem; color:var(--status-red); border-color:var(--status-red);"
+                    onclick="dpDelete(this.closest('tr'))">刪除</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr id="dp-empty"><td colspan="4" style="text-align:center; padding:2rem; color:var(--voc-text-muted);">尚無部門資料</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# 新增 / 編輯表單 #}
+  <div style="background:var(--voc-bg-alt); border:1px solid var(--voc-border); border-radius:6px; padding:1rem;">
+    <p id="dp-form-title" style="font-size:0.8rem; font-weight:600; margin:0 0 .75rem; color:var(--voc-text);">新增部門資料</p>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:.6rem;">
+      <div>
+        <label class="dp-lbl">廠區</label>
+        <select id="dp-plantid" class="dp-in">
+          <option value="">— 選廠區 —</option>
+          {% for p in plants %}
+          <option value="{{ p.plantid }}">{{ p.plantno }}{{ '（全廠）' if is_all_plant(p.plantid) else '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="dp-lbl">部門代碼</label>
+        <input id="dp-deptno" type="text" class="dp-in" placeholder="部門代碼" onchange="dpLookupDept()">
+      </div>
+      <div style="grid-column:span 2;">
+        <label class="dp-lbl">部門名稱（自動帶出）</label>
+        <input id="dp-deptname" type="text" class="dp-in" placeholder="輸入部門代碼後自動帶出" readonly>
+      </div>
+      <div style="grid-column:span 2;">
+        <label class="dp-lbl">備註（選填）</label>
+        <input id="dp-remark" type="text" class="dp-in" placeholder="備註">
+      </div>
+      <div style="grid-column:span 2; display:flex; align-items:flex-end; gap:.4rem;">
+        <button id="dp-submit" class="btn-voc btn-voc-primary" style="font-size:0.8rem;" onclick="dpSubmit()">新增</button>
+        <button id="dp-cancel" class="btn-voc btn-voc-outline" style="font-size:0.8rem; display:none;" onclick="dpResetForm()">取消</button>
+      </div>
+    </div>
+    <div id="dp-result" style="margin-top:.6rem; min-height:1.25rem;"></div>
+  </div>
+
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+    <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
+  </div>
+</div>
+
+<style>
+  .dp-lbl { font-size:0.7rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem; }
+  .dp-in  { width:100%; padding:.3rem .45rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.78rem; box-sizing:border-box; }
+</style>
+
+<script>
+let dpEditOldDeptno = null;  // 非 null = 編輯模式（保存原部門代碼定位）
+
+function dpMsg(text, ok) {
+  document.getElementById('dp-result').innerHTML =
+    '<div style="color:' + (ok ? 'var(--status-green)' : 'var(--status-red)') + ';font-size:0.8rem;">' +
+    (ok ? '✅ ' : '❌ ') + text + '</div>';
+}
+function dpClearMsg(delay) { if (delay) setTimeout(() => { document.getElementById('dp-result').innerHTML = ''; }, delay); }
+
+function dpVal(id) { return document.getElementById(id).value; }
+function dpSet(id, v) { document.getElementById(id).value = v; }
+
+function dpQuery() {
+  const plantid = dpVal('dp-query-plantid');
+  const deptno = dpVal('dp-query-deptno').trim();
+  const params = new URLSearchParams();
+  if (plantid) params.set('plantid', plantid);
+  if (deptno) params.set('deptno', deptno);
+  htmx.ajax('GET', '/dept/ui?' + params.toString(), { target: '#modal-container', swap: 'innerHTML' });
+}
+
+function dpLookupDept() {
+  const deptno = dpVal('dp-deptno').trim();
+  if (!deptno) { dpSet('dp-deptname', ''); return; }
+  fetch('/dept/name/' + encodeURIComponent(deptno))
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (ok) dpSet('dp-deptname', data.deptname);
+      else { dpSet('dp-deptname', ''); dpMsg(data.detail || '部門代碼錯誤!', false); }
+    })
+    .catch(() => {});
+}
+
+function dpResetForm() {
+  dpEditOldDeptno = null;
+  ['dp-plantid', 'dp-deptno', 'dp-deptname', 'dp-remark'].forEach(id => dpSet(id, ''));
+  document.getElementById('dp-plantid').disabled = false;
+  document.getElementById('dp-form-title').textContent = '新增部門資料';
+  document.getElementById('dp-submit').textContent = '新增';
+  document.getElementById('dp-cancel').style.display = 'none';
+}
+
+function dpEdit(tr) {
+  dpEditOldDeptno = tr.dataset.deptno;
+  const cells = tr.children;
+  dpSet('dp-plantid', tr.dataset.plantid);
+  dpSet('dp-deptno', tr.dataset.deptno);
+  dpSet('dp-deptname', cells[2].textContent === '—' ? '' : cells[2].textContent);
+  dpSet('dp-remark', '');
+  // 廠區為主鍵一部分，編輯時鎖定（舊版 _0plant.Enabled=false）
+  document.getElementById('dp-plantid').disabled = true;
+  document.getElementById('dp-form-title').textContent = '編輯部門資料（廠區不可改）';
+  document.getElementById('dp-submit').textContent = '儲存';
+  document.getElementById('dp-cancel').style.display = '';
+  document.getElementById('dp-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function dpSubmit() {
+  const plantid = parseInt(dpVal('dp-plantid'));
+  const deptno = dpVal('dp-deptno').trim();
+  const remark = dpVal('dp-remark').trim();
+
+  if (!plantid) { dpMsg('請選擇廠區', false); return; }
+  if (!deptno)  { dpMsg('請輸入部門代碼', false); return; }
+
+  const editing = dpEditOldDeptno !== null;
+  const url = editing ? '/dept/update' : '/dept/add';
+  const payload = editing
+    ? { plantid: plantid, old_deptno: dpEditOldDeptno, deptno: deptno, remark: remark }
+    : { plantid: plantid, deptno: deptno, remark: remark };
+
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (ok) {
+        dpMsg(data.message + '，重新查詢中…', true);
+        dpResetForm();
+        setTimeout(() => { dpQuery(); }, 800);
+      } else {
+        const msg = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('；') : (data.detail || '操作失敗');
+        dpMsg(msg, false);
+      }
+    })
+    .catch(() => dpMsg('網路錯誤，請重試', false));
+}
+
+function dpDelete(tr) {
+  if (!confirm('確定刪除 ' + tr.dataset.plantno + ' / ' + tr.dataset.deptno + ' ？')) return;
+  fetch('/dept/delete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plantid: parseInt(tr.dataset.plantid), deptno: tr.dataset.deptno })
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (ok) {
+        dpMsg(data.message + '，重新查詢中…', true);
+        setTimeout(() => { dpQuery(); }, 800);
+      } else {
+        dpMsg((data.detail || '刪除失敗'), false);
+      }
+    })
+    .catch(() => dpMsg('網路錯誤，請重試', false));
+}
+</script>

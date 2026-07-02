@@ -1,0 +1,144 @@
+<div style="padding: 1.5rem;">
+
+  {# 標題列 #}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">中水緊急通知</h4>
+    <button onclick="document.getElementById('voc-modal').close()"
+            style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
+  </div>
+
+  <p style="font-size:0.78rem; color:var(--voc-text-muted); margin:0 0 1rem;">
+    人工觸發中水（K14B）放流水質相關緊急 Email 通知，對應舊版 WaterUrgent.aspx 兩項功能。
+    寄出前請務必確認，通知會實際發送給收件名單（測試環境受 TEST_MODE 攔截）。
+  </p>
+
+  {% if error %}
+  <div style="background:var(--status-red-bg,#fee2e2); color:var(--status-red); border-radius:6px; padding:.6rem .8rem; margin-bottom:1rem; font-size:0.8rem;">
+    ❌ {{ error }}
+  </div>
+  {% endif %}
+
+  {# ── 水質異常通知 ─────────────────────────────────────── #}
+  <div style="background:var(--voc-bg-alt); border:1px solid var(--voc-border); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+    <p style="font-size:0.85rem; font-weight:700; margin:0 0 .4rem; color:var(--voc-text);">中水水質異常通知</p>
+    <p style="font-size:0.75rem; color:var(--voc-text-muted); margin:0 0 .75rem;">
+      對所有使用 K14B 中水的廠區發送「請回覆水質狀況」通知信（內容為 K14B 目前超標項目讀值）。
+    </p>
+    <button class="btn-voc btn-voc-primary" style="font-size:0.8rem;" onclick="wuSendAbnormal()">
+      發送水質異常通知
+    </button>
+  </div>
+
+  {# ── 改排水通知 ───────────────────────────────────────── #}
+  <div style="background:var(--voc-bg-alt); border:1px solid var(--voc-border); border-radius:6px; padding:1rem;">
+    <p style="font-size:0.85rem; font-weight:700; margin:0 0 .4rem; color:var(--voc-text);">改排水通知</p>
+    <p style="font-size:0.75rem; color:var(--voc-text-muted); margin:0 0 .75rem;">
+      勾選異常廠區與原因，發送「請回覆處理狀況」通知信（會額外副本通知 K14B）。
+    </p>
+
+    <div style="margin-bottom:.6rem;">
+      <label class="wu-lbl">通知廠區</label>
+      <div style="display:flex; flex-wrap:wrap; gap:.6rem;">
+        {% for p in plants %}
+        <label style="font-size:0.8rem; display:flex; align-items:center; gap:.25rem;">
+          <input type="checkbox" class="wu-plant-cb" value="{{ p.plantno }}"> {{ p.plantno }}
+        </label>
+        {% else %}
+        <span style="font-size:0.8rem; color:var(--voc-text-muted);">尚無可通知廠區</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:.6rem; margin-bottom:.75rem;">
+      <div>
+        <label class="wu-lbl">改排水原因</label>
+        <select id="wu-reasonid" class="wu-in" onchange="wuReasonChanged()">
+          <option value="">— 選擇原因 —</option>
+          {% for r in reasons %}
+          <option value="{{ r.reasonid }}" data-reason="{{ r.reason }}">{{ r.reason }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="wu-others-wrap" style="display:none;">
+        <label class="wu-lbl">其他異常原因</label>
+        <input id="wu-others" type="text" class="wu-in" placeholder="請輸入原因">
+      </div>
+    </div>
+
+    <button class="btn-voc btn-voc-primary" style="font-size:0.8rem;" onclick="wuSendChange()">
+      發送改排水通知
+    </button>
+  </div>
+
+  <div id="wu-result" style="margin-top:1rem; min-height:1.25rem;"></div>
+
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+    <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
+  </div>
+</div>
+
+<style>
+  .wu-lbl { font-size:0.7rem; color:var(--voc-text-muted); display:block; margin-bottom:.2rem; }
+  .wu-in  { width:100%; padding:.3rem .45rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.78rem; box-sizing:border-box; }
+</style>
+
+<script>
+function wuMsg(text, ok) {
+  document.getElementById('wu-result').innerHTML =
+    '<div style="color:' + (ok ? 'var(--status-green)' : 'var(--status-red)') + ';font-size:0.8rem;">' +
+    (ok ? '✅ ' : '❌ ') + text + '</div>';
+}
+
+function wuReasonChanged() {
+  const sel = document.getElementById('wu-reasonid');
+  const text = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.reason : '';
+  const wrap = document.getElementById('wu-others-wrap');
+  wrap.style.display = (text === '其他異常') ? '' : 'none';
+}
+
+function wuSendAbnormal() {
+  if (!confirm('確定要發送「中水水質異常通知」嗎？此操作會實際寄送 Email 給相關收件人。')) return;
+  fetch('/warning/water_urgent', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notify_type: 'water_abnormal' })
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (ok) wuMsg(data.message, true);
+      else {
+        const msg = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('；') : (data.detail || '發送失敗');
+        wuMsg(msg, false);
+      }
+    })
+    .catch(() => wuMsg('網路錯誤，請重試', false));
+}
+
+function wuSendChange() {
+  const plantnos = Array.from(document.querySelectorAll('.wu-plant-cb:checked')).map(cb => cb.value);
+  if (!plantnos.length) { wuMsg('請選擇廠區', false); return; }
+
+  const sel = document.getElementById('wu-reasonid');
+  const selectedText = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.reason : '';
+  if (!selectedText) { wuMsg('請選擇改排水原因', false); return; }
+
+  const others = document.getElementById('wu-others').value.trim();
+  if (selectedText === '其他異常' && !others) { wuMsg('請輸入其他異常原因', false); return; }
+  const reason = (selectedText === '其他異常') ? others : selectedText;
+
+  if (!confirm('確定要對 ' + plantnos.join('、') + ' 發送「改排水通知」（原因：' + reason + '）嗎？')) return;
+
+  fetch('/warning/water_urgent', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notify_type: 'water_change', plantnos: plantnos, reason: reason })
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (ok) wuMsg(data.message, true);
+      else {
+        const msg = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join('；') : (data.detail || '發送失敗');
+        wuMsg(msg, false);
+      }
+    })
+    .catch(() => wuMsg('網路錯誤，請重試', false));
+}
+</script>
