@@ -94,6 +94,27 @@
             onclick="document.getElementById('voc-modal').showModal()">
       異常回覆
     </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/report/ui"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      異常報表
+    </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/warning/water_urgent/ui"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      中水緊急通知
+    </button>
+    <button class="btn-voc btn-voc-outline"
+            hx-get="/dept/ui"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            onclick="document.getElementById('voc-modal').showModal()">
+      部門權限
+    </button>
     {# Phase 3: if has_perm(user, 'admin') #}
     <button class="btn-voc btn-voc-primary"
             hx-get="/ui/acl"

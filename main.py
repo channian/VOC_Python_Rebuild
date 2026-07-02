@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from routers import home_router, acl_router, spec_router, control_router, flow_router, warning_router, ui_router, qa_router, maillist_router, history_router
+from routers import home_router, acl_router, spec_router, control_router, flow_router, warning_router, ui_router, qa_router, maillist_router, history_router, report_router, dept_router
 
 # 初始化 FastAPI 應用程式模組
 app = FastAPI(
@@ -24,6 +24,8 @@ app.include_router(ui_router.router)
 app.include_router(qa_router.router)
 app.include_router(maillist_router.router)
 app.include_router(history_router.router)
+app.include_router(report_router.router)
+app.include_router(dept_router.router)
 
 @app.get("/", include_in_schema=False)
 async def read_root():
