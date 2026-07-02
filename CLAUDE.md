@@ -53,8 +53,11 @@ rvalue > recv（允收值）        → 'Y'（黃）
 ## 舊原始碼（2026-06-21 已取得網頁端）
 - `legacy/` 內有 32 個舊 `.cs`（dbVOC.cs + 各 .aspx.cs），精讀結果見 **`docs/legacy_source_analysis.md`**。
 - 要還原舊行為時**先查 `legacy/` 與該分析文件**，不要再憑 `docs/` 的舊推測當定論。
-- ⚠️ **仍缺外部排程 JOB 原始碼**：`SendMail_廠務法規許可值標準化管控報表`、`GetMsg1`、`CheckMAILlog`（首發/再發判斷）、`MTFlowBase`（簽核框架，狀態值除否決=8 外未確認）。
-  做「異常 Email 通知移植」與「完整簽核流程」前需請使用者補貼。
+- ✅ **2026-07-01 JOB 原始碼已全部補齊**（`legacy/Job_SendMail.cs`、`legacy/Job_dbVOC.cs`、
+  `legacy/MTFlowBase.cs`、`legacy/dbSignFlow.cs`），異常派報與簽核流程皆已依此移植完成。
+  唯一未取得：`CheckMAILlog` 本體（僅用於 IH 斷訊通知，不影響核心）。
+- **簽核狀態值（已確認）**：待簽核=0、簽核中=1、核准=7、否決=8、取消=12
+  （`flow_service.FlowStatus` IntEnum，**不要**再寫死數字）。
 
 ## 開發 / 測試
 ```
@@ -63,14 +66,26 @@ python main.py                    # 本地啟動 → http://localhost:8000/home
 ```
 - 新功能盡量寫**不依賴 DB 的純邏輯測試**（DB 端無 ODBC driver，連線會失敗屬正常）。
 
-## 已知待辦（動相關功能前先看）
-> 完整落差清單見 `docs/legacy_source_analysis.md` 第五節。重點：
-- **派送名單需重寫**：真實 `VOC_Mail_List` 主鍵 `(plantno,rpttype,empno)`，欄位含 rpttype/empname/notesid/mail/SM/signgrp/Mail1/SM1，先前 commit 的版本錯誤。
-- 🔴 **ACL 權限全開**（`acl_service.check_permission` 直接 return True）。
-- 🔴 **隔離自動核准** bug（`control_service` 的 `b_pass→fstatusid=3` 應移除，舊系統一律走簽核）。
-- 🔴 **隔離時間上限**：Python 用 4hr，舊系統一律 1 小時。
-- 🔴 **ccno 流水號寫死 `001`**，同日撞號 → 改查當日 MAX 後 3 碼 +1（交易內）。
-- AD/LDAP 登入延後到最後（`docs/ad_integration_guide.md`）。
+## 已知待辦（2026-07-01 大更新：第一階段模組移植全部完成）
+> 先前列的 4 個 🔴 bug（ACL 全開/隔離自動核准/時間上限/ccno 寫死）**皆已修復**，
+> 派送名單也已重寫完成。所有舊系統頁面（含派報/報表/規格簽核/部門權限/中水通知/
+> 隔離修改與時間修改）皆已移植，全套純邏輯測試 256 個通過。
+
+**尚未完成／待決事項：**
+- **check_permission 尚未掛到各 router 當守門**（acl_service 已有真實實作 + `ACL_ENFORCE`
+  開關，但除了 ControlTime 外其他端點還沒呼叫）——等 Phase 3 LDAP 有真實 current_user
+  後一併接上，現在 current_user 都是寫死 "admin" 接了也沒意義。
+- **正式上線前必改設定**：`ACL_ENFORCE=True`、`AUTH_MOCK=False`（見 .env.example）。
+- **AD/LDAP 登入**延後到最後（`docs/ad_integration_guide.md`）。
+- **待業務確認清單**（各 agent 移植時發現，已在對應程式碼註解標記）：
+  1. 異常報表母集合現含雨水溝（舊報表不含），統計數字會比舊系統多
+  2. 水質異常通知固定查 K14B 資料（舊系統原始行為，疑似 bug，已忠實還原）
+  3. EditAclUser 只管 roleid 3/7（照舊系統），是否開放管理全部 12 種角色
+  4. 隔離重複防呆：新版「區間重疊」擋 vs 舊系統「完全相等」才擋
+  5. 規格簽核 RPTTYPE_SPEC="規格維護" 為新設常數（legacy 該段是死碼無從考證）
+  6. ControlTime 無 1 小時上限且不走簽核（舊系統後門通道，上線前應評估）
+- **第二階段**：資料流與 JOB 重寫——Kepware(A，既有) → 新 VOC 資料庫(B，schema 未定案)
+  轉拋 JOB 由本專案撰寫，見 `docs/JOB確認清單.md` 第六節。
 
 ## Git
 - 工作分支：`claude/wizardly-clarke-NRLEK`（push 用 `git push -u origin <branch>`）。
