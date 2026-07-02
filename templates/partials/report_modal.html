@@ -1,0 +1,197 @@
+{# 異常報表 Modal（對應舊系統 VOCreport.aspx：線上統計報表，非 Excel/CSV 匯出）。 #}
+{# ⚠️ 舊系統用全域共用實體暫存表 VOC_report 做 PIVOT，多人同時查詢會互相覆蓋資料； #}
+{# Python 版已修正：SQL 只撈原始明細，PIVOT/排行/長條圖統計全部在 report_service.py 的 #}
+{# build_summary / build_pivot / build_ranking 於 Python 端各自彙整，無共用暫存表、無併發互蓋問題。 #}
+<div style="padding: 1.5rem;">
+
+  {# 標題列 #}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--voc-border);">
+    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--voc-text);">異常報表</h4>
+    <button onclick="document.getElementById('voc-modal').close()"
+            style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:var(--voc-text-muted); line-height:1;">✕</button>
+  </div>
+
+  {# 篩選表單：送出後以 HTMX 重載整個 modal 內容 #}
+  <form hx-get="/report/ui"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-end; margin-bottom:1rem;">
+
+    <div>
+      <label class="rpt-lbl">廠區</label>
+      <select name="plant" id="rpt-plant" class="rpt-in"
+              onchange="rptLoadItems(this.value)">
+        <option value="">— 全部廠區 —</option>
+        {% for p in plants %}<option value="{{ p }}" {% if p == plant %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="rpt-lbl">項目</label>
+      <select name="item" id="rpt-item" class="rpt-in">
+        <option value="">— 全部項目 —</option>
+        {% for i in items %}<option value="{{ i }}" {% if i == item %}selected{% endif %}>{{ i }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="rpt-lbl">開始日期</label>
+      <input type="text" name="sdate" value="{{ sdate }}" class="rpt-in" placeholder="yyyy/MM/dd" style="width:7.5rem;">
+    </div>
+
+    <div>
+      <label class="rpt-lbl">結束日期</label>
+      <input type="text" name="edate" value="{{ edate }}" class="rpt-in" placeholder="yyyy/MM/dd" style="width:7.5rem;">
+    </div>
+
+    <div style="display:flex; align-items:center; gap:.3rem; padding-bottom:.15rem;">
+      <input type="checkbox" id="rpt-mt" name="mt" value="true" {% if mt %}checked{% endif %}
+             style="cursor:pointer;">
+      <label for="rpt-mt" style="font-size:0.78rem; cursor:pointer;">MT 廠全部</label>
+    </div>
+
+    <button type="submit" class="btn-voc btn-voc-primary" style="font-size:0.8rem;">查詢</button>
+  </form>
+
+  {% if error %}
+  <div style="color:var(--status-red); font-size:0.8rem; margin-bottom:.75rem;">⚠️ {{ error }}</div>
+  {% endif %}
+
+  {% if not error and summary %}
+
+  {# ── 長條圖：純 CSS 水平 bar，不用任何 JS 圖表庫 ─────────────────────────── #}
+  <div style="margin-bottom:1.25rem;">
+    <p style="font-size:0.82rem; font-weight:700; color:var(--voc-text); margin:0 0 .5rem;">
+      {{ sdate }} ~ {{ edate }}
+      {{ plant if plant else '各廠區' }}{{ (' ' + item) if item else '' }} 異常件數統計表
+      <span style="font-weight:400; color:var(--voc-text-muted); font-size:0.75rem;">（共 {{ total_count }} 件）</span>
+    </p>
+    <div style="display:flex; flex-direction:column; gap:.35rem;">
+      {% for row in summary %}
+      <div style="display:flex; align-items:center; gap:.5rem;">
+        <div style="width:4rem; flex-shrink:0; font-size:0.78rem; font-weight:700; color:var(--voc-text); text-align:right;">
+          {{ row.plantno }}
+        </div>
+        <div style="flex:1; background:var(--voc-bg-main); border-radius:3px; height:1.1rem; position:relative; overflow:hidden;"
+             role="img" aria-label="{{ row.plantno }} 異常 {{ row.count }} 件">
+          <div style="height:100%; width:{{ row.pct }}%; background:var(--voc-primary); border-radius:3px; min-width:2px;"></div>
+        </div>
+        <div style="width:3rem; flex-shrink:0; font-size:0.78rem; font-family:var(--font-mono); text-align:right;">
+          <a href="javascript:void(0)"
+             hx-get="/ui/history?plant={{ row.plantno }}&item={{ item }}&sdate={{ sdate }}&edate={{ edate }}&mt={{ mt }}"
+             hx-target="#modal-container" hx-swap="innerHTML"
+             style="color:var(--voc-primary); font-weight:700; text-decoration:none;">{{ row.count }}</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── PIVOT 交叉表：廠區 × 項目 ────────────────────────────────────────────── #}
+  {% if pivot.columns %}
+  <div style="margin-bottom:1.25rem; overflow-x:auto;">
+    <p style="font-size:0.82rem; font-weight:700; color:var(--voc-text); margin:0 0 .5rem;">廠區 × 項目 交叉統計表</p>
+    <table class="dashboard-table" style="font-size:0.78rem;">
+      <thead>
+        <tr>
+          <th>項目</th>
+          {% for col in pivot.columns %}<th style="text-align:center;">{{ col }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in pivot.rows %}
+        <tr {% if row.item == '總計' %}style="background:var(--voc-bg-main); font-weight:700;"{% endif %}>
+          <td style="font-weight:700; white-space:nowrap;">{{ row.item }}</td>
+          {% for col in pivot.columns %}
+          <td style="text-align:center; font-family:var(--font-mono);">
+            {% if row[col] > 0 %}
+            <a href="javascript:void(0)"
+               hx-get="/ui/history?item={{ '' if row.item == '總計' else row.item }}&plant={{ '' if col == 'Total' else col }}&sdate={{ sdate }}&edate={{ edate }}&mt={{ mt }}"
+               hx-target="#modal-container" hx-swap="innerHTML"
+               style="color:var(--voc-primary); text-decoration:none;">{{ row[col] }}</a>
+            {% else %}
+            <span style="color:var(--voc-text-muted);">0</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {# ── 排行表：件數排行（並列名次，DENSE_RANK 語意）───────────────────────── #}
+  {% if ranking.rows %}
+  <div style="margin-bottom:.5rem; overflow-x:auto;">
+    <p style="font-size:0.82rem; font-weight:700; color:var(--voc-text); margin:0 0 .5rem;">
+      異常件數排行
+      <span style="font-weight:400; color:var(--voc-text-muted); font-size:0.75rem;">（並列名次不跳號，最大名次 {{ ranking.max_rank }}）</span>
+    </p>
+    <table class="dashboard-table" style="font-size:0.78rem;">
+      <thead>
+        <tr><th style="width:4rem;">名次</th><th>廠區</th><th>異常件數</th></tr>
+      </thead>
+      <tbody>
+        {% for r in ranking.rows %}
+        <tr style="background:
+          {%- if r.rank <= 3 -%}
+            var(--status-red-bg)
+          {%- elif ranking.max_rank > 0 and r.rank >= ranking.max_rank - 2 -%}
+            var(--status-green-bg)
+          {%- else -%}
+            transparent
+          {%- endif -%};">
+          <td style="text-align:center; font-family:var(--font-mono); font-weight:700;">
+            {{ r.rank }}
+            {% if r.rank <= 3 %}<span style="font-size:0.68rem; color:var(--status-red);">（前3）</span>{% endif %}
+            {% if ranking.max_rank > 0 and r.rank >= ranking.max_rank - 2 %}<span style="font-size:0.68rem; color:var(--status-green);">（後3）</span>{% endif %}
+          </td>
+          <td style="font-weight:700;">{{ r.plantno }}</td>
+          <td style="font-family:var(--font-mono);">
+            <a href="javascript:void(0)"
+               hx-get="/ui/history?plant={{ r.plantno }}&item={{ item }}&sdate={{ sdate }}&edate={{ edate }}&mt={{ mt }}"
+               hx-target="#modal-container" hx-swap="innerHTML"
+               style="color:var(--voc-primary); font-weight:700; text-decoration:none;">{{ r.count }}</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% elif not error %}
+  <div style="text-align:center; padding:2rem 0; color:var(--voc-text-muted); font-size:0.85rem;">
+    目前查詢區間無異常記錄
+  </div>
+  {% endif %}
+
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+    <button onclick="document.getElementById('voc-modal').close()" class="btn-voc btn-voc-outline">關閉</button>
+  </div>
+
+</div>
+
+<style>
+  .rpt-lbl { font-size:0.7rem; color:var(--voc-text-muted); display:block; margin-bottom:.15rem; }
+  .rpt-in  { padding:.28rem .4rem; border:1px solid var(--voc-border); border-radius:4px; font-size:0.78rem; }
+</style>
+
+<script>
+{# 廠區變更時重載項目下拉，沿用既有 /history/items API（不修改該既有端點）#}
+function rptLoadItems(plant) {
+  fetch('/history/items?plant=' + encodeURIComponent(plant))
+    .then(r => r.json())
+    .then(items => {
+      const sel = document.getElementById('rpt-item');
+      sel.innerHTML = '<option value="">— 全部項目 —</option>';
+      items.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = i;
+        sel.appendChild(opt);
+      });
+    })
+    .catch(() => {});
+}
+</script>
