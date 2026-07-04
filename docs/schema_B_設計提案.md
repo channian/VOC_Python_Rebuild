@@ -1,10 +1,10 @@
-# Schema B 設計提案（PostgreSQL）— 討論稿 v1
+# Schema B 設計提案 — v2（決策已回覆）
 
-> 前提文件：`docs/系統功能與資料架構總覽.md`（As-Is 基準）。
-> 本文件目的：(1) 逐條列出「現況 → 問題 → 建議」的比對，讓決策有來龍去脈；
-> (2) 給出 Schema B 第一版 DDL 草案與 A↔B 對照表。
-> **狀態：討論稿**——標 ★ 的是需要你拍板的決策點，其餘是我建議直接採用的改法。
-> 定案後才會啟動平行 agent 做 SQL 層移植。建立日期：2026-07-01
+> 前提文件：`docs/系統功能與資料架構總覽.md`（As-Is 基準）。執行計畫見 `docs/PM執行路線圖.md`。
+> **狀態：v2**——2026-07-01 使用者已回覆決策（見第四節決策紀錄），主要變更：
+> (1) **歷史表需逐時管制值快照**（稽核需求）→ `reading_history` 加快照欄位；
+> (2) **正式環境引擎未定**（PG 測試、正式可能 MSSQL）→ 全部 SQL 須遵守「引擎可攜規範」（見文末）；
+> (3) 其餘決策點（A+B/C/D/J/命名）採建議案，凍結前如有異議請提出。建立 2026-07-01
 
 ## 設計原則
 
@@ -157,11 +157,19 @@ CREATE TABLE reading_history (                     -- C 項：append-only，永�
     value       numeric,
     status      text NOT NULL,
     raw_text    text,
+    -- ★稽核決策（2026-07-01）：法規稽核需要「當時管制值」逐時證據 →
+    --   每筆讀值快照當下生效的 SPEC 三階管制值（沿襲舊 VOC_SCADA_HIST 亦存 OOS/OOC/alert1/recv 的做法）
+    spec_oos_low   numeric, spec_oos_high   numeric,
+    spec_ooc_low   numeric, spec_ooc_high   numeric,
+    spec_alert_low numeric, spec_alert_high numeric,
+    spec_recv_low  numeric, spec_recv_high  numeric,
+    limits_extra   json,        -- SCADA/CWMS 自設管制值快照（泛型 JSON，引擎可攜）
     measured_at timestamptz NOT NULL,
     UNIQUE (plant_no, item, measured_at)
 );
 CREATE INDEX idx_rh_lookup ON reading_history (plant_no, item, measured_at DESC);
 -- K1/K9 雨水溝三點連升：直接對本表用 window function，不需另存三欄
+-- 容量估算：~200 項目 × 96 筆/日 ≈ 1.9 萬筆/日、700 萬筆/年，加快照欄位仍完全可承受
 
 -- ============ 派報紀錄（D 項：明細正規化）============
 CREATE TABLE mail_log (
@@ -314,17 +322,29 @@ CREATE TABLE curve (plant_no text NOT NULL, item text NOT NULL, url text,
 | VOC_EmptyCell | —（併入 spec 或前端設定，低優先） | |
 | VOC_SCADA_TagList/Tag、VOC_Flow_Sta、VOC_AVG 等 | —（第二階段轉拋 JOB 設計時一併決定） | |
 
-## 四、需要你拍板的決策點（回覆代號即可）
+## 四、決策紀錄（2026-07-01 使用者回覆）
 
-| # | 問題 | 我的建議 |
+| # | 問題 | 決策 |
 |---|---|---|
-| ★A+B | 讀值與門檻拆數值欄（value+status / low+high） | **採用**。轉拋 JOB 寫入時分類一次，全系統受益；raw_text 保底不丟資訊 |
-| ★C | 隔離改為推導、歷史 append-only、讀值不竄改 | **採用**。這是資料可信度問題 |
-| ★D | 派報紀錄正規化（mail_log_item） | **採用**。首發/再發正確性直接受益；evaluate_row 介面小改 |
-| ★J | SignFlow：測試期 B 內同構表 | **採用**（測試期）；正式去向（續用公司庫 vs 自管）等測試通過後與相關單位討論 |
-| ★命名 | snake_case 新名＋對照表 vs 沿用舊表名 | **建議新名**；如果你希望降低心智負擔也可以沿用舊名（告訴我你的偏好） |
-| ★歷史管制值 | reading_history 只存讀值，不存每 15 分的管制值快照 | **建議只存讀值**（管制值變更頻率低，spec 表 updated_at + tranlog 已可追溯）；若法規稽核需要逐時管制值快照請告訴我 |
+| A+B | 讀值與門檻拆數值欄 | ✅ 採建議案 |
+| C | 隔離改推導、歷史 append-only | ✅ 採建議案 |
+| D | 派報紀錄正規化（mail_log_item） | ✅ 採建議案 |
+| J | SignFlow 測試期 B 內同構表 | ✅ 採建議案，正式去向後議 |
+| 命名 | snake_case 新名＋對照表 | ✅ 採建議案（凍結前可反悔） |
+| **歷史管制值** | 逐時快照 | ✅ **需要**（環保稽核要「當時管制值」證據）→ DDL 已更新 |
+| **DB 引擎** | PG 測試、**正式未定** | → 引擎可攜規範（見下節），正式引擎於 Phase C 前決定 |
+| **新廠區時程** | **3 個月內**，可先用轉拋程式沿用舊架構 | → 雙軌道計畫，見 `docs/PM執行路線圖.md` |
+| 舊系統退場 | 雙軌並行比對後切換 | → 對帳機制設計，見路線圖 |
+
+## 五、引擎可攜規範（因「正式引擎未定」新增，SQL 移植 agent 必守）
+
+1. 優先用 **SQLAlchemy Core/ORM 表達式**，少寫 raw SQL；必要的 raw SQL 限用兩邊共通語法。
+2. 型別用 SQLAlchemy 泛型：`JSON`（不是 PG 專屬 `JSONB`）、`DateTime(timezone=True)`、`Numeric`、`Boolean`。
+3. 禁用單邊方言：PG 的 `ON CONFLICT`/`DISTINCT ON`、MSSQL 的 `IIF`/`TOP`——用 `case()`、`limit()` 等可攜寫法。
+4. 自增主鍵用 `Identity()`/`BigInteger+autoincrement`（兩邊皆通），不要手寫 `bigserial`/`IDENTITY` DDL——
+   **建表一律走 SQLAlchemy `metadata.create_all()` 或 Alembic**，本文件的 DDL 是「語意規格」不是部署腳本。
+5. 方言特化（如 window function 細節差異）集中到獨立模組，換引擎只改一處。
 
 ---
 
-*v1 討論稿。你逐條回覆後我會修訂凍結為 v2，並以 v2 啟動平行 agent 進行 SQL 層移植與整合測試。*
+*v2。已凍結供 Phase A 執行；執行順序與里程碑見 `docs/PM執行路線圖.md`。*
