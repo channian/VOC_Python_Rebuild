@@ -20,6 +20,7 @@
 | `Job.dbVOC.GetDataRed` | 判斷該筆讀值是否要列入派報、決定燈號、寫入 msg/msg1/msg2 | ✅ **2026-07-01 已取得**，完整邏輯見下方「GetDataRed 完整還原」 |
 | `Job.dbVOC.GetData()`（無參數）| JOB 撈全廠即時資料 | ✅ **2026-07-01 已取得** |
 | `dbVOC.CheckMAILlog` | IH 主機/Tag 斷訊通知的「當天是否已發送」判斷 | ⚠️ 仍未取得本體，但已知契約：回傳 `1`=今天已發過、`0`=尚未發過；**與 VOC 主派報無關**（只用在 IH 斷線通知），不影響核心移植 |
+| **歷史曲線頁**（2026-07-01 使用者補記） | 首頁「歷史曲線」連結指向的圖表頁面本體（`VOC_Curve.URL` 所指的外部頁，推測掛在 Historian/khfacsv01 上） | ⚠️ **原始碼未提供**，Python 端目前只移植了「顯示連結」。待使用者提供原始碼後決定：忠實移植 vs 直接用 Schema B 的 `reading_history` 自建曲線（新歷史表本來就存逐時讀值+管制值快照，自建可一併擺脫對舊 Historian 的依賴——HANDOVER 曾列「Historian 拿掉則曲線功能消失」風險，自建即可解） |
 
 **重要澄清**：先前以為 `GetMsg`/`GetMsg1`/`GetMsg2`/`GetDataRed`/`GetData()` 屬於網頁端 `dbVOC.cs`（namespace 空白，MTLibrary 專案），
 所以在該檔案 grep 不到；**實際上這些方法屬於另一個同名但不同 namespace 的類別 `Job.dbVOC`**（JOB 專案自己的 DB 存取類別），

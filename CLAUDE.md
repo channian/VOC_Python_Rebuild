@@ -77,6 +77,8 @@ python main.py                    # 本地啟動 → http://localhost:8000/home
   後一併接上，現在 current_user 都是寫死 "admin" 接了也沒意義。
 - **正式上線前必改設定**：`ACL_ENFORCE=True`、`AUTH_MOCK=False`（見 .env.example）。
 - **AD/LDAP 登入**延後到最後（`docs/ad_integration_guide.md`）。
+- **歷史曲線頁原始碼未提供**（`VOC_Curve.URL` 指向的外部圖表頁）：目前只移植了連結；
+  待補件後決定忠實移植或用 Schema B 的 reading_history 自建（見 PM執行路線圖第七節）。
 - **待業務確認清單**（各 agent 移植時發現，已在對應程式碼註解標記）：
   1. 異常報表母集合現含雨水溝（舊報表不含），統計數字會比舊系統多
   2. 水質異常通知固定查 K14B 資料（舊系統原始行為，疑似 bug，已忠實還原）
