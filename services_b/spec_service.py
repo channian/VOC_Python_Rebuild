@@ -227,10 +227,26 @@ def delete_spec(db: Session, current_user_empno: str, plant_no: str, item: str, 
 # ── 規格簽核申請（spec_apply，僅建申請單，不建簽核流程——見檔頭說明）────────────
 
 def _check_no_pending_apply(db: Session, plant_no: str, item: str) -> None:
-    """對應 A 版 `_check_no_pending_apply()`：同廠區/項目若已有一筆「簽核中」申請單，禁止重覆申請。"""
+    """
+    對應 A 版 `_check_no_pending_apply()`：同廠區/項目若已有一筆「送簽流程尚未結案」的申請單，
+    禁止重覆申請。
+
+    ⚠️ 與 A 版的刻意差異（修正半成品遺留的防呆破洞）：A 版 `create_spec_apply()` 在同一次呼叫
+    內就會立刻建立簽核流程，把 fstatus 由待簽核(0) 原子推進到簽核中(1)，所以 A 版只需擋
+    「簽核中」。本檔 `create_spec_apply()`（見檔頭第 4 點）刻意不建流程——flow 建立延後到
+    main_b 組裝時另外呼叫 WP3 對應函式——因此呼叫完當下 fstatus 恆為待簽核(0)。若這裡沿用
+    A 版只擋「簽核中」，在 main_b 尚未接上 WP3 建流程之前這個防呆永遠不會生效（DB 裡根本
+    不會出現 fstatus=簽核中(1) 的申請單），同一項目可以被重覆送出多筆待簽核申請。
+    這裡擴大為「待簽核(0) 或 簽核中(1)」皆視為擋重覆，確保本檔案在 WP3 尚未接線時防呆仍然有效；
+    main_b 接上 WP3 建流程後行為不變（因為那時申請單本來就會落在這兩個狀態之一）。
+    """
     pending = (
         db.query(SpecApply)
-        .filter_by(plant_no=plant_no, item=item, fstatus=int(FlowStatus.簽核中))
+        .filter(
+            SpecApply.plant_no == plant_no,
+            SpecApply.item == item,
+            SpecApply.fstatus.in_((int(FlowStatus.待簽核), int(FlowStatus.簽核中))),
+        )
         .first()
     )
     if pending:
