@@ -101,13 +101,16 @@ def main() -> None:
 
         # ── 步驟 2：TEST001 申請隔離 pH1（stime 設在「現在+2 秒」，讓派報那一步時已生效）──
         _print_header("步驟 2／5：TEST001 申請隔離 TEST1/pH1")
-        now = datetime.now(timezone.utc)
+        # ⚠️ ControlCreate.validate_times() 用 naive datetime.now() 比較（schemas/control_schema.py
+        # 不可修改），這裡刻意傳 naive datetime，比照 tests_integration/test_control_flow.py 既有作法，
+        # 避免 tz-aware/naive datetime 比較噴例外。
+        now_naive = datetime.now()
         try:
             data = ControlCreate(
                 plantid=TEST_PLANT_ID,
                 mdfdesc="示範演練：pH1 校正保養",
-                stime=now + timedelta(seconds=2),
-                etime=now + timedelta(minutes=30),
+                stime=now_naive + timedelta(seconds=2),
+                etime=now_naive + timedelta(minutes=30),
                 remark="demo_closed_loop 自動產生",
                 items=[ControlItemBase(plantno=TEST_PLANT_NO, item="pH1", sourceid="1")],
             )
