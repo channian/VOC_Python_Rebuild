@@ -64,3 +64,9 @@ class DashboardRow(BaseModel):
     plant_rowspan: int  = 1          # 此廠區共幾列（僅第一列設值，其餘為 0）
     show_plant:    bool = True       # 是否渲染廠區 <td>（非第一列設 False）
     plant_has_red: bool = False      # 此廠區是否有任何紅燈（影響廠區格背景色）
+
+    # ── B 棧新增（schema_B_設計提案.md J 項）──────────────────────────────
+    # rain_24h：reading_current.rain_24h，由 B 棧轉拋 JOB 直接算好寫入（取代 A 棧 PMS 跨庫 JOIN，
+    # 見 docs/PhaseA執行規格書.md 第二節）。A 棧 services/dashboard_service.py 目前不填此欄，
+    # 預設空字串對現有模板無影響（純新增選填欄位，向後相容）。
+    rain_24h: Optional[str] = ""

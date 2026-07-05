@@ -74,23 +74,17 @@ def _upsert(session, model, filters: dict, values: dict):
 
 
 def _clear_test_scope(session) -> None:
-    """先清：刪除本腳本擁有的 TEST1／TEST001／TEST999／kepware_sim 資料（子表優先，避免 FK 擋刪）。"""
-    session.query(ReadingHistory).filter(ReadingHistory.plant_no == TEST_PLANT_NO).delete()
-    session.query(ReadingCurrent).filter(ReadingCurrent.plant_no == TEST_PLANT_NO).delete()
-    session.query(Spec).filter(Spec.plant_no == TEST_PLANT_NO).delete()
-    session.query(Dept).filter(Dept.plant_id == TEST_PLANT_ID).delete()
-    session.query(AclUserRole).filter(AclUserRole.plant_no == TEST_PLANT_NO).delete()
-    session.query(MailList).filter(MailList.plant_no == TEST_PLANT_NO).delete()
-    session.query(Item).filter(Item.item.in_(["pH1", "Cu1", "VOC1"])).delete(synchronize_session=False)
-    session.query(Plant).filter(Plant.plant_no == TEST_PLANT_NO).delete()
-    session.query(TagMapping).filter(TagMapping.source_table == "kepware_sim").delete()
-    session.query(KepwareSim).delete()  # 整表都是模擬資料，直接清空
-    session.query(SignEmp).filter(SignEmp.emp_no.in_([APPLICANT_EMPNO, SIGNER_EMPNO])).delete(
-        synchronize_session=False
-    )
-    session.query(Employee).filter(Employee.emp_no.in_([APPLICANT_EMPNO, SIGNER_EMPNO])).delete(
-        synchronize_session=False
-    )
+    """先清：整庫依 FK 依賴反序逐表清空。
+
+    2026-07-01 主控修正：原版只清 WP1 自己種的範圍，但 WP2~WP5 的整合測試會
+    commit isolation/sign_flow/mail_log 等表的資料，殘留列的 FK 會擋住 plant 刪除
+    （曾實際發生 isolation_plant_id_fkey 違反）。voc_b 是專用測試庫，
+    每次 seed 前整庫清空最穩，也讓所有 WP 的測試起點一致。
+    """
+    from models_b import BaseB
+
+    for table in reversed(BaseB.metadata.sorted_tables):
+        session.execute(table.delete())
     session.flush()
 
 
