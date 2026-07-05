@@ -30,6 +30,15 @@ services_b/spec_service.py — 規格值維護 + 規格簽核申請（Schema B �
      建立流程並回填 flow_id/fstatus。`apply_spec_from_form()` 只負責「核准後套用」這一步，
      交易邊界（commit/rollback）交由呼叫端（WP3 的 process_spec_sign 等價函式）控制，
      本函式與 create_spec_apply 一樣採 fail-fast：例外時各自 rollback 並重新拋出。
+  5. ⚠️ 刪除規格的資料完整性（models_b.py 凍結，接手時實測發現的真實 FK 限制）：
+     `reading_current` 對 `spec` 有硬 FK（`ForeignKeyConstraint(["plant_no","item"],
+     ["spec.plant_no","spec.item"])`，models_b.py 未加 ON DELETE CASCADE），A 版 VOC_SCADA_WEB
+     與 VOC_SPEC 之間沒有這種強制約束，所以 A 版 `delete_spec()` 直接刪 VOC_SPEC 也不會出錯。
+     B 版若比照 A 版原樣刪 spec，只要該廠區/項目已經有過讀值（reading_current 有一筆），
+     就會直接被 DB 擋下（ForeignKeyViolation）。這裡的處理方式：刪除規格時一併刪除對應的
+     `reading_current`（該項目已經沒有規格可比對，留著「目前讀值」也沒有意義；
+     `reading_history` 沒有 FK 到 spec，是獨立的稽核軌跡，不受影響、不刪除，符合
+     append-only 精神——刪規格後仍查得到歷史紀錄，只是「目前值」欄位一併清空）。
 
 沿用重用（禁止複製）：
   - `services.control_service.next_ccno`：formno 與 ccno 格式相同（yyyyMMddNNN 11 碼流水號）。
@@ -43,7 +52,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from models_b import Spec, SpecApply, Item, Source, Tranlog
+from models_b import Spec, SpecApply, Item, Source, Tranlog, ReadingCurrent
 from services.control_service import next_ccno
 from services.flow_service import FlowStatus
 
@@ -122,6 +131,17 @@ def _spec_snapshot_dict(spec: Optional[Spec]) -> Optional[dict]:
         "recv_low": _num(spec.recv_low), "recv_high": _num(spec.recv_high), "recv_status": spec.recv_status,
         "source_id": spec.source_id, "tagname": spec.tagname, "seqno": spec.seqno,
     }
+
+
+def _delete_reading_current_if_exists(db: Session, plant_no: str, item: str) -> None:
+    """
+    刪除規格前，先清掉對應的 reading_current（見檔頭第 5 點：models_b.py 的硬 FK 限制）。
+    reading_history 不受影響（無 FK、append-only，稽核軌跡照留）。
+    """
+    rc = db.query(ReadingCurrent).filter_by(plant_no=plant_no, item=item).first()
+    if rc is not None:
+        db.delete(rc)
+        db.flush()
 
 
 _SPEC_EDITABLE_FIELDS = (
@@ -211,6 +231,7 @@ def delete_spec(db: Session, current_user_empno: str, plant_no: str, item: str, 
             raise ValueError("找不到資料!")
 
         before = _spec_snapshot_dict(spec)
+        _delete_reading_current_if_exists(db, plant_no, item)
         db.delete(spec)
 
         db.add(Tranlog(
@@ -388,6 +409,7 @@ def apply_spec_from_form(db: Session, spec_apply_id: int, current_user_empno: st
         if spec is None:
             raise ValueError(f"找不到規格值資料可刪除: {plant_no}/{item}")
         before = _spec_snapshot_dict(spec)
+        _delete_reading_current_if_exists(db, plant_no, item)
         db.delete(spec)
         db.add(Tranlog(
             emp_no=current_user_empno, log_type="D", data_before=before, data_after=None,
