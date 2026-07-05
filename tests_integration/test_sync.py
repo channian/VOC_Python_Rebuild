@@ -303,7 +303,7 @@ def test_check_staleness_no_flip_when_already_target_state(b_db):
 # 5. legacy sink 字串化（PG 模擬表）
 # ============================================================
 
-def test_write_legacy_sink_formats_rvalue(b_db, tmp_path):
+def test_write_legacy_sink_formats_rvalue(b_db):
     from database_b import b_engine  # 用同一個測試 PG engine 模擬「舊 MSSQL VOC_SCADA_WEB」
 
     rows = b_db.execute(

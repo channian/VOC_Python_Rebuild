@@ -291,6 +291,11 @@ def _sync_one_mapping(db: Session, mapping: TagMapping, result: SyncResult,
         _sync_control_limit(db, mapping, value, status, result)
 
 
+def get_sync_interval_minutes(db: Session) -> int:
+    """公開小工具：讀 system_config['sync_interval_minutes']（預設 5），供 worker script 讀取排程間隔。"""
+    return _get_config_int(db, "sync_interval_minutes", 5)
+
+
 def run_sync(db: Session, now: Optional[datetime] = None) -> SyncResult:
     """
     同步主流程：讀取全部 enabled 的 tag_mapping，逐筆取 A 端最新資料 → classify → 寫 B 端。
