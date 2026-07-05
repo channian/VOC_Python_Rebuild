@@ -40,5 +40,13 @@ class Settings(BaseSettings):
     TEST_DEV_EMAIL: str = "developer@asegroup.com"
     TEST_DEV_PHONE: str = "0912345678"
 
+    # ==========================================
+    # Schema B（Phase A 重構版）資料庫連線
+    # ==========================================
+    # 測試/沙盒環境預設走本機 PostgreSQL（見 scripts/dev_pg.sh 建立的 voc/voc@voc_b）；
+    # 正式環境引擎尚未定案（PG 或 MSSQL 皆有可能），因此 models_b.py 全部使用
+    # SQLAlchemy 泛型型別，禁止寫死 PG 專屬方言（見 docs/schema_B_設計提案.md 第五節）。
+    VOC_B_DB_URL: str = "postgresql+psycopg2://voc:voc@localhost/voc_b"
+
 # 實例化以便在專案各處匯入使用
 settings = Settings()
