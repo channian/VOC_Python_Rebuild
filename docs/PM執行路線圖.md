@@ -107,6 +107,19 @@ Track 1 與 Phase A **可完全平行**，互不阻塞。
 2. **你**：提供新廠區 Kepware tag 規格（Track 1 前置）；把 SignFlow 去向、6 條業務確認排入與相關單位的溝通
 3. 對帳白名單初稿會在 Phase A 尾聲由我先擬，影子運行前你確認
 
+## 六之一、Phase A 沙盒驗收紀錄（2026-07-05）
+
+- ✅ 整合測試 88 綠（真 PG）、純邏輯 281 綠、main_b 首頁等五路由 200、
+  閉環演練通過（申請→簽核→超標派報首發、隔離項目正確不派報）；SMTP 逾時屬沙盒環境限制。
+- WP2~WP5 主控核可的設計裁決與已知債（後續追蹤）：
+  1. `mail_log_item` 目前「每 item 一列」（detail 保留完整 msg1 供 evaluate_row 零修改重用），
+     D 決策的逐條件正規化留待 evaluate_row 重構時完成（schema 已支援）
+  2. warning_service B 版為同精神簡化實作（雨水溝正式表結構隨 PMS 決策一併定案）
+  3. dept 顯示名稱暫用 dept_no（employee 快取補欄位後調整）
+  4. 種子資料待補：派報/簽核用 rpttype、虛擬廠區列（測試已自行建立）
+  5. 同項目多重 tag_mapping 應加設定告警
+- 待補完：main_b 的 control/flow/spec/qa/reason/water_urgent router（資料層皆已就緒）
+
 ## 七、已知功能缺口備忘（待補件）
 
 | 功能 | 現況 | 待辦 |

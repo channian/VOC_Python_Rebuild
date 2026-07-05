@@ -11,16 +11,19 @@ FastAPI + SQLAlchemy + Jinja2 + HTMX。DB 目前接 MSSQL（`VOC` database）。
 
 ## 專案結構（速查）
 ```
-main.py              # 入口：註冊所有 router + StaticFiles
-database.py          # SQLAlchemy Engine（VOC_DB_URL from .env）
-models/              # ORM（spec_model, acl_model, maillist_model...）
-schemas/             # Pydantic 驗證
-services/            # 業務邏輯（dashboard/control/spec/qa/maillist/notify...）
-routers/             # API + ui_router（HTMX partial 片段）
-templates/           # home.html + partials/*.html（modal）
-static/css/voc.css   # 設計系統（燈號色/rowspan/底色/斜紋）
-tests/               # pytest，純邏輯為主（不依賴 DB）
-docs/                # 分析文件（注意：皆為「推測/摘要」，非舊原始碼）
+main.py              # A 棧入口（MSSQL，公司平行測試中，勿隨意改動）
+database.py          # A 棧 Engine（VOC_DB_URL from .env）
+models/ schemas/ services/ routers/   # A 棧（MSSQL 方言 SQL）
+templates/           # home.html + partials/*.html（兩棧共用）
+static/css/voc.css   # 設計系統
+tests/               # 純邏輯測試（不依賴 DB）
+─── B 棧（Schema B / PostgreSQL，Phase A 起）───
+main_b.py database_b.py models_b.py   # B 棧入口/Engine(VOC_B_DB_URL)/全表定義
+services_b/ routers_b/                # B 棧資料層（SQLAlchemy 2.0 可攜，禁 raw text()）
+                                      # 純邏輯一律 import services/ 重用，兩棧同源
+scripts/dev_pg.sh seed_test_data.py run_sync_worker.py demo_closed_loop.py
+tests_integration/   # 真 PG 整合測試（無 PG 自動 skip）
+docs/                # PhaseA執行規格書 / schema_B_設計提案 v2 / PM執行路線圖
 ```
 
 ## 不可違反的技術決策
