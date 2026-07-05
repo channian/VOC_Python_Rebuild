@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select, delete
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from models_b import Isolation, IsolationItem, IsolationHistory, MailList, Employee, SignFlow, SignFlowStep
