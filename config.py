@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # ⚠️⚠️ 正式環境部署前必須設為 False，否則任何人都能用 admin/admin 登入！
     AUTH_MOCK: bool = True
 
+    # Mock 身分（B 棧閉環測試用）：current_user 尚未接 LDAP（Phase 3），B 棧 router 以
+    # 這組設定扮演目前操作者。閉環測試「申請人≠簽核人」時，改 .env 的 MOCK_USER_EMPNO
+    # 在 TEST001（申請人）與 TEST999（簽核人）之間切換即可（簽核排除申請人本人是舊系統
+    # 原設計，自己不能簽自己的單）。LDAP 完成後此設定廢除。
+    MOCK_USER_EMPNO: str = "admin"
+    MOCK_USER_NAME: str = "系統管理員"
+
     # 雙軌並行測試模式 (Test Mode / Dry Run)
     TEST_MODE: bool = True
     TEST_DEV_EMAIL: str = "developer@asegroup.com"

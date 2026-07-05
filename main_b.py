@@ -47,7 +47,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from routers_b import ui_router_b
+from routers_b import control_router_b, spec_router_b, ui_router_b
 
 app = FastAPI(
     title="VOC 廠務法規許可標準化管理平台（Schema B / PostgreSQL 版）",
@@ -59,6 +59,11 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.include_router(ui_router_b.router)
+# WP6 補完（2026-07-05）：待整合清單全數接通——
+#   control_router_b：/ui/control(+items)、/control/*、/ui/flow、/flow/*
+#   spec_router_b   ：/ui/spec、/spec/*、/ui/qa、/qa/update、/ui/reason、/warning/water_urgent/ui
+app.include_router(control_router_b.router)
+app.include_router(spec_router_b.router)
 
 
 @app.get("/", include_in_schema=False)
