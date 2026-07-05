@@ -118,7 +118,10 @@ Track 1 與 Phase A **可完全平行**，互不阻塞。
   3. dept 顯示名稱暫用 dept_no（employee 快取補欄位後調整）
   4. 種子資料待補：派報/簽核用 rpttype、虛擬廠區列（測試已自行建立）
   5. 同項目多重 tag_mapping 應加設定告警
-- 待補完：main_b 的 control/flow/spec/qa/reason/water_urgent router（資料層皆已就緒）
+- ~~待補完：main_b 的 control/flow/spec/qa/reason/water_urgent router~~ →
+  ✅ 2026-07-05 WP6 完成：全路由接通、新增 MOCK_USER_EMPNO 身分切換設定、
+  最終驗收整合 100 綠／純邏輯 281 綠。**Phase A 沙盒階段全部完成**，
+  下一步＝使用者本機 Docker 重現（docs/本機PG測試環境.md）＋提供新廠區 tag 規格啟動 Track 1。
 
 ## 七、已知功能缺口備忘（待補件）
 
