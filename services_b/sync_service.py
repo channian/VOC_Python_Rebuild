@@ -209,17 +209,12 @@ def _build_limits_extra(current: ReadingCurrent) -> dict:
 
 def _sync_value(db: Session, mapping: TagMapping, value, status: str, raw_text: str,
                  measured_at: datetime, result: SyncResult) -> None:
-    """target_field='value'：覆寫 reading_current，並（若該 measured_at 尚未存在）append reading_history 快照。"""
-    current = _get_or_create_reading_current(db, mapping.plant_no, mapping.item, measured_at)
-    current.value = value
-    current.status = status
-    current.raw_text = raw_text
-    current.comm_ok = status != "broken"
-    current.measured_at = measured_at
-    current.updated_at = datetime.now(timezone.utc)
-    db.flush()
-
-    # append-only：同 (plant_no,item,measured_at) 已存在就跳過，不 UPDATE 舊歷史列
+    """
+    target_field='value'：先檢查該 (plant_no,item,measured_at) 是否已經同步過，已存在就整筆跳過
+    （不觸碰 reading_current，也不重複寫 reading_history）——這個順序刻意設計成讓 run_sync 天生
+    具備幂等性：同一個來源時間點重跑多次，第二次以後全部落在 skipped，不會有任何副作用；
+    也讓「reading_current 目前的狀態」永遠對應「reading_history 最新一筆」，兩者不會不同步。
+    """
     exists = db.execute(
         select(ReadingHistory.id).where(
             ReadingHistory.plant_no == mapping.plant_no,
@@ -230,6 +225,15 @@ def _sync_value(db: Session, mapping: TagMapping, value, status: str, raw_text: 
     if exists is not None:
         result.skipped += 1
         return
+
+    current = _get_or_create_reading_current(db, mapping.plant_no, mapping.item, measured_at)
+    current.value = value
+    current.status = status
+    current.raw_text = raw_text
+    current.comm_ok = status != "broken"
+    current.measured_at = measured_at
+    current.updated_at = datetime.now(timezone.utc)
+    db.flush()
 
     spec = db.execute(
         select(Spec).where(Spec.plant_no == mapping.plant_no, Spec.item == mapping.item)
