@@ -15,13 +15,11 @@
 
 ## 二、前置需求
 
-- Docker（Desktop 或 Engine 皆可）。
-- Python 3.11+，專案根目錄跑過 `pip install -r requirements.txt`（若無此檔，至少要有
-  `sqlalchemy`、`psycopg2-binary`、`pydantic-settings`、`pytest`）。
-- 尚未安裝 `psycopg2-binary` 的話：
-  ```bash
-  pip install psycopg2-binary
-  ```
+- Docker（Desktop 或 Engine 皆可）——**僅本機/家用情境需要**；公司正式環境若 IT 已提供
+  PostgreSQL 服務，跳過 Docker，直接看第九之一節。
+- Python 3.11+，專案根目錄跑 `pip install -r requirements.txt`
+  （2026-07-06 已修正：此檔案原本是 UTF-16 編碼且缺 `psycopg2-binary`，會導致
+  `pip install` 直接報錯或裝不到 PG 驅動——已修好，現在照抄這行指令即可，不需要再手動補裝）。
 
 ## 三、步驟 1：用 Docker 起一個 PostgreSQL 16
 
@@ -136,7 +134,7 @@ docker stop voc-pg && docker rm voc-pg
 python -c "from database_b import drop_all_b; drop_all_b()"
 ```
 
-## 九、（附）沙盒／公司內網等「已有原生 PostgreSQL 16」環境的替代做法
+## 九、（附）沙盒等「本機已裝原生 PostgreSQL 16」環境的替代做法
 
 如果你的環境（例如本專案的開發沙盒）已經裝了 PostgreSQL 16 的 binaries
 （`/usr/lib/postgresql/16`），不需要 Docker，直接跑：
@@ -149,3 +147,40 @@ bash scripts/dev_pg.sh
 建立資料庫 `voc_b`，最後用 `psql` 驗證連線成功。跑完之後直接接續本文件第五節（建表＋灌種子資料）
 即可，不需要再處理 Docker 相關步驟。此腳本已在專案沙盒環境實測可重複執行（冷啟動／已啟動兩種
 情境皆驗證過）。
+
+**注意**：`dev_pg.sh` 啟動的 PG cluster 不是常駐服務（沙盒容器重啟、閒置回收都會讓它停掉），
+每次回來測試前**先重跑一次 `bash scripts/dev_pg.sh` 再跑測試**——腳本冪等，PG 已在跑的話
+會直接略過初始化步驟，不會出錯。
+
+## 九之一、公司正式／測試環境（IT 已提供 PostgreSQL 服務時）
+
+這是「不是你自己起容器/裝 PG binaries，而是 IT 已經給你一顆可連線的 PostgreSQL」的情境。
+跟前兩節的差別只在「PG 從哪來」，後續步驟完全一樣：
+
+1. **跟 IT/DBA 要的資訊**：主機位址、port（預設 5432）、資料庫名稱（可以就叫 `voc_b`，
+   或用公司命名慣例）、帳號密碼。**資料庫本身通常要請 DBA 先建好空的**
+   （`CREATE DATABASE voc_b;`），本專案的程式**只會建表，不會建資料庫**。
+2. **設定 `.env`**：
+   ```
+   VOC_B_DB_URL=postgresql+psycopg2://帳號:密碼@主機位址:5432/voc_b
+   ```
+3. **建表＋灌種子資料**（與第五節完全相同）：
+   ```bash
+   python -c "from database_b import create_all_b; create_all_b()"
+   python scripts/seed_test_data.py
+   ```
+4. 若要讓派報信真的寄到你手上，記得同時確認 `.env` 的 `TEST_MODE=True`、
+   `TEST_DEV_EMAIL=你的信箱`；種子資料裡 `TEST001`/`TEST999` 的 `notesid` 預設是
+   `TEST_PLACEHOLDER`，要收信仍建議照第五節的提示改掉。
+5. **`MOCK_USER_EMPNO`／`MOCK_USER_NAME`**（`.env.example` 已列出）：測「申請人核准不了自己
+   的單」這種閉環時，在 `TEST001`（申請人）／`TEST999`（簽核人）之間切換。
+6. **網路與防火牆**：公司環境常有網段限制，執行 `python main_b.py` 的機器要能連到
+   PG 的 port（5432 或 IT 指定的 port）；反過來若你要讓同事也能用瀏覽器連你的
+   `main_b.py`（監聽 `0.0.0.0:8000`），也要確認防火牆開放 8000。
+7. 跑 `python -m pytest tests_integration/ -v` 驗證——跟前面章節一樣，全綠代表這顆
+   PG 上的 Schema B 運作正常。
+
+**結論**：「建好資料庫＋灌種子資料」是核心的兩步沒錯，但完整順序是
+`.env 設連線字串 → create_all_b()（建表）→ seed_test_data.py（灌資料）→ 視需要調整
+TEST_DEV_EMAIL/MOCK_USER_EMPNO/notesid → 跑 main_b.py 或 tests_integration/ 驗證`，
+資料庫「空殼」本身要先請 DBA 建好，程式不會自己建資料庫（只會建表）。
