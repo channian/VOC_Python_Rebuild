@@ -18,6 +18,11 @@
 
   <!-- HTMX -->
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+  <!-- json-enc 擴充：flow_modal.html 的簽核按鈕用 hx-ext="json-enc" 讓 hx-vals 以 JSON body
+       送出（後端 /flow/sign 吃 Pydantic SignAction，非表單編碼）。core htmx 不含此擴充，
+       缺載入會讓 hx-vals 退回表單編碼送出，後端 422（2026-07-08 實測發現，見 CLAUDE.md）。
+       defer 保證在 htmx.org 之後才註冊擴充。 -->
+  <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/json-enc.js" defer></script>
 </head>
 <body>
 

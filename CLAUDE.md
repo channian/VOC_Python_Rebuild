@@ -34,6 +34,13 @@ docs/                # PhaseA執行規格書 / schema_B_設計提案 v2 / PM執�
 3. **Jinja2 備忘用 `{# ... #}`，不要放進 `<!-- -->`**（HTML 注解裡的 `{% %}`/`{{ }}` 仍會被解析）。
 4. **檔案操作一律用 Read/Write/Edit 工具**，不要用 `cat`/`ls`（專案原本在含中文的 Windows 路徑，Bash 中文易亂碼）。
 5. `models/spec_model.py` 對應舊 MSSQL schema，**架構未定案前不要改**。
+6. **後端吃 JSON body（Pydantic model）的端點，前端不要用 `hx-vals` 裸送**——htmx 的
+   `hx-vals` 預設用表單編碼（`application/x-www-form-urlencoded`）送出，不是 JSON；
+   就算加了 `hx-ext="json-enc"` 屬性，那個擴充套件檔案本身也要另外載入 script 才會生效
+   （2026-07-08 實測發現：`flow_modal.html` 只宣告了 `hx-ext` 沒載入擴充，導致 `/flow/sign`
+   永遠 422，兩棧 `home.html` 共用故已一併修好，見 `home.html` 的 `json-enc.js` script tag）。
+   **新頁面一律照 `maillist_modal.html`/`spec_modal.html` 的模式**：純 JS `fetch()` 明確帶
+   `Content-Type: application/json`，不要用 `hx-vals` 對 JSON body 端點送資料。
 
 ## 燈號計算規則（`services/dashboard_service.py`）
 ```
