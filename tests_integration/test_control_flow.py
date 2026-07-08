@@ -6,11 +6,10 @@ services_b/control_service.py + services_b/flow_service.py 的完整資料流：
   申請 → 送簽 → 核准/否決 → is_item_isolated 推導 → 修改單 org 回寫 → ControlTime →
   his 快照 → ccno 流水號 → 簽核人查詢。
 
-⚠️ 種子資料補充說明：scripts/seed_test_data.py（WP1 凍結檔）只餵了 TEST999 一筆
-mail_list（rpttype=水質異常，供派報用），並沒有餵「水保養中」/「空保養中」這兩個
-隔離簽核專用的 rpttype（見 services/flow_service.build_rtype_list()）。本檔用
-autouse fixture 在既有 seed 基礎上「補」這兩筆 sign_grp=1 名單給 TEST999，
-不改動 seed_test_data.py 本體，其他 WP 測試不受影響（b_db 每個測試案例都會重新 seed）。
+2026-07-06 主控更新：「水保養中」/「空保養中」這兩個隔離簽核專用 rpttype
+（見 services/flow_service.build_rtype_list()）已直接種進 scripts/seed_test_data.py
+本體（供使用者瀏覽器實測隔離送簽時也能找到簽核人，不再只靠這裡的測試專用補丁），
+本檔原本用來補這兩筆的 autouse fixture 已移除（保留會與 seed 撞主鍵）。
 """
 
 from datetime import datetime, timedelta, timezone
@@ -34,26 +33,6 @@ from services_b.control_service import (
 )
 from services_b.flow_service import get_signers, process_sign, get_todo_list
 from scripts.seed_test_data import TEST_PLANT_NO, TEST_PLANT_ID, APPLICANT_EMPNO, SIGNER_EMPNO
-
-
-# ── 補充種子：隔離簽核專用 rpttype（水保養中/空保養中）─────────────────────────
-
-@pytest.fixture(autouse=True)
-def _seed_isolation_sign_mail_list(b_db):
-    """
-    每個測試案例都補一筆 TEST999 的「水保養中」「空保養中」sign_grp=1 名單，
-    讓 create_sign_flow()/get_signers() 找得到簽核人（seed_test_data.py 只餵了
-    「水質異常」這個派報用 rpttype，不涵蓋隔離簽核用的 rtype）。
-    """
-    for rpttype in ("水保養中", "空保養中"):
-        b_db.add(
-            MailList(
-                plant_no=TEST_PLANT_NO, rpttype=rpttype, emp_no=SIGNER_EMPNO,
-                emp_name="測試簽核人", mail_type="TO", mail_on=True, sign_grp=True,
-            )
-        )
-    b_db.flush()
-    yield
 
 
 def _make_control_create(item: str = "pH1", minutes_ahead: int = 5, duration_minutes: int = 30) -> ControlCreate:

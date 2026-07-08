@@ -290,6 +290,19 @@ def _seed_identities(session) -> None:
             mail_type="TO", mail_on=True, sign_grp=True,
         )
     )
+
+    # 隔離申請簽核用的名單（services/flow_service.build_rtype_list：含"VOC"項目→空保養中，
+    # 其餘→水保養中）。曾漏掉這兩筆，導致瀏覽器實測「送簽」時報「尚未設定簽核人員」
+    # （demo_closed_loop.py / tests_integration/test_main_b_routes.py 原本各自補丁一次，
+    # 2026-07-06 主控修正：直接種進 seed，兩處補丁可以拿掉但先保留亦不衝突，upsert 語意相容）。
+    for isolation_rtype in ("水保養中", "空保養中"):
+        session.add(
+            MailList(
+                plant_no=TEST_PLANT_NO, rpttype=isolation_rtype, emp_no=SIGNER_EMPNO,
+                emp_name="測試簽核人", notes_id=NOTES_PLACEHOLDER,
+                mail_type="TO", mail_on=True, sign_grp=True,
+            )
+        )
     session.flush()
 
 

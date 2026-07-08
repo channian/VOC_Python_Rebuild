@@ -19,7 +19,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from models_b import Item, MailList, Spec, ReadingCurrent, ReadingHistory, SpecApply, Tranlog
+from models_b import Item, Spec, ReadingCurrent, ReadingHistory, SpecApply, Tranlog
 from services.dashboard_service import _calculate_light
 from services.flow_service import FlowStatus
 from services_b.control_service import create_isolation, is_item_isolated
@@ -104,17 +104,9 @@ def test_isolation_checker_real_integration_via_control_service(b_db):
     再用 is_item_isolated() 當作 isolation_checker 注入 get_dashboard_rows()，驗證推導出的
     保養中狀態能正確反映在儀表板列上（C 決策：隔離不竄改 reading_current，只在顯示層推導）。
     """
-    # 種子資料（scripts/seed_test_data.py，WP1 凍結檔）只餵了「水質異常」這個派報用 rpttype，
-    # 沒有隔離簽核專用的「水保養中」（見 services.flow_service.build_rtype_list：Cu1 不含
-    # 'VOC' 字樣 → 歸類水保養中）。這裡在測試內另外補一筆，不動 seed_test_data.py 本體。
-    b_db.add(
-        MailList(
-            plant_no=TEST_PLANT_NO, rpttype="水保養中", emp_no=SIGNER_EMPNO,
-            emp_name="測試簽核人", mail_type="TO", mail_on=True, sign_grp=True,
-        )
-    )
-    b_db.flush()
-
+    # 2026-07-06 主控更新：隔離簽核用的「水保養中」名單列（見
+    # services.flow_service.build_rtype_list：Cu1 不含 'VOC' 字樣 → 歸類水保養中）
+    # 已直接種進 scripts/seed_test_data.py 本體，這裡不再需要另外補（保留會撞主鍵）。
     now = datetime.now()
     data = ControlCreate(
         plantid=TEST_PLANT_ID, mdfdesc="WP4 儀表板整合測試",

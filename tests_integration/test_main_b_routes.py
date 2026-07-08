@@ -39,14 +39,9 @@ def as_user(monkeypatch):
     return _switch
 
 
-def _seed_isolation_signer(db):
-    """種子缺隔離簽核用 rpttype（水保養中）的名單列（WP5 已知缺口），測試自行補上簽核人 TEST999。"""
-    db.add(MailList(
-        plant_no=TEST_PLANT_NO, rpttype="水保養中", emp_no=SIGNER_EMPNO,
-        emp_name="測試簽核人", notes_id="TEST_PLACEHOLDER",
-        mail_type="TO", mail_on=True, sign_grp=True,
-    ))
-    db.commit()
+# 2026-07-06 主控更新：隔離簽核用的「水保養中」名單列已直接種進
+# scripts/seed_test_data.py 本體（供瀏覽器實測也能用），本檔原本自行補這筆的
+# _seed_isolation_signer() 已移除（保留會與 seed 撞主鍵）。
 
 
 # ── 頁面 GET 200 ────────────────────────────────────────────────────────────
@@ -71,8 +66,6 @@ def test_control_items_contains_seeded_items(client):
 # ── 寫入路徑 1：申請隔離 → 送簽 → 簽核核准 ─────────────────────────────────
 
 def test_isolation_apply_submit_sign_via_api(client, b_db, as_user):
-    _seed_isolation_signer(b_db)
-
     # 以 TEST001（申請人）身分申請＋送簽
     as_user(APPLICANT_EMPNO, "測試申請人")
     stime = datetime.now() + timedelta(minutes=5)
