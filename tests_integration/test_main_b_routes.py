@@ -84,8 +84,16 @@ def test_isolation_apply_submit_sign_via_api(client, b_db, as_user):
     ).scalar_one()
     assert iso.fstatus == int(FlowStatus.待簽核)
 
-    r = client.post(f"/control/submit/{iso.id}")
-    assert r.status_code == 200, r.text
+    # 2026-07-08 補：送簽通知信 hook 曾長期是 no-op（create_sign_flow 的 notify_callback 沒被
+    # router 接上），使用者實測簽核成功、也收到核准信之後才發現「送簽當下」那封提醒簽核人
+    # 的信一直沒寄——鎖住這條線不再被回歸悄悄拔掉。
+    with mock.patch("routers_b.control_router_b.send_email_sync") as mock_send:
+        r = client.post(f"/control/submit/{iso.id}")
+        assert r.status_code == 200, r.text
+        mock_send.assert_called_once()
+        subject, body, to_addrs = mock_send.call_args.args[:3]
+        assert "待簽核" in subject
+        assert to_addrs == ["TEST_PLACEHOLDER@aseglobal.com"]  # 簽核人(TEST999)的 notesid 轉 email
     b_db.refresh(iso)
     assert iso.fstatus == int(FlowStatus.簽核中)
     assert iso.flow_id is not None

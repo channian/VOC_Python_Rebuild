@@ -27,7 +27,7 @@ services_b/control_service.py — Schema B（PostgreSQL）廠區隔離申請資�
 
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -134,7 +134,12 @@ def _has_overlapping_isolation(
 # ── 申請 / 送簽 / 修改單 ──────────────────────────────────────────────────────
 
 def create_isolation(
-    db: Session, current_user_empno: str, current_user_name: str, data: ControlCreate, is_commit: bool = True
+    db: Session,
+    current_user_empno: str,
+    current_user_name: str,
+    data: ControlCreate,
+    is_commit: bool = True,
+    notify_callback: Optional[Callable[..., None]] = None,
 ) -> Isolation:
     """
     對應 A 棧 create_control()：新增隔離申請單。data 沿用既有 schemas.control_schema.ControlCreate
@@ -143,6 +148,8 @@ def create_isolation(
     一律走簽核（免簽核 b_pass 分支舊系統已停用，不移植，與 A 棧一致）：
       - 暫存（is_commit=False）：fstatus=待簽核(0)
       - 送簽（is_commit=True）：建立簽核流程後 fstatus=簽核中(1)
+
+    :param notify_callback: 送簽通知信 hook（is_commit=True 時才會觸發），語意同 submit_isolation。
     """
     try:
         for itm in data.items:
@@ -182,7 +189,14 @@ def create_isolation(
             rtype_list = build_rtype_list([itm.item for itm in data.items])
             # 沿用 A 棧既有行為：plantno 取 items 迴圈最後一筆值（legacy 遺留行為，見 services/control_service.py 註解）
             plantno = data.items[-1].plantno
-            flow_id = create_sign_flow(db, plantno, rtype_list, current_user_empno, new_iso.id)
+
+            def _adapt(fid, plant_no, signer_empnos, flow_id):
+                if notify_callback is not None:
+                    notify_callback(isolation=new_iso, signer_empnos=signer_empnos, flow_id=flow_id)
+
+            flow_id = create_sign_flow(
+                db, plantno, rtype_list, current_user_empno, new_iso.id, notify_callback=_adapt
+            )
             new_iso.flow_id = flow_id
             new_iso.fstatus = int(FlowStatus.簽核中)
 
@@ -202,9 +216,19 @@ def create_isolation(
         raise
 
 
-def submit_isolation(db: Session, isolation_id: int, current_user_empno: str, current_user_name: str) -> bool:
+def submit_isolation(
+    db: Session,
+    isolation_id: int,
+    current_user_empno: str,
+    current_user_name: str,
+    notify_callback: Optional[Callable[..., None]] = None,
+) -> bool:
     """
     對應 A 棧 submit_control()：把一筆先前「暫存」（fstatus=待簽核）的隔離申請單正式送出簽核。
+
+    :param notify_callback: 送簽通知信 hook，預設 no-op；成功建立簽核流程後以
+        (isolation=<Isolation>, signer_empnos=<List[str]>, flow_id=<int>) 呼叫
+        （呼叫端可據此寄信通知簽核人「有單待簽」）。
     """
     try:
         record = db.execute(select(Isolation).where(Isolation.id == isolation_id)).scalar_one_or_none()
@@ -220,7 +244,13 @@ def submit_isolation(db: Session, isolation_id: int, current_user_empno: str, cu
         rtype_list = build_rtype_list([it.item for it in items])
         plantno = items[-1].plant_no  # 沿用 A 棧既有行為
 
-        flow_id = create_sign_flow(db, plantno, rtype_list, current_user_empno, isolation_id)
+        def _adapt(fid, plant_no, signer_empnos, flow_id):
+            if notify_callback is not None:
+                notify_callback(isolation=record, signer_empnos=signer_empnos, flow_id=flow_id)
+
+        flow_id = create_sign_flow(
+            db, plantno, rtype_list, current_user_empno, isolation_id, notify_callback=_adapt
+        )
         record.flow_id = flow_id
         record.fstatus = int(FlowStatus.簽核中)
 
@@ -243,7 +273,12 @@ def submit_isolation(db: Session, isolation_id: int, current_user_empno: str, cu
 
 
 def modify_isolation(
-    db: Session, current_user_empno: str, current_user_name: str, data: ControlModify, is_commit: bool = True
+    db: Session,
+    current_user_empno: str,
+    current_user_name: str,
+    data: ControlModify,
+    is_commit: bool = True,
+    notify_callback: Optional[Callable[..., None]] = None,
 ) -> Isolation:
     """
     對應 A 棧 modify_control()：針對「已核准且仍有效」的隔離單建立一張新的修改單
@@ -251,6 +286,8 @@ def modify_isolation(
 
     his 寫入沿用 A 棧語意：本函式一律寫 utype=新增(1)；utype=修改隔離區間(3) 是核准後才由
     services_b.flow_service.process_sign 寫入（回寫 org_id 那段），這裡不重複寫。
+
+    :param notify_callback: 送簽通知信 hook（is_commit=True 時才會觸發），語意同 submit_isolation。
     """
     try:
         org = db.execute(select(Isolation).where(Isolation.id == data.orgccid)).scalar_one_or_none()
@@ -296,7 +333,14 @@ def modify_isolation(
         if is_commit:
             rtype_list = build_rtype_list([itm.item for itm in data.items])
             plantno = data.items[-1].plantno
-            flow_id = create_sign_flow(db, plantno, rtype_list, current_user_empno, new_iso.id)
+
+            def _adapt(fid, plant_no, signer_empnos, flow_id):
+                if notify_callback is not None:
+                    notify_callback(isolation=new_iso, signer_empnos=signer_empnos, flow_id=flow_id)
+
+            flow_id = create_sign_flow(
+                db, plantno, rtype_list, current_user_empno, new_iso.id, notify_callback=_adapt
+            )
             new_iso.flow_id = flow_id
             new_iso.fstatus = int(FlowStatus.簽核中)
 

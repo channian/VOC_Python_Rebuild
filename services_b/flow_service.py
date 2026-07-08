@@ -98,7 +98,14 @@ def _get_sign_emp(db: Session, empno: str) -> SignEmp:
 
 # ── 建立簽核流程 ──────────────────────────────────────────────────────────────
 
-def create_sign_flow(db: Session, plant_no: str, rtype_list: List[str], empno: str, fid: int) -> int:
+def create_sign_flow(
+    db: Session,
+    plant_no: str,
+    rtype_list: List[str],
+    empno: str,
+    fid: int,
+    notify_callback: Optional[Callable[..., None]] = None,
+) -> int:
     """
     對應 dbSignFlow.CreateNewFlow(fruleid, fid, empno, plantno, rtype, hashkey, showinfo) 的
     「一階群組簽核」多載，B 棧版本：
@@ -111,7 +118,13 @@ def create_sign_flow(db: Session, plant_no: str, rtype_list: List[str], empno: s
     沒人能簽的流程，這裡提前擋下）。
 
     :param fid: 對應本張隔離單的 isolation.id（B 棧欄位名稱換了，語意同 A 棧的 ccid）。
+    :param notify_callback: 送簽通知信 hook，預設 no-op；對應舊系統 Proc送簽() 建立 flow 後立刻呼叫
+        SendMail通知(isFinished=false)——送簽當下就主動通知簽核人「有單待簽」，與 process_sign()
+        的「簽核結果」通知信是兩個不同時間點的呼叫。成功建立 flow 後以
+        (fid=<int>, plant_no=<str>, signer_empnos=<List[str]>, flow_id=<int>) 呼叫。
     """
+    notify_callback = notify_callback or _noop_notify
+
     signer_empnos = get_signers(db, plant_no, rtype_list, empno)
     if not signer_empnos:
         raise ValueError(f"廠區 {plant_no} 尚未設定簽核人員（mail_list.sign_grp=true），無法送簽")
@@ -141,6 +154,7 @@ def create_sign_flow(db: Session, plant_no: str, rtype_list: List[str], empno: s
             )
         )
     db.flush()
+    notify_callback(fid=fid, plant_no=plant_no, signer_empnos=signer_empnos, flow_id=flow.flow_id)
 
     return flow.flow_id
 

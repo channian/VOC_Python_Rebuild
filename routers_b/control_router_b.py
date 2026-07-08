@@ -63,6 +63,37 @@ def _notify_sign_result(db: Session, isolation: Isolation, new_status: FlowStatu
         logger.exception("簽核通知信寄送失敗（不影響簽核本身已成功送出）")
 
 
+def _notify_submit_pending(db: Session, isolation: Isolation, signer_empnos: List[str]) -> None:
+    """送簽通知信（2026-07-08 補接：對應舊系統 Proc送簽() 建立 flow 後立刻呼叫
+    SendMail通知(isFinished=false)——送簽當下就主動通知簽核人「有單待簽」，不是只靠待辦
+    清單被動查看。與 _notify_sign_result 是兩個不同時間點的通知信，之前只補了後者，
+    使用者實測才發現送簽當下沒收到信）。
+
+    寄給 signer_empnos（get_signers 回傳的該廠區簽核人清單），查無 email 的人略過，
+    全部查無 email 時只記警告、不讓送簽動作失敗。
+    """
+    try:
+        if not signer_empnos:
+            return
+        to_addrs = []
+        for empno in signer_empnos:
+            emp = db.execute(select(Employee).where(Employee.emp_no == empno)).scalar_one_or_none()
+            if emp is not None and emp.notes_id:
+                to_addrs.append(notesid_to_email(emp.notes_id))
+        if not to_addrs:
+            logger.warning("送簽通知信：廠區簽核人（%s）皆查無 email，略過寄信", signer_empnos)
+            return
+        subject = f"【隔離申請待簽核】{isolation.ccno} (Security C)"
+        body = (
+            f"<p>以下文件待您簽核，請儘速處理：</p>"
+            f"<p>申請單號：{isolation.ccno}</p>"
+            f"<p>說明：{isolation.mdfdesc or ''}</p>"
+        )
+        send_email_sync(subject, body, to_addrs)
+    except Exception:
+        logger.exception("送簽通知信寄送失敗（不影響送簽本身已成功送出）")
+
+
 # ── 模板形狀轉接 ─────────────────────────────────────────────────────────────
 
 def _iso_dict_for_template(row: dict) -> dict:
@@ -126,7 +157,12 @@ def render_control_items_b(request: Request, plantno: str = "", db: Session = De
 def create_control_b(data: ControlCreate, is_commit: bool = True, db: Session = Depends(get_b_db)):
     try:
         empno, name = _user()
-        control_service.create_isolation(db, empno, name, data, is_commit)
+        control_service.create_isolation(
+            db, empno, name, data, is_commit,
+            notify_callback=lambda isolation, signer_empnos, flow_id: _notify_submit_pending(
+                db, isolation, signer_empnos
+            ),
+        )
         return {"status": "success", "message": "申請已成功送出"}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -139,7 +175,12 @@ def create_control_b(data: ControlCreate, is_commit: bool = True, db: Session = 
 def submit_control_b(ccid: int, db: Session = Depends(get_b_db)):
     try:
         empno, name = _user()
-        control_service.submit_isolation(db, ccid, empno, name)
+        control_service.submit_isolation(
+            db, ccid, empno, name,
+            notify_callback=lambda isolation, signer_empnos, flow_id: _notify_submit_pending(
+                db, isolation, signer_empnos
+            ),
+        )
         return {"status": "success", "message": "已送出簽核"}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -152,7 +193,12 @@ def submit_control_b(ccid: int, db: Session = Depends(get_b_db)):
 def modify_control_b(data: ControlModify, is_commit: bool = True, db: Session = Depends(get_b_db)):
     try:
         empno, name = _user()
-        iso = control_service.modify_isolation(db, empno, name, data, is_commit)
+        iso = control_service.modify_isolation(
+            db, empno, name, data, is_commit,
+            notify_callback=lambda isolation, signer_empnos, flow_id: _notify_submit_pending(
+                db, isolation, signer_empnos
+            ),
+        )
         return {"status": "success", "message": f"修改單 {iso.ccno} 已建立並送簽"}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
