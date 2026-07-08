@@ -16,10 +16,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database_b import get_b_db
-from models_b import Isolation, IsolationItem, Item, Plant, Spec
+from models_b import Employee, Isolation, IsolationItem, Item, Plant, Spec
 from schemas.control_schema import ControlCreate, ControlModify, ControlTimeUpdate
 from schemas.flow_schema import SignAction
 from services.control_service import RIGHTSID_CONTROL_TIME  # A/B 兩棧共用常數（roleid=12）
+from services.flow_service import FlowStatus
+from services.maillist_service import notesid_to_email  # 既有純函式，notesid→email 轉換規則兩棧同源
+from services.notify_service import send_email_sync
 from services_b import acl_service, control_service, flow_service
 
 logger = logging.getLogger(__name__)
@@ -32,6 +35,32 @@ def _user() -> tuple[str, str]:
     """目前操作者（MOCK_USER_EMPNO 設定，request 時讀取以支援測試中切換身分；Phase 3 LDAP 後改真身分）。"""
     from config import settings
     return settings.MOCK_USER_EMPNO, settings.MOCK_USER_NAME
+
+
+def _notify_sign_result(db: Session, isolation: Isolation, new_status: FlowStatus, action_id: int) -> None:
+    """簽核結果通知信（2026-07-08 補接：WP3 留的 notify_callback hook 之前一直是 no-op，
+    使用者實測簽核成功後才發現一直沒收到通知信，回頭補上）。
+
+    寄給申請人（isolation.cemp_no），走既有 notify_service.send_email_sync（TEST_MODE 保護、
+    走 IT mail server），notesid→email 轉換沿用 services/maillist_service.notesid_to_email
+    （兩棧同源，不重寫規則）。查無 email 時只記警告、不讓簽核動作因此失敗（通知信是附加效果，
+    不該讓核心的簽核狀態變更失敗）。
+    """
+    try:
+        emp = db.get(Employee, isolation.cemp_no)
+        if emp is None or not emp.notes_id:
+            logger.warning("簽核通知信：申請人 %s 查無 email，略過寄信", isolation.cemp_no)
+            return
+        result_text = "核准" if new_status == FlowStatus.核准 else "否決"
+        subject = f"【隔離申請{result_text}通知】{isolation.ccno} (Security C)"
+        body = (
+            f"<p>申請單號：{isolation.ccno}</p>"
+            f"<p>結果：{result_text}</p>"
+            f"<p>說明：{isolation.mdfdesc or ''}</p>"
+        )
+        send_email_sync(subject, body, [notesid_to_email(emp.notes_id)])
+    except Exception:
+        logger.exception("簽核通知信寄送失敗（不影響簽核本身已成功送出）")
 
 
 # ── 模板形狀轉接 ─────────────────────────────────────────────────────────────
@@ -183,6 +212,9 @@ def sign_apply_b(action: SignAction, db: Session = Depends(get_b_db)):
     try:
         flow_service.process_sign(
             db, isolation_id=action.ccid, flow_id=action.flowid, action_id=action.actionid,
+            notify_callback=lambda isolation, new_status, action_id: _notify_sign_result(
+                db, isolation, new_status, action_id
+            ),
             current_user_empno=_user()[0], current_user_name=_user()[1],
             comment=getattr(action, "comment", "") or "",
         )
