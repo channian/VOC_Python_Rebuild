@@ -66,7 +66,8 @@ def test_migration_loads_and_transforms(empty_db):
     assert report.counts["isolation_item"] == 1
     assert report.counts["employee"] == 3           # 1 申請 + 2 簽核
     assert report.counts["sign_emp"] == 3
-    assert report.counts["mail_list"] == 6          # 2 簽核 × 1 廠 ×（水保養中/空保養中/水質異常）
+    # 2 簽核 × 1 廠 ×（2 隔離 + 1 水質異常 + 14 派報 rpttype）= 34
+    assert report.counts["mail_list"] == 34
     assert report.counts["acl_user_role"] == 2
     assert report.counts["system_config"] == 4
 
@@ -98,6 +99,6 @@ def test_migration_idempotent(empty_db):
     assert db.execute(select(func.count()).select_from(Spec)).scalar() == 3
     assert db.execute(select(func.count()).select_from(SignEmp)).scalar() == 3
     assert db.execute(select(func.count()).select_from(Isolation)).scalar() == 1
-    assert db.execute(select(func.count()).select_from(MailList)).scalar() == 6
+    assert db.execute(select(func.count()).select_from(MailList)).scalar() == 34
     assert db.execute(select(func.count()).select_from(ReadingCurrent)).scalar() == 3
     assert db.execute(select(func.count()).select_from(Plant)).scalar() == 1

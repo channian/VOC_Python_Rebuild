@@ -75,36 +75,38 @@ def test_mail_list_count_and_sign_grp_flags():
     result = build_personnel(ctx, PLANT_NOS)
     mail_list = result["mail_list"]
 
-    # 2 簽核人 × 2 廠 × (2 隔離 rpttype + 1 水質異常) = 12
-    assert len(mail_list) == 12
+    n_signers = len(ctx.personnel.signers)         # 2
+    n_iso = len(ctx.isolation_sign_rpttypes)       # 2（水保養中/空保養中）
+    n_dispatch = len(ctx.dispatch_rpttypes)        # 14（派報收件人）
+    per_plant = n_iso + 1 + n_dispatch             # + 1 水質異常
+    # 2 簽核人 × 2 廠 × (2 隔離 + 1 水質異常 + 14 派報)
+    assert len(mail_list) == n_signers * len(PLANT_NOS) * per_plant
     for ml in mail_list:
         assert isinstance(ml, MailList)
         assert ml.mail_type == "TO"
         assert ml.mail_on is True
 
-    isolation_rows = [ml for ml in mail_list if ml.rpttype in ("水保養中", "空保養中")]
-    water_rows = [ml for ml in mail_list if ml.rpttype == "水質異常"]
+    isolation_rows = [ml for ml in mail_list if ml.rpttype in ctx.isolation_sign_rpttypes]
+    water_rows = [ml for ml in mail_list if ml.rpttype == ctx.water_dispatch_rpttype]
+    dispatch_rows = [ml for ml in mail_list if ml.rpttype in ctx.dispatch_rpttypes]
 
-    # 2 簽核人 × 2 廠 × 2 隔離 rpttype = 8
-    assert len(isolation_rows) == 8
-    for ml in isolation_rows:
-        assert ml.sign_grp is True
+    # 只有隔離簽核名單 sign_grp=True，其餘（水質異常/派報）皆 False
+    assert len(isolation_rows) == n_signers * len(PLANT_NOS) * n_iso
+    assert all(ml.sign_grp is True for ml in isolation_rows)
+    assert len(water_rows) == n_signers * len(PLANT_NOS)
+    assert all(ml.sign_grp is False for ml in water_rows)
+    assert len(dispatch_rows) == n_signers * len(PLANT_NOS) * n_dispatch
+    assert all(ml.sign_grp is False for ml in dispatch_rows)
 
-    # 2 簽核人 × 2 廠 × 1 水質異常 = 4
-    assert len(water_rows) == 4
-    for ml in water_rows:
-        assert ml.sign_grp is False
-
-    # 每個簽核人在每個廠都齊全三種 rpttype
-    signer_empnos = {"S001", "S002"}
+    # 每個簽核人在每個廠都齊全所有 rpttype
+    expected_rpttypes = set(ctx.isolation_sign_rpttypes) | {ctx.water_dispatch_rpttype} | set(ctx.dispatch_rpttypes)
     for plant_no in PLANT_NOS:
-        for empno in signer_empnos:
+        for empno in {"S001", "S002"}:
             rpttypes = {
-                ml.rpttype
-                for ml in mail_list
+                ml.rpttype for ml in mail_list
                 if ml.plant_no == plant_no and ml.emp_no == empno
             }
-            assert rpttypes == {"水保養中", "空保養中", "水質異常"}
+            assert rpttypes == expected_rpttypes
 
 
 def test_acl_user_role_count_and_fields():

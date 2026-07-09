@@ -54,6 +54,13 @@ class MigrationContext:
     isolation_sign_rpttypes: tuple = ("水保養中", "空保養中")
     water_dispatch_rpttype: str = "水質異常"
     signer_role_id: int = 3                    # 簽核人在 acl_user_role 掛的角色（沿用 seed 慣例 roleid=3）
+    # 派報收件人用的報表類型：services/dispatch_service.evaluate_row 產生的代碼（去掉 -廠區 後綴）。
+    # sType='水'/'空' × {Alert, OOS, OOS15, OOS30, OOC, OOC15, OOC30}（ArrOOCS=['','15','30']）。
+    # 全部種進 mail_list（TO），確保搬遷後任何派報情境都找得到收件人，不必像 demo 那樣臨時補。
+    dispatch_rpttypes: tuple = (
+        "水Alert", "水OOS", "水OOS15", "水OOS30", "水OOC", "水OOC15", "水OOC30",
+        "空Alert", "空OOS", "空OOS15", "空OOS30", "空OOC", "空OOC15", "空OOC30",
+    )
 
 
 def load_personnel(path: str) -> PersonnelBinding:
