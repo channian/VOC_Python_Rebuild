@@ -1,0 +1,20 @@
+[
+  {
+    "itemid": 1,
+    "item": "pH1",
+    "unit": "pH",
+    "stype": "廢水"
+  },
+  {
+    "itemid": 2,
+    "item": "COD2",
+    "unit": "mg/L",
+    "stype": "廢水"
+  },
+  {
+    "itemid": 3,
+    "item": "VOC1",
+    "unit": "ppm",
+    "stype": "空汙"
+  }
+]

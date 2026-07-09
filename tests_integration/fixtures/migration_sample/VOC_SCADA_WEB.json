@@ -1,0 +1,50 @@
+[
+  {
+    "plantno": "K7",
+    "item": "pH1",
+    "rvalue": "7.5",
+    "cdatetime": "2026-07-09T10:00:00",
+    "OOS_HH": "9",
+    "OOC_H": "8.5",
+    "alert": "8.2",
+    "OOS_LL": "6",
+    "OOC_L": "6.5",
+    "alert_L": "6.8",
+    "OOS_HH1": null,
+    "OOC_H1": null,
+    "broken": 0,
+    "TwentyFourHours": null
+  },
+  {
+    "plantno": "K7",
+    "item": "COD2",
+    "rvalue": "120",
+    "cdatetime": "2026-07-09T10:00:00",
+    "OOS_HH": "100",
+    "OOC_H": "80",
+    "alert": "60",
+    "OOS_LL": null,
+    "OOC_L": null,
+    "alert_L": null,
+    "OOS_HH1": null,
+    "OOC_H1": null,
+    "broken": 0,
+    "TwentyFourHours": null
+  },
+  {
+    "plantno": "K7",
+    "item": "VOC1",
+    "rvalue": "N.D",
+    "cdatetime": "2026-07-09T10:00:00",
+    "OOS_HH": "5",
+    "OOC_H": "4",
+    "alert": "3",
+    "OOS_LL": null,
+    "OOC_L": null,
+    "alert_L": null,
+    "OOS_HH1": null,
+    "OOC_H1": null,
+    "broken": 0,
+    "TwentyFourHours": null
+  }
+]

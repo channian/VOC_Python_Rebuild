@@ -1,0 +1,54 @@
+[
+  {
+    "plantno": "K7",
+    "item": "pH1",
+    "LAW": "6-9",
+    "OOS": "6-9",
+    "OOC": "6.5-8.5",
+    "alert": "6.8-8.2",
+    "recv": "7",
+    "source": 1,
+    "status": 1,
+    "tagname": "K7_pH1",
+    "seqno": 1
+  },
+  {
+    "plantno": "K7",
+    "item": "COD2",
+    "LAW": "100",
+    "OOS": "100",
+    "OOC": "80",
+    "alert": "60",
+    "recv": "50",
+    "source": 1,
+    "status": 1,
+    "tagname": "K7_COD2",
+    "seqno": 2
+  },
+  {
+    "plantno": "K7",
+    "item": "VOC1",
+    "LAW": "5",
+    "OOS": "5",
+    "OOC": "4",
+    "alert": "3",
+    "recv": "2",
+    "source": 3,
+    "status": 1,
+    "tagname": "K7_VOC1",
+    "seqno": 3
+  },
+  {
+    "plantno": "K7",
+    "item": "OLD9",
+    "LAW": "1",
+    "OOS": "1",
+    "OOC": "1",
+    "alert": "1",
+    "recv": "1",
+    "source": 1,
+    "status": 0,
+    "tagname": "K7_OLD9",
+    "seqno": 9
+  }
+]

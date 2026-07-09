@@ -1,0 +1,18 @@
+[
+  {
+    "typeid": 1,
+    "RptType": "水質異常"
+  },
+  {
+    "typeid": 2,
+    "RptType": "水保養中"
+  },
+  {
+    "typeid": 3,
+    "RptType": "空保養中"
+  },
+  {
+    "typeid": 4,
+    "RptType": "規格維護"
+  }
+]

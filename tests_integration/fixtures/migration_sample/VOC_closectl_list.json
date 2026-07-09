@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "ccid": 1001,
+    "plantno": "K7",
+    "item": "pH1",
+    "sourceid": "1"
+  },
+  {
+    "id": 2,
+    "ccid": 1002,
+    "plantno": "K7",
+    "item": "COD2",
+    "sourceid": "1"
+  },
+  {
+    "id": 3,
+    "ccid": 1003,
+    "plantno": "K7",
+    "item": "VOC1",
+    "sourceid": "3"
+  }
+]

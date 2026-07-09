@@ -1,0 +1,14 @@
+[
+  {
+    "sourceid": 1,
+    "source": "SCADA"
+  },
+  {
+    "sourceid": 2,
+    "source": "CWMS"
+  },
+  {
+    "sourceid": 3,
+    "source": "QA"
+  }
+]
