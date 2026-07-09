@@ -1,0 +1,9 @@
+{
+  "_說明": "搬遷時把 A 棧真實人員全部改綁成你部門的同事。email 直接寫完整信箱（系統會自動反推 notes_id）。仿舊系統角色分工：廠棟工程師=申請人、環工負責人=簽核人。至少各填一位。複製本檔為 scripts/migration_personnel.json 再填。",
+  "廠棟工程師_申請人": [
+    {"empno": "A123456", "name": "陳大明", "email": "Da_Ming_Chen@aseglobal.com"}
+  ],
+  "環工負責人_簽核人": [
+    {"empno": "B654321", "name": "林小華", "email": "Hsiao_Hua_Lin@aseglobal.com"}
+  ]
+}
