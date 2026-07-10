@@ -19,9 +19,38 @@ A 端來源欄位對照（依實際 A 端 ORM model 或欄位假設）：
   sys_aclrolerights   models/acl_model.py 的 SysAclRoleRights：roleid, rightsid, allowrights
 """
 
+import logging
 from typing import Any, Dict, List
 
 from models_b import AclRole, AclRoleRights, Curve, Dept, Item, MailTypeModel, Plant, Source
+
+logger = logging.getLogger(__name__)
+
+
+def _dedup_rows(rows: List[Dict[str, Any]], key: str) -> List[Dict[str, Any]]:
+    """依 A 端某欄位去重（保留第一筆），供「B 端該欄位有 UNIQUE 約束、但 A 端可能重複」的表使用。
+
+    B 把 item.item / plant.plant_no / mail_type.rpttype 設為 UNIQUE（各表以它為業務鍵 JOIN），
+    但舊 A 表這些欄位不一定唯一（主鍵是另一個 id 欄）。若不先去重，兩筆同名不同 id 的列都會
+    被 upsert 的 merge 當成不同主鍵各自 INSERT，flush 時撞 UNIQUE 約束（IntegrityError）。
+    去重時 key 為 None 的列一併略過（NOT NULL 欄位灌 None 也會失敗）。
+    """
+    seen = set()
+    out: List[Dict[str, Any]] = []
+    dropped = 0
+    for row in rows:
+        val = row.get(key)
+        if val is None:
+            dropped += 1
+            continue
+        if val in seen:
+            dropped += 1
+            continue
+        seen.add(val)
+        out.append(row)
+    if dropped:
+        logger.warning("_dedup_rows(key=%s)：去重/略過 %d 筆（同名重複或該鍵為空）", key, dropped)
+    return out
 
 
 def normalize_source(rows: List[Dict[str, Any]]) -> List[Source]:
@@ -36,9 +65,10 @@ def normalize_item(rows: List[Dict[str, Any]]) -> List[Item]:
     """A VOC_item{itemid, item, unit, stype} → Item(item_id, item, display_name=None, unit, is_active=True)。
 
     display_name（舊程式硬編的 pH1→pH、COD2→COD 別名對照）非 A 端資料，一律先填 None，日後另補。
+    B 的 item.item 有 UNIQUE 約束、舊 VOC_item 同名不一定唯一，故先依 item 去重（保留第一筆）。
     """
     out: List[Item] = []
-    for row in rows:
+    for row in _dedup_rows(rows, "item"):
         out.append(
             Item(
                 item_id=row.get("itemid"),
@@ -55,9 +85,10 @@ def normalize_plant(rows: List[Dict[str, Any]]) -> List[Plant]:
     """A VOC_plant{plantid, plantno, sort, isShow} → Plant(...)。
 
     plantid==29（舊 ALL 虛擬列）→ kind='all'；其餘 → kind='normal'。
+    B 的 plant.plant_no 有 UNIQUE 約束，故先依 plantno 去重（保留第一筆）。
     """
     out: List[Plant] = []
-    for row in rows:
+    for row in _dedup_rows(rows, "plantno"):
         plantid = row.get("plantid")
         sort = row.get("sort")
         out.append(
@@ -101,9 +132,9 @@ def normalize_dept(rows: List[Dict[str, Any]]) -> List[Dept]:
 
 def normalize_mail_type(rows: List[Dict[str, Any]]) -> List[MailTypeModel]:
     """A VOC_Mail_Type{typeid, RptType}（models/maillist_model.py 的 VocMailType）
-    → MailTypeModel(type_id=typeid, rpttype=RptType)。"""
+    → MailTypeModel(type_id=typeid, rpttype=RptType)。B 的 rpttype 有 UNIQUE 約束，先依 RptType 去重。"""
     out: List[MailTypeModel] = []
-    for row in rows:
+    for row in _dedup_rows(rows, "RptType"):
         out.append(MailTypeModel(type_id=row.get("typeid"), rpttype=row.get("RptType")))
     return out
 

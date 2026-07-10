@@ -224,3 +224,34 @@ class TestNormalizeAclRoleRights:
 
     def test_empty(self):
         assert normalize_acl_role_rights([]) == []
+
+
+class TestDedupUniqueKey:
+    """B 端 item/plant/mail_type 有 UNIQUE 約束，A 端同鍵可能重複，須去重（保留第一筆）。"""
+
+    def test_item_dedup_by_name(self):
+        out = normalize_item([
+            {"itemid": 1, "item": "VOC", "unit": "ppm"},
+            {"itemid": 77, "item": "VOC", "unit": "ppm"},   # 同名不同 id → 收斂
+            {"itemid": 2, "item": "COD", "unit": "mg/L"},
+        ])
+        assert [i.item for i in out] == ["VOC", "COD"]
+        assert out[0].item_id == 1  # 保留第一筆
+
+    def test_item_skip_null_name(self):
+        out = normalize_item([{"itemid": 1, "item": None, "unit": "x"}])
+        assert out == []
+
+    def test_plant_dedup_by_plantno(self):
+        out = normalize_plant([
+            {"plantid": 1, "plantno": "K7", "sort": 1, "isShow": 1},
+            {"plantid": 99, "plantno": "K7", "sort": 2, "isShow": 1},  # 同 plantno → 收斂
+        ])
+        assert len(out) == 1 and out[0].plant_id == 1
+
+    def test_mail_type_dedup_by_rpttype(self):
+        out = normalize_mail_type([
+            {"typeid": 1, "RptType": "水質異常"},
+            {"typeid": 9, "RptType": "水質異常"},  # 同 rpttype → 收斂
+        ])
+        assert len(out) == 1 and out[0].type_id == 1
