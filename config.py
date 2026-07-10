@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     TEST_DEV_EMAIL: str = "developer@asegroup.com"
     TEST_DEV_PHONE: str = "0912345678"
 
+    # 測試用「固定副本」：所有寄出的信一律 CC 到這些地址，方便確認信件真的有寄出
+    # （非上班時間也能自己收到副本驗證，不必等同事回報）。多個地址用逗號分隔。
+    # 留空＝不加固定副本。TEST_MODE=True 時信件已全部改寄 TEST_DEV_EMAIL，此設定僅在
+    # 真實寄送（TEST_MODE=False，實際寄給同事）時才有意義。正式上線務必清空。
+    ALWAYS_CC_EMAIL: str = ""
+
     # ==========================================
     # Schema B（Phase A 重構版）資料庫連線
     # ==========================================

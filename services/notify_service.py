@@ -25,7 +25,7 @@ def send_email_sync(subject: str, body: str, to_addresses: list[str], cc_address
     cc_addresses：副本收件人（新增於異常派報 dispatch_service.run_dispatch 移植時，
     因舊版信件需要 TO/CC 分開，向下相容——不傳就等同原本行為）。
     """
-    cc_addresses = cc_addresses or []
+    cc_addresses = list(cc_addresses or [])
     # --- 測試模式攔截邏輯 ---
     if settings.TEST_MODE:
         logger.info(f"TEST_MODE 攔截 Email。原標題: {subject}, 原收件: {to_addresses}, 原副本: {cc_addresses}")
@@ -35,6 +35,14 @@ def send_email_sync(subject: str, body: str, to_addresses: list[str], cc_address
                 f"（副本：{cc_addresses}）</b></div>") + body
         to_addresses = [settings.TEST_DEV_EMAIL]
         cc_addresses = []
+    # -----------------------
+
+    # --- 測試用固定副本（ALWAYS_CC_EMAIL）：所有信一律 CC 到指定地址，方便確認信件有寄出 ---
+    # 放在 TEST_MODE 攔截之後：真實寄送時把自己加進 CC；已在收件人清單中的地址不重複加。
+    always_cc = getattr(settings, "ALWAYS_CC_EMAIL", "") or ""
+    for addr in (a.strip() for a in always_cc.split(",")):
+        if addr and addr not in to_addresses and addr not in cc_addresses:
+            cc_addresses.append(addr)
     # -----------------------
 
     try:
