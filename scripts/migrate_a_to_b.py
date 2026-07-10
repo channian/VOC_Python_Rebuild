@@ -12,6 +12,7 @@ scripts/migrate_a_to_b.py — 把 export/*.json 轉換載入 B 棧（Schema B / 
 """
 
 import argparse
+import json
 import os
 import sys
 
@@ -20,6 +21,40 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database_b import BSessionLocal, create_all_b  # noqa: E402
 from migration.context import load_personnel  # noqa: E402
 from migration.runner import run_migration  # noqa: E402
+
+# 搬遷會讀的 A 表檔（與 scripts/export_mssql.py 匯出的檔名一致）
+_EXPECTED_FILES = [
+    "VOC_source", "VOC_item", "VOC_plant", "VOC_dept", "VOC_Mail_Type", "VOC_Curve",
+    "sys_aclrole", "sys_aclrolerights", "VOC_SPEC", "VOC_SCADA_WEB",
+    "VOC_closectl", "VOC_closectl_list",
+]
+
+
+def _preflight_export(export_dir: str) -> int:
+    """檢查 export 資料夾：逐檔印出筆數或 MISSING/EMPTY，回傳總筆數。
+
+    這是為了避免「找不到檔 → 默默 0 筆 → 看似成功卻沒資料」的困惑（使用者實測踩過）。
+    """
+    print(f"檢查 export 資料夾：{os.path.abspath(export_dir)}")
+    if not os.path.isdir(export_dir):
+        print(f"  ✗ 資料夾不存在！請確認 --export 路徑，或先在公司跑 scripts/export_mssql.py")
+        return 0
+    total = 0
+    for name in _EXPECTED_FILES:
+        path = os.path.join(export_dir, f"{name}.json")
+        if not os.path.exists(path):
+            print(f"  ✗ {name}.json  MISSING")
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                rows = json.load(f)
+            n = len(rows) if isinstance(rows, list) else 0
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ✗ {name}.json  讀取失敗：{exc}")
+            continue
+        total += n
+        print(f"  {'✓' if n else '·'} {name}.json  {n} 筆" + ("" if n else "  (EMPTY)"))
+    return total
 
 
 def main() -> None:
@@ -39,6 +74,16 @@ def main() -> None:
 
     plant_filter = {p.strip() for p in args.plants.split(",") if p.strip()} or None
     personnel = load_personnel(args.personnel)
+
+    # 先檢查 export 檔案，避免「找不到檔 → 默默 0 筆」的困惑
+    total_rows = _preflight_export(args.export)
+    if total_rows == 0:
+        parser.error(
+            f"export 資料夾 {os.path.abspath(args.export)} 沒有任何可載入的 A 表資料。\n"
+            "請確認：(1) 你在對的目錄執行、(2) --export 指到正確資料夾、"
+            "(3) 已在能連 MSSQL 的機器跑過 scripts/export_mssql.py 產生 export/*.json。"
+        )
+    print()
 
     create_all_b()  # 冪等：確保 Schema B 表已存在
     db = BSessionLocal()

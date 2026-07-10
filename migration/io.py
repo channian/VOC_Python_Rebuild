@@ -9,20 +9,30 @@ sink：upsert() 用 SQLAlchemy Session.merge 以主鍵合併——存在則更�
 """
 
 import json
+import logging
 import os
 from typing import Any, Dict, Iterable, List
 
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 
 def read_table(export_dir: str, table_name: str) -> List[Dict[str, Any]]:
-    """讀 export_dir/<table_name>.json（不存在回空 list，讓缺某張表不會中斷整批）。"""
+    """讀 export_dir/<table_name>.json（不存在回空 list，讓缺某張表不會中斷整批）。
+
+    檔案不存在或為空時記 warning——避免「找不到檔」被默默當成「0 筆」而讓整批看似成功卻無資料。
+    """
     path = os.path.join(export_dir, f"{table_name}.json")
     if not os.path.exists(path):
+        logger.warning("read_table：找不到 %s（該表將以 0 筆處理）", path)
         return []
     with open(path, encoding="utf-8") as f:
         rows = json.load(f)
-    return rows if isinstance(rows, list) else []
+    if not isinstance(rows, list) or not rows:
+        logger.warning("read_table：%s 內容為空（0 筆）", path)
+        return rows if isinstance(rows, list) else []
+    return rows
 
 
 def upsert(db: Session, objs: Iterable[Any]) -> int:
