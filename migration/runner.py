@@ -71,9 +71,9 @@ def run_migration(
     # ── 1. 父表 ──
     _load("source", config_tables.normalize_source(io.read_table(export_dir, "VOC_source")))
     _load("item", config_tables.normalize_item(io.read_table(export_dir, "VOC_item")))
+    # plant 是設定主檔，一律全部載入；不可因 plant_filter 砍掉，否則 dept/spec/isolation 指向
+    # 被砍廠區的 plant FK 會斷（廠區過濾的真正場合在 export 階段：只挑該廠的 spec/reading/closectl）。
     plant_objs = config_tables.normalize_plant(io.read_table(export_dir, "VOC_plant"))
-    if plant_filter:
-        plant_objs = [p for p in plant_objs if p.plant_no in plant_filter]
     _load("plant", plant_objs)
     _load("mail_type", config_tables.normalize_mail_type(io.read_table(export_dir, "VOC_Mail_Type")))
     _load("acl_role", config_tables.normalize_acl_role(io.read_table(export_dir, "sys_aclrole")))
@@ -86,7 +86,16 @@ def run_migration(
     _load("acl_role_rights", config_tables.normalize_acl_role_rights(io.read_table(export_dir, "sys_aclrolerights")))
 
     # ── 3. 人員（改綁 config 同事）──
-    plant_nos: List[str] = [p.plant_no for p in plant_objs]
+    # 名單/權限掛在哪些廠：有指定 plant_filter 就取其中「已載入的」廠區，否則全部載入的廠區。
+    if plant_filter:
+        plant_nos: List[str] = [p.plant_no for p in plant_objs if p.plant_no in plant_filter]
+        if not plant_nos:
+            logger.warning(
+                "plant_filter=%s 在載入的廠區(plant)中都找不到；mail_list/acl_user_role 將為空。"
+                "請確認 --plants 給的是 VOC_plant.plantno 的值。", plant_filter,
+            )
+    else:
+        plant_nos = [p.plant_no for p in plant_objs]
     people = personnel_norm.build_personnel(ctx, plant_nos)
     _load("employee", people["employee"])
     _load("sign_emp", people["sign_emp"])

@@ -1,6 +1,4 @@
 [
-  {
-    "plantid": 1,
-    "deptno": "D01"
-  }
+  {"plantid": 1, "deptno": "D01"},
+  {"plantid": 29, "deptno": "D29"}
 ]

@@ -59,7 +59,8 @@ def test_migration_loads_and_transforms(empty_db):
 
     # ── 筆數 ──
     assert report.counts["source"] == 3
-    assert report.counts["plant"] == 1              # ALL(plantid=29) 被 plant_filter 濾掉
+    assert report.counts["plant"] == 2              # K7 + ALL(29) 全載入（plant 不因 filter 砍，否則 FK 斷）
+    assert report.counts["dept"] == 2               # 含指向 plantid=29 的一筆（回歸守 dept→plant FK）
     assert report.counts["spec"] == 3               # 停用(status=0)的 OLD9 略過
     assert report.counts["reading_current"] == 3
     assert report.counts["isolation"] == 1          # 只有有效核准的 1001（1002 過期、1003 刪除）
@@ -101,4 +102,4 @@ def test_migration_idempotent(empty_db):
     assert db.execute(select(func.count()).select_from(Isolation)).scalar() == 1
     assert db.execute(select(func.count()).select_from(MailList)).scalar() == 34
     assert db.execute(select(func.count()).select_from(ReadingCurrent)).scalar() == 3
-    assert db.execute(select(func.count()).select_from(Plant)).scalar() == 1
+    assert db.execute(select(func.count()).select_from(Plant)).scalar() == 2
