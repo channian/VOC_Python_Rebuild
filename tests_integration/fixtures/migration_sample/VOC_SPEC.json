@@ -50,5 +50,18 @@
     "status": 0,
     "tagname": "K7_OLD9",
     "seqno": 9
+  },
+  {
+    "plantno": "K7",
+    "item": "GHOST",
+    "LAW": "1",
+    "OOS": "1",
+    "OOC": "1",
+    "alert": "1",
+    "recv": "1",
+    "source": 1,
+    "status": 1,
+    "tagname": "K7_GHOST",
+    "seqno": 8
   }
 ]

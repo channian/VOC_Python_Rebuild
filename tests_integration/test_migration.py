@@ -60,8 +60,8 @@ def test_migration_loads_and_transforms(empty_db):
     # ── 筆數 ──
     assert report.counts["source"] == 3
     assert report.counts["plant"] == 2              # K7 + ALL(29) 全載入（plant 不因 filter 砍，否則 FK 斷）
-    assert report.counts["dept"] == 2               # 含指向 plantid=29 的一筆（回歸守 dept→plant FK）
-    assert report.counts["spec"] == 3               # 停用(status=0)的 OLD9 略過
+    assert report.counts["dept"] == 2               # 指向 plantid=99(不存在)的孤兒列被略過，不 crash
+    assert report.counts["spec"] == 3               # 停用 OLD9 + item=GHOST(不存在)的孤兒列都被略過
     assert report.counts["reading_current"] == 3
     assert report.counts["isolation"] == 1          # 只有有效核准的 1001（1002 過期、1003 刪除）
     assert report.counts["isolation_item"] == 1

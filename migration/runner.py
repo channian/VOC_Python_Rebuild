@@ -68,21 +68,55 @@ def run_migration(
     def _load(table_b: str, objs) -> None:
         report.add(table_b, io.upsert(db, objs))
 
+    def _drop_orphans(objs, keyfn, valid: set, label: str):
+        """過濾掉「參照的父表資料沒載入」的孤兒列並記警告。
+
+        A 端有些資料塞不進 B（例如 A 兩個 plantid 共用同一個 plantno，B 的 plant_no 唯一只能留一筆，
+        另一個 plantid 就沒有對應的 plant 列）；此時參照它的子表（dept.plant_id 等）會撞 FK。
+        搬遷應對這種「A 有、B 塞不下」有韌性：略過孤兒列、記警告，而不是整批失敗。
+        """
+        kept, dropped = [], 0
+        for o in objs:
+            if keyfn(o) in valid:
+                kept.append(o)
+            else:
+                dropped += 1
+        if dropped:
+            logger.warning("搬遷 %s：略過 %d 筆孤兒列（參照的父表資料未載入，多半因 A 端 plantno 重複/為空塞不進 B）",
+                           label, dropped)
+        return kept
+
     # ── 1. 父表 ──
-    _load("source", config_tables.normalize_source(io.read_table(export_dir, "VOC_source")))
-    _load("item", config_tables.normalize_item(io.read_table(export_dir, "VOC_item")))
-    # plant 是設定主檔，一律全部載入；不可因 plant_filter 砍掉，否則 dept/spec/isolation 指向
-    # 被砍廠區的 plant FK 會斷（廠區過濾的真正場合在 export 階段：只挑該廠的 spec/reading/closectl）。
+    source_objs = config_tables.normalize_source(io.read_table(export_dir, "VOC_source"))
+    _load("source", source_objs)
+    item_objs = config_tables.normalize_item(io.read_table(export_dir, "VOC_item"))
+    _load("item", item_objs)
+    # plant 是設定主檔，一律全部載入；不可因 plant_filter 砍掉（廠區過濾的真正場合在 export 階段）。
     plant_objs = config_tables.normalize_plant(io.read_table(export_dir, "VOC_plant"))
     _load("plant", plant_objs)
     _load("mail_type", config_tables.normalize_mail_type(io.read_table(export_dir, "VOC_Mail_Type")))
     _load("acl_role", config_tables.normalize_acl_role(io.read_table(export_dir, "sys_aclrole")))
 
-    # ── 2. 依賴父表 ──
-    _load("dept", config_tables.normalize_dept(io.read_table(export_dir, "VOC_dept")))
-    _load("spec", spec_norm.normalize_spec(io.read_table(export_dir, "VOC_SPEC")))
-    _load("curve", config_tables.normalize_curve(io.read_table(export_dir, "VOC_Curve")))
-    _load("reading_current", reading_norm.normalize_reading_current(io.read_table(export_dir, "VOC_SCADA_WEB")))
+    # 父表已載入的鍵集合，供下方過濾子表孤兒
+    plant_ids = {p.plant_id for p in plant_objs}
+    plant_nos_loaded = {p.plant_no for p in plant_objs}
+    item_names = {i.item for i in item_objs}
+    source_ids = {s.source_id for s in source_objs}
+
+    # ── 2. 依賴父表（過濾掉父表沒載入的孤兒列）──
+    dept_objs = _drop_orphans(
+        config_tables.normalize_dept(io.read_table(export_dir, "VOC_dept")),
+        lambda d: d.plant_id, plant_ids, "dept")
+    _load("dept", dept_objs)
+
+    spec_objs = spec_norm.normalize_spec(io.read_table(export_dir, "VOC_SPEC"))
+    spec_objs = _drop_orphans(spec_objs, lambda s: s.plant_no, plant_nos_loaded, "spec(plant)")
+    spec_objs = _drop_orphans(spec_objs, lambda s: s.item, item_names, "spec(item)")
+    spec_objs = _drop_orphans(spec_objs, lambda s: s.source_id, source_ids, "spec(source)")
+    _load("spec", spec_objs)
+
+    _load("curve", config_tables.normalize_curve(io.read_table(export_dir, "VOC_Curve")))  # 無 FK
+    _load("reading_current", reading_norm.normalize_reading_current(io.read_table(export_dir, "VOC_SCADA_WEB")))  # 無 FK
     _load("acl_role_rights", config_tables.normalize_acl_role_rights(io.read_table(export_dir, "sys_aclrolerights")))
 
     # ── 3. 人員（改綁 config 同事）──
@@ -108,6 +142,9 @@ def run_migration(
         io.read_table(export_dir, "VOC_closectl_list"),
         ctx,
     )
+    iso_objs = _drop_orphans(iso_objs, lambda i: i.plant_id, plant_ids, "isolation")
+    iso_ids = {i.id for i in iso_objs}
+    iso_item_objs = _drop_orphans(iso_item_objs, lambda it: it.isolation_id, iso_ids, "isolation_item")
     _load("isolation", iso_objs)
     _load("isolation_item", iso_item_objs)
 
