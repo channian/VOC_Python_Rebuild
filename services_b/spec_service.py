@@ -109,9 +109,14 @@ def list_specs(db: Session, plant_no: str = "", item: str = "") -> List[dict]:
 
 
 def get_sources(db: Session) -> List[dict]:
-    """取得資料來源清單，供規格維護表單下拉選單使用。"""
+    """取得資料來源清單，供規格維護表單下拉選單使用。
+
+    ⚠️ 回傳 key 必須是 sourceid/source（A 棧形狀）——spec_modal.html 是兩棧共用模板，
+    JS 的 SPEC_SOURCES 讀 s.sourceid/s.source；之前回 source_id/name 導致來源下拉
+    全部顯示 undefined（2026-07-10 使用者實測發現，誤以為編輯功能沒實作）。
+    """
     rows = db.query(Source.source_id, Source.name).order_by(Source.source_id).all()
-    return [{"source_id": r[0], "name": r[1]} for r in rows]
+    return [{"sourceid": r[0], "source": r[1]} for r in rows]
 
 
 def _num(v: Optional[Decimal]) -> Optional[float]:

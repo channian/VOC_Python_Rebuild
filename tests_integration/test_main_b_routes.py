@@ -64,6 +64,15 @@ def test_control_items_contains_seeded_items(client):
     assert "pH1" in html and "Cu1" in html
 
 
+def test_spec_modal_sources_shape(client):
+    """SPEC_SOURCES 必須是 A 棧形狀 sourceid/source（共用模板 JS 讀這兩個 key）。
+    2026-07-10 使用者實測：B 版曾回 source_id/name，來源下拉全顯示 undefined，
+    被誤認為編輯功能沒實作——鎖住這個形狀不再回歸。"""
+    html = client.get("/ui/spec").text
+    assert '"sourceid"' in html and '"source"' in html
+    assert '"source_id"' not in html.split("const SPEC_SOURCES")[1][:200]
+
+
 # ── 寫入路徑 1：申請隔離 → 送簽 → 簽核核准 ─────────────────────────────────
 
 def test_isolation_apply_submit_sign_via_api(client, b_db, as_user):
