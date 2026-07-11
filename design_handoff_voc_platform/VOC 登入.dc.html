@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-0);color:var(--fg-1);font-family:var(--font-sans);font-size:14px;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-hover)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+input::placeholder{color:var(--fg-3)}
+</style>
+</helmet>
+
+<div data-screen-label="登入" style="min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
+  background:
+    radial-gradient(600px 400px at 85% -10%, rgba(34,211,238,0.08), transparent 60%),
+    radial-gradient(500px 360px at 10% 110%, rgba(59,130,246,0.06), transparent 60%),
+    var(--bg-0);">
+
+  <div style="position:absolute;inset:0;background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);background-size:32px 32px;pointer-events:none"></div>
+
+  <div style="position:relative;width:400px;max-width:92vw;background:var(--bg-2);border:1px solid var(--border-1);border-radius:14px;box-shadow:var(--shadow-2);padding:36px 34px 30px;display:flex;flex-direction:column;gap:22px">
+
+    <!-- logo -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+      <div style="position:relative">
+        <span style="font-weight: 800; font-size: 40px; letter-spacing: .01em; background: linear-gradient(90deg,#eab308,#22c55e,#22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1">VOC</span>
+        <span style="position:absolute;right:-4px;bottom:-2px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent-glow);animation:pulse 1.5s ease-in-out infinite"></span>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:15px;color:var(--fg-1)">VOC 監測平台</div>
+        <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">WASTE / VOC MONITOR</div>
+      </div>
+    </div>
+
+    <div style="height:1px;background:var(--border-1)"></div>
+
+    <!-- form -->
+    <form onSubmit="{{ onSubmit }}" style="display:flex;flex-direction:column;gap:14px">
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">帳號 ACCOUNT</label>
+        <input type="text" value="{{ user }}" onChange="{{ onUser }}" placeholder="AD帳號" autoComplete="username" style="padding:10px 14px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13.5px;font-family:inherit;outline:none;transition:box-shadow 180ms var(--ease),border-color 180ms var(--ease)" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">密碼 PASSWORD</label>
+        <div style="position:relative">
+          <input type="{{ pwType }}" value="{{ pass }}" onChange="{{ onPass }}" placeholder="••••••••" autoComplete="current-password" style="width:100%;padding:10px 42px 10px 14px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13.5px;font-family:inherit;outline:none;transition:box-shadow 180ms var(--ease),border-color 180ms var(--ease)" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+          <button type="button" onClick="{{ onTogglePw }}" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--fg-3);cursor:pointer;padding:4px;display:flex" style-hover="color:var(--fg-1)">
+            <sc-if value="{{ pwVisible }}" hint-placeholder-val="{{ false }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </sc-if>
+            <sc-if value="{{ pwHidden }}" hint-placeholder-val="{{ true }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-2.16 3.19m-3.4 1.98A9.12 9.12 0 0 1 12 17c-6.5 0-10-7-10-7a13.4 13.4 0 0 1 4.06-4.94"></path><path d="M1 1l22 22"></path><path d="M9.53 9.53A3 3 0 0 0 12 15a3 3 0 0 0 2.47-4.47"></path></svg>
+            </sc-if>
+          </button>
+        </div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-2);cursor:pointer;user-select:none">
+        <span onClick="{{ onToggleRemember }}" style="{{ rememberBoxStyle }}">
+          <sc-if value="{{ remember }}" hint-placeholder-val="{{ false }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;color:#fff"><path d="M20 6 9 17l-5-5"></path></svg>
+          </sc-if>
+        </span>
+        記住此裝置
+      </label>
+
+      <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);color:var(--err);font-size:12.5px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;flex:none"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+          帳號或密碼錯誤，請重新輸入
+        </div>
+      </sc-if>
+
+      <button type="submit" style="{{ submitStyle }}" style-hover="background:var(--blue-hover)">
+        <sc-if value="{{ loading }}" hint-placeholder-val="{{ false }}">
+          <span style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;display:inline-block;animation:spin 0.7s linear infinite"></span>
+        </sc-if>
+        <span>{{ submitTxt }}</span>
+      </button>
+    </form>
+
+    <div style="text-align:center;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);letter-spacing:.04em">FAC CIM 4K60</div>
+  </div>
+</div>
+
+<helmet><style>@keyframes spin{to{transform:rotate(360deg)}}</style></helmet>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { user: '', pass: '', pwHidden: true, remember: true, loading: false, hasError: false };
+
+  onSubmit = e => {
+    e.preventDefault();
+    if (!this.state.user || !this.state.pass) {
+      this.setState({ hasError: true });
+      return;
+    }
+    this.setState({ loading: true, hasError: false });
+    setTimeout(() => {
+      this.setState({ loading: false });
+      window.location.href = 'VOC Dashboard.dc.html';
+    }, 700);
+  };
+
+  renderVals() {
+    const S = this.state;
+    const boxBase = { width: 16, height: 16, borderRadius: 4, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' };
+    return {
+      user: S.user, pass: S.pass,
+      onUser: e => this.setState({ user: e.target.value, hasError: false }),
+      onPass: e => this.setState({ pass: e.target.value, hasError: false }),
+      pwType: S.pwHidden ? 'password' : 'text',
+      pwVisible: !S.pwHidden, pwHidden: S.pwHidden,
+      onTogglePw: () => this.setState(s => ({ pwHidden: !s.pwHidden })),
+      remember: S.remember,
+      onToggleRemember: () => this.setState(s => ({ remember: !s.remember })),
+      rememberBoxStyle: { ...boxBase, border: '1.5px solid ' + (S.remember ? 'var(--accent)' : 'var(--border-3)'), background: S.remember ? 'var(--accent)' : 'transparent' },
+      hasError: S.hasError,
+      loading: S.loading,
+      submitTxt: S.loading ? '登入中…' : '登入',
+      submitStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px', borderRadius: 6, background: 'var(--blue)', border: 'none', color: '#fff', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', boxShadow: 'var(--glow-blue)', transition: 'all 180ms var(--ease)', marginTop: 4 },
+      onSubmit: this.onSubmit,
+    };
+  }
+}
+</script>
+</body>
+</html>

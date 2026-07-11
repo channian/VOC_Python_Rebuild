@@ -1,0 +1,216 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "handoff/**",
+              "ui_kits/dashboard/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Inter|JetBrains Mono))/i]",
+        "message": "Font not provided by the design system. Available: Inter, JetBrains Mono."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {},
+    "tokens": [
+      "--accent",
+      "--accent-glow",
+      "--accent-hover",
+      "--accent-soft",
+      "--bg-0",
+      "--bg-1",
+      "--bg-2",
+      "--bg-3",
+      "--bg-4",
+      "--bg-grid",
+      "--blue",
+      "--blue-glow",
+      "--blue-hover",
+      "--blue-soft",
+      "--border-1",
+      "--border-2",
+      "--border-3",
+      "--ease",
+      "--ease-out",
+      "--err",
+      "--err-bg",
+      "--err-glow",
+      "--fg-1",
+      "--fg-2",
+      "--fg-3",
+      "--fg-4",
+      "--font-display",
+      "--font-mono",
+      "--font-sans",
+      "--fs-body",
+      "--fs-display",
+      "--fs-h1",
+      "--fs-h2",
+      "--fs-h3",
+      "--fs-micro",
+      "--fs-sm",
+      "--fs-xs",
+      "--glow-accent",
+      "--glow-blue",
+      "--info",
+      "--info-bg",
+      "--lh-loose",
+      "--lh-normal",
+      "--lh-tight",
+      "--ls-caps",
+      "--ls-tight",
+      "--muted",
+      "--muted-bg",
+      "--ok",
+      "--ok-bg",
+      "--ok-glow",
+      "--r-lg",
+      "--r-md",
+      "--r-pill",
+      "--r-sm",
+      "--r-xl",
+      "--r-xs",
+      "--shadow-1",
+      "--shadow-2",
+      "--shadow-3",
+      "--shadow-sm",
+      "--sp-1",
+      "--sp-2",
+      "--sp-3",
+      "--sp-4",
+      "--sp-5",
+      "--sp-6",
+      "--sp-7",
+      "--sp-8",
+      "--sp-9",
+      "--t-fast",
+      "--t-med",
+      "--t-slow",
+      "--warn",
+      "--warn-bg",
+      "--warn-glow"
+    ],
+    "tokenKinds": {
+      "--bg-0": "color",
+      "--bg-1": "color",
+      "--bg-2": "color",
+      "--bg-3": "color",
+      "--bg-4": "color",
+      "--bg-grid": "color",
+      "--fg-1": "color",
+      "--fg-2": "color",
+      "--fg-3": "color",
+      "--fg-4": "color",
+      "--border-1": "color",
+      "--border-2": "color",
+      "--border-3": "color",
+      "--accent": "color",
+      "--accent-hover": "color",
+      "--accent-soft": "color",
+      "--accent-glow": "color",
+      "--blue": "color",
+      "--blue-hover": "color",
+      "--blue-soft": "color",
+      "--blue-glow": "color",
+      "--ok": "color",
+      "--ok-bg": "color",
+      "--ok-glow": "color",
+      "--warn": "color",
+      "--warn-bg": "color",
+      "--warn-glow": "color",
+      "--err": "color",
+      "--err-bg": "color",
+      "--err-glow": "color",
+      "--info": "color",
+      "--info-bg": "color",
+      "--muted": "color",
+      "--muted-bg": "color",
+      "--shadow-sm": "shadow",
+      "--shadow-1": "shadow",
+      "--shadow-2": "shadow",
+      "--shadow-3": "shadow",
+      "--glow-accent": "shadow",
+      "--glow-blue": "shadow",
+      "--r-xs": "spacing",
+      "--r-sm": "spacing",
+      "--r-md": "spacing",
+      "--r-lg": "spacing",
+      "--r-xl": "spacing",
+      "--r-pill": "spacing",
+      "--sp-1": "spacing",
+      "--sp-2": "spacing",
+      "--sp-3": "spacing",
+      "--sp-4": "spacing",
+      "--sp-5": "spacing",
+      "--sp-6": "spacing",
+      "--sp-7": "spacing",
+      "--sp-8": "spacing",
+      "--sp-9": "spacing",
+      "--font-sans": "font",
+      "--font-mono": "font",
+      "--font-display": "font",
+      "--fs-display": "spacing",
+      "--fs-h1": "spacing",
+      "--fs-h2": "spacing",
+      "--fs-h3": "spacing",
+      "--fs-body": "spacing",
+      "--fs-sm": "spacing",
+      "--fs-xs": "spacing",
+      "--fs-micro": "spacing",
+      "--lh-tight": "other",
+      "--lh-normal": "other",
+      "--lh-loose": "other",
+      "--ls-caps": "spacing",
+      "--ls-tight": "spacing",
+      "--ease": "other",
+      "--ease-out": "other",
+      "--t-fast": "other",
+      "--t-med": "other",
+      "--t-slow": "other"
+    },
+    "fontFamilies": [
+      "Inter",
+      "JetBrains Mono"
+    ]
+  }
+}

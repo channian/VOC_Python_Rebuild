@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-1);color:var(--fg-1);font-family:var(--font-sans);font-size:14px;-webkit-font-smoothing:antialiased;
+background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);background-size:32px 32px;background-attachment:fixed}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-hover)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+input::placeholder{color:var(--fg-3)}
+</style>
+</helmet>
+
+<div data-screen-label="VOC 監測儀表板" style="display:flex;min-height:100vh;align-items:stretch">
+
+  <!-- ═══ 左側廠區導覽 rail (1b) ═══ -->
+  <aside data-screen-label="廠區導覽" style="width:236px;flex:none;background:var(--bg-2);border-right:1px solid var(--border-1);position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 14px 14px;border-bottom:1px solid var(--border-1)">
+      <div style="position:relative;flex:none">
+        <span style="font-weight:800;font-size:22px;letter-spacing:.01em;font-family:var(--font-sans);background:linear-gradient(90deg,#eab308,#22c55e,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1">VOC</span>
+        <span style="position:absolute;right:-2px;bottom:-3px;width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent-glow);animation:pulse 1.5s ease-in-out infinite"></span>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:var(--fg-1)">VOC 監測平台</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase">WASTE / VOC MONITOR</div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--fg-3);padding:14px 16px 6px">廠區 PLANTS — 異常置頂</div>
+    <div style="padding:0 8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{ railPlants }}" as="rp" hint-placeholder-count="8">
+        <div onClick="{{ rp.onClick }}" style="{{ rp.style }}" style-hover="background:var(--bg-3)">
+          <span style="{{ rp.barStyle }}"></span>
+          <span style="font-weight:600;font-family:var(--font-mono);font-size:13px">{{ rp.no }}</span>
+          <span style="flex:1"></span>
+          <sc-for list="{{ rp.pills }}" as="pp" hint-placeholder-count="1">
+            <span style="{{ pp.style }}">{{ pp.txt }}</span>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="flex:1"></div>
+    <div style="padding:14px 16px;border-top:1px solid var(--border-1)">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--fg-3);margin-bottom:8px">燈號 LEGEND</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--fg-2)">
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:50%;background:var(--err);box-shadow:0 0 6px var(--err-glow);flex:none"></span>R 超過 OOS</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:9px;clip-path:polygon(50% 0,100% 100%,0 100%);background:var(--warn);flex:none"></span>O 數值超標（OOC~OOS）</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border:2px dashed var(--warn);transform:rotate(45deg);flex:none"></span>O≠ 管制值不同步</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;background:#eab308;transform:rotate(45deg);flex:none"></span>Y 預警／超允收</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;border:2px solid var(--ok);flex:none"></span>G 正常</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border:1px solid var(--muted);background:repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px);flex:none"></span>斷訊／保養中</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ 主內容 (1a) ═══ -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+    <!-- topbar -->
+    <header style="height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:10">
+      <div>
+        <h1 style="margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)">首頁儀表板</h1>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px">VOC PLATFORM / DASHBOARD</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);padding:6px 12px;border:1px solid var(--border-1);border-radius:999px;background:var(--bg-1)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);animation:pulse 1.5s ease-in-out infinite"></span>
+        資料更新 {{ updatedAt }} ・ 下次刷新 <b style="color:var(--accent)">{{ countdown }}</b>
+      </div>
+      <div style="display:flex;gap:8px">
+        <sc-for list="{{ toolBtns }}" as="tb" hint-placeholder-count="4">
+          <button onClick="{{ tb.onClick }}" style="display:inline-flex;align-items:center;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;transition:all 180ms var(--ease);white-space:nowrap" style-hover="color:var(--fg-1);border-color:var(--border-3);transform:translateY(-1px)">{{ tb.label }}</button>
+        </sc-for>
+      </div>
+    </header>
+
+    <div style="padding:20px 28px 48px;max-width:1440px;width:100%">
+
+      <!-- 摘要橫條 -->
+      <div data-screen-label="異常摘要" style="display:flex;gap:16px;margin-bottom:16px;align-items:stretch">
+        <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="4">
+          <div onClick="{{ m.onClick }}" style="{{ m.style }}" style-hover="border-color:var(--border-2)">
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);display:flex;align-items:center;gap:7px"><span style="{{ m.dotStyle }}"></span>{{ m.label }}</div>
+            <div style="{{ m.numStyle }}">{{ m.n }}</div>
+          </div>
+        </sc-for>
+        <div style="flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;padding:14px 18px;box-shadow:var(--shadow-1)">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:9px">異常速覽 ACTIVE ANOMALIES</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ chips }}" as="c" hint-placeholder-count="5">
+              <button onClick="{{ c.onClick }}" style="{{ c.style }}" style-hover="filter:brightness(1.25)">
+                <span style="{{ c.dotStyle }}"></span>{{ c.txt }}<span style="font-family:var(--font-mono);font-weight:600">{{ c.val }}</span>
+              </button>
+            </sc-for>
+            <sc-if value="{{ noAnomaly }}" hint-placeholder-val="{{ false }}">
+              <span style="color:var(--fg-3);font-size:13px">目前無 R／O 級異常</span>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+
+      <!-- 篩選列 -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <sc-for list="{{ statusChips }}" as="f" hint-placeholder-count="6">
+          <button onClick="{{ f.onClick }}" style="{{ f.style }}" style-hover="border-color:var(--border-3)">{{ f.txt }}</button>
+        </sc-for>
+        <span style="width:1px;height:20px;background:var(--border-2)"></span>
+        <sc-for list="{{ sourceChips }}" as="f" hint-placeholder-count="4">
+          <button onClick="{{ f.onClick }}" style="{{ f.style }}" style-hover="border-color:var(--border-3)">{{ f.txt }}</button>
+        </sc-for>
+        <span style="flex:1"></span>
+        <div style="position:relative;width:240px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--fg-3)"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <input value="{{ search }}" onChange="{{ onSearch }}" placeholder="搜尋廠區／項目…" style="width:100%;padding:8px 12px 8px 36px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px;font-family:inherit;outline:none" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+        </div>
+      </div>
+
+      <!-- 廠區手風琴 -->
+      <div data-screen-label="廠區列表" style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ plants }}" as="p" hint-placeholder-count="6">
+          <section style="{{ p.cardStyle }}">
+            <div onClick="{{ p.onToggle }}" style="{{ p.headStyle }}" style-hover="background:var(--bg-3)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="{{ p.chevStyle }}"><path d="m9 18 6-6-6-6"></path></svg>
+              <span style="font-family:var(--font-mono);font-weight:700;font-size:15px;color:var(--fg-1)">{{ p.no }}</span>
+              <span style="font-size:12px;color:var(--fg-3)">{{ p.desc }}</span>
+              <sc-for list="{{ p.pills }}" as="pl" hint-placeholder-count="1">
+                <span style="{{ pl.style }}"><span style="{{ pl.dotStyle }}"></span>{{ pl.txt }}</span>
+              </sc-for>
+              <span style="flex:1"></span>
+              <sc-if value="{{ p.collapsed }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;gap:5px;align-items:center;margin-right:12px">
+                  <sc-for list="{{ p.dots }}" as="d" hint-placeholder-count="10">
+                    <span style="{{ d.style }}"></span>
+                  </sc-for>
+                </span>
+              </sc-if>
+              <span style="font-size:12px;color:var(--fg-3);font-family:var(--font-mono)">{{ p.countTxt }}</span>
+            </div>
+
+            <sc-if value="{{ p.expanded }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top:1px solid var(--border-1)">
+                <div style="display:grid;grid-template-columns:96px 1fr 120px 76px 72px 1fr 84px 28px;gap:10px;align-items:center;padding:7px 18px;background:var(--bg-1);border-bottom:1px solid var(--border-1);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">
+                  <span>狀態</span><span>監測項目</span><span style="text-align:right">最新讀值</span><span>單位</span><span>來源</span><span>備註</span><span>歷史</span><span></span>
+                </div>
+                <sc-for list="{{ p.items }}" as="it" hint-placeholder-count="6">
+                  <div>
+                    <div onClick="{{ it.onToggle }}" style="{{ it.rowStyle }}" style-hover="background:var(--bg-3)">
+                      <span style="{{ it.pillStyle }}"><span style="{{ it.dotStyle }}"></span>{{ it.stLabel }}</span>
+                      <span style="font-weight:600;font-size:13.5px;color:var(--fg-1)">{{ it.item }}</span>
+                      <span style="{{ it.valStyle }}">{{ it.val }}</span>
+                      <span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-3)">{{ it.unit }}</span>
+                      <span style="{{ it.srcStyle }}">{{ it.srcTxt }}</span>
+                      <span style="font-size:12px;color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.remark }}</span>
+                      <span>
+                        <sc-if value="{{ it.hasUrl }}" hint-placeholder-val="{{ false }}">
+                          <a href="{{ it.url }}" onClick="{{ it.onCurve }}" style="font-size:12px;font-family:var(--font-mono);color:var(--accent)">曲線 ↗</a>
+                        </sc-if>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="{{ it.chevStyle }}"><path d="m6 9 6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ it.open }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:14px 18px 16px 124px;background:var(--bg-1);border-bottom:1px solid var(--border-1)">
+                        <div style="display:flex;gap:32px;flex-wrap:wrap">
+                          <div>
+                            <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:7px">SPEC 門檻 THRESHOLDS</div>
+                            <div style="display:flex;gap:14px;font-family:var(--font-mono);font-size:12.5px">
+                              <span><span style="color:var(--err)">OOS</span> <b style="color:var(--fg-1)">{{ it.oos }}</b></span>
+                              <span><span style="color:var(--warn)">OOC</span> <b style="color:var(--fg-1)">{{ it.ooc }}</b></span>
+                              <span><span style="color:#eab308">Alert</span> <b style="color:var(--fg-1)">{{ it.alert }}</b></span>
+                              <span><span style="color:var(--fg-2)">允收</span> <b style="color:var(--fg-1)">{{ it.recv }}</b></span>
+                              <span><span style="color:var(--fg-3)">法規</span> <b style="color:var(--fg-2)">{{ it.law }}</b></span>
+                            </div>
+                          </div>
+                          <div>
+                            <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:7px">系統管制值比對 SYNC</div>
+                            <div style="display:flex;gap:10px;align-items:center;font-family:var(--font-mono);font-size:12.5px">
+                              <span style="color:var(--fg-2)">SCADA <b style="color:var(--fg-1)">{{ it.scadaVal }}</b></span>
+                              <span style="{{ it.scadaCmpStyle }}">{{ it.scadaCmpTxt }}</span>
+                              <span style="color:var(--fg-2)">CWMS <b style="color:var(--fg-1)">{{ it.cwmsVal }}</b></span>
+                              <span style="{{ it.cwmsCmpStyle }}">{{ it.cwmsCmpTxt }}</span>
+                            </div>
+                          </div>
+                          <sc-if value="{{ it.hasRain }}" hint-placeholder-val="{{ false }}">
+                            <div>
+                              <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:7px">24H 累積雨量</div>
+                              <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-3)">{{ it.rainTxt }}</div>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ p.hiddenTxt }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:8px 18px;font-size:12px;color:var(--fg-3);background:var(--bg-2)">{{ p.hiddenTxt }}</div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </section>
+        </sc-for>
+
+        <sc-if value="{{ noResult }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:48px;text-align:center;color:var(--fg-2);background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px">
+            <div style="font-size:14px">沒有符合篩選條件的監測項目</div>
+            <div style="font-size:12px;color:var(--fg-3);margin-top:6px">調整燈號／來源篩選或清除搜尋關鍵字</div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 功能 Modal 佔位 -->
+<sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:100">
+    <div onClick="{{ stop }}" style="width:480px;background:var(--bg-2);border:1px solid var(--border-2);border-radius:14px;box-shadow:var(--shadow-3);padding:24px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-size:16px;font-weight:700;color:var(--fg-1)">{{ modalTitle }}</span>
+        <span style="flex:1"></span>
+        <button onClick="{{ closeModal }}" style="background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px" style-hover="color:var(--fg-1)">✕</button>
+      </div>
+      <p style="margin:0 0 18px;font-size:13px;color:var(--fg-2);line-height:1.7">此入口對應既有功能模組，落地時以原生 &lt;dialog&gt; 元素 + HTMX 局部載入掛回原功能表單，不使用 Bootstrap Modal。</p>
+      <div style="display:flex;justify-content:flex-end">
+        <button onClick="{{ closeModal }}" style="padding:9px 16px;border-radius:6px;font-size:13px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;box-shadow:var(--glow-blue);font-family:inherit" style-hover="background:var(--blue-hover);transform:translateY(-1px)">關閉</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;refreshMinutes&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 15, &quot;tsType&quot;: &quot;number&quot;, &quot;min&quot;: 1, &quot;max&quot;: 60, &quot;unit&quot;: &quot;分鐘&quot;, &quot;section&quot;: &quot;資料刷新&quot; },
+  &quot;distinguishSyncOrange&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;燈號&quot; },
+  &quot;compactRows&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;密度&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { fStatus: 'all', fSource: 0, search: '', expanded: {}, openRow: null, modal: null, secs: 0, updatedAt: '' };
+    this.PLANTS = this.makeData();
+  }
+
+  makeData() {
+    const CAT = [
+      { item: 'pH', unit: '', oos: '6-9', ooc: '6.2-8.8', alert: '6.5-8.5', recv: '6.5-8.5', law: '5-10', base: 7.2, dec: 2 },
+      { item: 'COD', unit: 'mg/L', oos: '100', ooc: '80', alert: '70', recv: '60', law: '120', base: 52, dec: 0 },
+      { item: 'SS', unit: 'mg/L', oos: '30', ooc: '25', alert: '20', recv: '18', law: '50', base: 11, dec: 1 },
+      { item: 'VOC', unit: 'ppm', oos: '50', ooc: '40', alert: '30', recv: '25', law: '60', base: 17, dec: 1 },
+      { item: 'Cu', unit: 'mg/L', oos: '3', ooc: '2.5', alert: '2', recv: '1.8', law: '3', base: 0.42, dec: 2, src: 3 },
+      { item: 'Ni', unit: 'mg/L', oos: '1', ooc: '0.8', alert: '0.6', recv: '0.5', law: '1', base: 0.12, dec: 2, src: 3 },
+      { item: '氨氮', unit: 'mg/L', oos: '20', ooc: '16', alert: '12', recv: '10', law: '30', base: 6.4, dec: 1 },
+      { item: '流量', unit: 'CMD', oos: '4000', ooc: '3600', alert: '3200', recv: '3000', law: '—', base: 2150, dec: 0 },
+      { item: '溫度', unit: '°C', oos: '15-40', ooc: '18-38', alert: '20-36', recv: '20-36', law: '—', base: 28.4, dec: 1 },
+      { item: '導電度', unit: 'µS/cm', oos: '4500', ooc: '4000', alert: '3500', recv: '3200', law: '—', base: 1820, dec: 0, src: 2 },
+      { item: '濁度', unit: 'NTU', oos: '50', ooc: '40', alert: '30', recv: '25', law: '—', base: 8.2, dec: 1, src: 2 },
+      { item: '硝酸鹽', unit: 'mg/L', oos: '50', ooc: '45', alert: '40', recv: '35', law: '50', base: 21.5, dec: 1 },
+    ];
+    const defs = [
+      ['K7', '廢水處理場', 12], ['K14B', '廢水處理場', 10], ['K9', '空污防制', 11], ['K11', '廢水處理場', 12],
+      ['K3', '廢水處理場', 10], ['K5', '空污防制', 9], ['K6', '廢水處理場', 10], ['K8', '空污防制', 8],
+      ['K10', '廢水處理場', 9], ['K12', '雨水溝／放流', 10], ['K14A', '廢水處理場', 11], ['K15', '空污防制', 8],
+    ];
+    const OV = {
+      'K7|pH':   { status: 'R', val: '9.42', url: 'VOC 歷史曲線.dc.html', remark: '' },
+      'K7|VOC':  { status: 'O', val: '42.1', url: 'VOC 歷史曲線.dc.html' },
+      'K7|Cu':   { status: 'X', val: '保養中', broken: 2, remark: '例行保養至 7/9' },
+      'K14B|COD':{ status: 'R', val: '128', src: 2, url: 'VOC 歷史曲線.dc.html' },
+      'K9|SS':   { status: 'X', val: '斷訊', broken: 1, remark: '通訊模組斷線，已通報' },
+      'K9|流量': { status: 'X', val: '斷訊', broken: 1, remark: '' },
+      'K9|氨氮': { status: 'Y', val: '13.8', url: 'VOC 歷史曲線.dc.html' },
+      'K11|pH':  { status: 'O2', val: '7.41', scadaOos: '6-9.5', remark: 'SCADA 管制值與 SPEC 不同步' },
+      'K3|氨氮': { status: 'Y', val: '14.5' },
+      'K3|硝酸鹽':{ status: 'Y', val: '41.2', url: 'VOC 歷史曲線.dc.html' },
+    };
+    return defs.map(([no, desc, n], pi) => {
+      const items = [];
+      for (let i = 0; i < n; i++) {
+        const c = CAT[i % CAT.length];
+        const jitter = 0.82 + (((pi * 13 + i * 7) % 37) / 100);
+        const raw = c.base * jitter;
+        const ov = OV[no + '|' + c.item] || {};
+        const isRain = no === 'K12' && c.item === 'pH';
+        items.push({
+          plant: no, item: c.item, unit: c.unit,
+          oos: c.oos, ooc: c.ooc, alert: c.alert, recv: c.recv, law: c.law,
+          scadaVal: ov.scadaOos || c.oos, cwmsVal: c.oos,
+          status: ov.status || 'G',
+          val: ov.val !== undefined ? ov.val : raw.toFixed(c.dec),
+          src: ov.src || c.src || 1,
+          url: ov.url || '',
+          remark: ov.remark || '',
+          broken: ov.broken || 0,
+          hasRain: isRain, rain: '',
+          id: no + '|' + c.item,
+        });
+      }
+      return { no, desc, items };
+    });
+  }
+
+  componentDidMount() {
+    const total = (this.props.refreshMinutes ?? 15) * 60;
+    const fmt = d => String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    this.setState({ secs: total - 173, updatedAt: fmt(new Date()) });
+    this.timer = setInterval(() => {
+      this.setState(s => s.secs <= 1 ? { secs: total, updatedAt: fmt(new Date()) } : { secs: s.secs - 1 });
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  renderVals() {
+    const S = this.state;
+    const distinguish = this.props.distinguishSyncOrange ?? true;
+    const compact = this.props.compactRows ?? false;
+    const YC = '#eab308', YBG = 'rgba(234,179,8,0.12)';
+
+    const ST = {
+      R:  { c: 'var(--err)',  bg: 'var(--err-bg)',  label: 'R',  sev: 0 },
+      O:  { c: 'var(--warn)', bg: 'var(--warn-bg)', label: 'O',  sev: 1 },
+      O2: { c: 'var(--warn)', bg: 'var(--warn-bg)', label: distinguish ? 'O≠' : 'O', sev: 2 },
+      Y:  { c: YC,            bg: YBG,              label: 'Y',  sev: 3 },
+      X:  { c: 'var(--fg-2)', bg: 'var(--muted-bg)',label: '—',  sev: 4 },
+      G:  { c: 'var(--ok)',   bg: 'var(--ok-bg)',   label: 'G',  sev: 5 },
+    };
+    const dotOf = (st) => {
+      if (st === 'R') return { width: 9, height: 9, borderRadius: '50%', background: 'var(--err)', boxShadow: '0 0 8px var(--err-glow)', animation: 'pulse 1.4s ease-in-out infinite', flex: 'none' };
+      if (st === 'O') return { width: 10, height: 9, clipPath: 'polygon(50% 0,100% 100%,0 100%)', background: 'var(--warn)', flex: 'none' };
+      if (st === 'O2') return distinguish
+        ? { width: 7, height: 7, border: '2px dashed var(--warn)', transform: 'rotate(45deg)', flex: 'none' }
+        : { width: 10, height: 9, clipPath: 'polygon(50% 0,100% 100%,0 100%)', background: 'var(--warn)', flex: 'none' };
+      if (st === 'Y') return { width: 8, height: 8, background: YC, transform: 'rotate(45deg)', flex: 'none' };
+      if (st === 'X') return { width: 9, height: 9, border: '1px solid var(--muted)', background: 'repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px)', flex: 'none' };
+      return { width: 7, height: 7, borderRadius: '50%', border: '2px solid var(--ok)', background: 'transparent', flex: 'none' };
+    };
+    const SRC = { 1: ['SCADA', 'var(--info)', 'var(--info-bg)'], 2: ['CWMS', 'var(--accent)', 'var(--accent-soft)'], 3: ['QA手測', 'var(--fg-2)', 'var(--muted-bg)'] };
+
+    // ---- filter helpers ----
+    const q = S.search.trim().toLowerCase();
+    const anyFilter = S.fStatus !== 'all' || S.fSource !== 0 || q !== '';
+    const matches = (it) => {
+      if (S.fStatus === 'abn' && !['R', 'O', 'O2', 'Y'].includes(it.status)) return false;
+      if (S.fStatus === 'R' && it.status !== 'R') return false;
+      if (S.fStatus === 'O' && it.status !== 'O' && it.status !== 'O2') return false;
+      if (S.fStatus === 'Y' && it.status !== 'Y') return false;
+      if (S.fStatus === 'X' && it.status !== 'X') return false;
+      if (S.fSource !== 0 && it.src !== S.fSource) return false;
+      if (q && !(it.plant.toLowerCase().includes(q) || it.item.toLowerCase().includes(q))) return false;
+      return true;
+    };
+
+    // ---- counts + severity ----
+    const counts = { R: 0, O: 0, O2: 0, Y: 0, X: 0, G: 0 };
+    this.PLANTS.forEach(p => p.items.forEach(it => counts[it.status]++));
+
+    const enriched = this.PLANTS.map(p => {
+      const cs = { R: 0, O: 0, O2: 0, Y: 0, X: 0, G: 0 };
+      p.items.forEach(it => cs[it.status]++);
+      const sev = cs.R ? 0 : cs.O ? 1 : cs.O2 ? 2 : cs.Y ? 3 : cs.X ? 4 : 5;
+      return { ...p, cs, sev };
+    }).sort((a, b) => a.sev - b.sev || a.no.localeCompare(b.no));
+
+    const sevBar = ['var(--err)', 'var(--warn)', 'var(--warn)', YC, 'var(--muted)', 'var(--border-2)'];
+
+    const pillOf = (st, txt) => ({
+      style: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-mono)', background: ST[st].bg, color: ST[st].c, whiteSpace: 'nowrap', border: st === 'O2' && distinguish ? '1px dashed var(--warn)' : '1px solid transparent' },
+      dotStyle: dotOf(st), txt,
+    });
+
+    // ---- rail ----
+    const railPlants = enriched.map(p => {
+      const pills = [];
+      if (p.cs.R) pills.push({ txt: 'R' + p.cs.R, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--err-bg)', color: 'var(--err)' } });
+      if (p.cs.O) pills.push({ txt: 'O' + p.cs.O, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--warn-bg)', color: 'var(--warn)' } });
+      if (p.cs.O2) pills.push({ txt: 'O≠' + p.cs.O2, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--warn-bg)', color: 'var(--warn)', border: '1px dashed var(--warn)' } });
+      if (p.cs.Y) pills.push({ txt: 'Y' + p.cs.Y, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: YBG, color: YC } });
+      if (p.cs.X) pills.push({ txt: '斷' + p.cs.X, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--muted-bg)', color: 'var(--fg-2)' } });
+      if (!pills.length) pills.push({ txt: '正常', style: { fontSize: 10.5, padding: '1px 7px', borderRadius: 999, color: 'var(--fg-3)' } });
+      return {
+        no: p.no, pills,
+        style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: 'var(--fg-2)', transition: 'background 120ms var(--ease)', background: p.sev <= 1 ? 'var(--err-bg)' : 'transparent' },
+        barStyle: { width: 3, height: 18, borderRadius: 2, background: sevBar[p.sev], boxShadow: p.sev === 0 ? '0 0 8px var(--err-glow)' : 'none', flex: 'none' },
+        onClick: () => this.setState(s => ({ expanded: { ...s.expanded, [p.no]: true } })),
+      };
+    });
+
+    // ---- metrics ----
+    const mkMetric = (label, n, st, filterKey) => ({
+      label, n,
+      style: { width: 128, flex: 'none', background: 'var(--bg-2)', border: '1px solid ' + (n > 0 && (st === 'R') ? 'rgba(239,68,68,0.45)' : 'var(--border-1)'), borderRadius: 12, padding: '14px 16px', boxShadow: n > 0 && st === 'R' ? 'var(--shadow-1), 0 0 16px rgba(239,68,68,0.12)' : 'var(--shadow-1)', cursor: 'pointer', transition: 'border-color 160ms var(--ease)' },
+      dotStyle: dotOf(st),
+      numStyle: { fontFamily: 'var(--font-mono)', fontSize: 30, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginTop: 6, color: n > 0 ? ST[st].c : 'var(--fg-3)' },
+      onClick: () => this.setState(s => ({ fStatus: s.fStatus === filterKey ? 'all' : filterKey })),
+    });
+    const metrics = [
+      mkMetric('紅燈 R', counts.R, 'R', 'R'),
+      mkMetric('橙燈 O', counts.O + counts.O2, 'O', 'O'),
+      mkMetric('黃燈 Y', counts.Y, 'Y', 'Y'),
+      mkMetric('斷訊／保養', counts.X, 'X', 'X'),
+    ];
+
+    // ---- anomaly chips (R + O + O2) ----
+    const anomalies = [];
+    enriched.forEach(p => p.items.forEach(it => { if (['R', 'O', 'O2'].includes(it.status)) anomalies.push(it); }));
+    anomalies.sort((a, b) => ST[a.status].sev - ST[b.status].sev);
+    const chips = anomalies.map(it => ({
+      txt: it.plant + '・' + it.item + (it.status === 'O2' && distinguish ? '（設定不同步）' : ''),
+      val: it.status === 'O2' ? '' : it.val,
+      dotStyle: dotOf(it.status),
+      style: { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 12px', borderRadius: 999, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', background: ST[it.status].bg, color: ST[it.status].c, border: it.status === 'O2' && distinguish ? '1px dashed var(--warn)' : '1px solid transparent', transition: 'filter 120ms var(--ease)' },
+      onClick: () => this.setState(s => ({ expanded: { ...s.expanded, [it.plant]: true }, openRow: it.id })),
+    }));
+
+    // ---- filter chips ----
+    const chip = (txt, active, onClick) => ({
+      txt, onClick,
+      style: { padding: '5px 13px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms var(--ease)', background: active ? 'var(--accent-soft)' : 'transparent', color: active ? 'var(--accent)' : 'var(--fg-2)', border: '1.5px solid ' + (active ? 'var(--accent)' : 'var(--border-2)') },
+    });
+    const setF = k => () => this.setState(s => ({ fStatus: s.fStatus === k ? 'all' : k }));
+    const statusChips = [
+      chip('全部', S.fStatus === 'all', () => this.setState({ fStatus: 'all' })),
+      chip('只看異常', S.fStatus === 'abn', setF('abn')),
+      chip('R', S.fStatus === 'R', setF('R')),
+      chip('O', S.fStatus === 'O', setF('O')),
+      chip('Y', S.fStatus === 'Y', setF('Y')),
+      chip('斷訊／保養', S.fStatus === 'X', setF('X')),
+    ];
+    const setSrc = k => () => this.setState(s => ({ fSource: s.fSource === k ? 0 : k }));
+    const sourceChips = [
+      chip('SCADA', S.fSource === 1, setSrc(1)),
+      chip('CWMS', S.fSource === 2, setSrc(2)),
+      chip('QA手測', S.fSource === 3, setSrc(3)),
+    ];
+
+    // ---- plants ----
+    const rowPad = compact ? '6px 18px' : '9px 18px';
+    let visibleItems = 0;
+    const plants = enriched.map(p => {
+      const filtered = p.items.filter(matches);
+      if (anyFilter && filtered.length === 0) return null;
+      visibleItems += filtered.length;
+      const expanded = anyFilter ? true : (S.expanded[p.no] ?? p.sev <= 2);
+      const hiddenN = p.items.length - filtered.length;
+      const pills = [];
+      if (p.cs.R) pills.push(pillOf('R', p.cs.R));
+      if (p.cs.O) pills.push(pillOf('O', p.cs.O));
+      if (p.cs.O2) pills.push(pillOf('O2', p.cs.O2));
+      if (p.cs.Y) pills.push(pillOf('Y', p.cs.Y));
+      if (p.cs.X) pills.push(pillOf('X', p.cs.X));
+
+      const items = filtered.map(it => {
+        const st = ST[it.status];
+        const open = S.openRow === it.id;
+        const stLabel = it.status === 'X' ? (it.broken === 2 ? '保養' : '斷訊') : st.label;
+        const rowBg = it.status === 'R' ? 'var(--err-bg)'
+          : it.status === 'X' ? 'repeating-linear-gradient(45deg, rgba(71,85,105,0.10) 0 6px, transparent 6px 12px)'
+          : 'transparent';
+        return {
+          ...it, open, stLabel,
+          hasUrl: !!it.url,
+          rainTxt: it.rain || '—（資料暫缺，Schema B 後補上）',
+          rowStyle: { display: 'grid', gridTemplateColumns: '96px 1fr 120px 76px 72px 1fr 84px 28px', gap: 10, alignItems: 'center', padding: rowPad, borderBottom: '1px solid var(--border-1)', cursor: 'pointer', background: rowBg, transition: 'background 120ms var(--ease)' },
+          pillStyle: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', background: st.bg, color: st.c, whiteSpace: 'nowrap', justifySelf: 'start', border: it.status === 'O2' && distinguish ? '1px dashed var(--warn)' : '1px solid transparent' },
+          dotStyle: dotOf(it.status),
+          valStyle: { textAlign: 'right', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: it.status === 'R' || it.status === 'O' ? 700 : 500, color: it.status === 'G' ? 'var(--fg-1)' : it.status === 'X' ? 'var(--fg-3)' : st.c },
+          srcStyle: { fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: SRC[it.src][2], color: SRC[it.src][1], justifySelf: 'start', letterSpacing: '0.04em' },
+          srcTxt: SRC[it.src][0],
+          chevStyle: { width: 14, height: 14, color: 'var(--fg-3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms var(--ease)' },
+          scadaCmpTxt: it.scadaVal === it.oos ? '一致' : '不同步',
+          scadaCmpStyle: { padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: it.scadaVal === it.oos ? 'var(--ok-bg)' : 'var(--warn-bg)', color: it.scadaVal === it.oos ? 'var(--ok)' : 'var(--warn)', border: it.scadaVal === it.oos ? 'none' : '1px dashed var(--warn)' },
+          cwmsCmpTxt: it.cwmsVal === it.oos ? '一致' : '不同步',
+          cwmsCmpStyle: { padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: it.cwmsVal === it.oos ? 'var(--ok-bg)' : 'var(--warn-bg)', color: it.cwmsVal === it.oos ? 'var(--ok)' : 'var(--warn)' },
+          onToggle: () => this.setState(s => ({ openRow: s.openRow === it.id ? null : it.id })),
+          onCurve: (e) => e.stopPropagation(),
+        };
+      });
+
+      const dots = p.items.slice(0, 20).map(it => ({ style: { ...dotOf(it.status), opacity: it.status === 'G' ? 0.45 : 1 } }));
+
+      return {
+        no: p.no, desc: p.desc, pills, items, dots, expanded, collapsed: !expanded,
+        countTxt: anyFilter ? filtered.length + '/' + p.items.length + ' 項' : '共 ' + p.items.length + ' 項',
+        hiddenTxt: anyFilter && hiddenN > 0 ? '已依篩選條件隱藏 ' + hiddenN + ' 項' : false,
+        cardStyle: { background: 'var(--bg-2)', border: '1px solid ' + (p.sev === 0 ? 'rgba(239,68,68,0.5)' : p.sev <= 2 ? 'rgba(245,158,11,0.4)' : 'var(--border-1)'), borderRadius: 12, boxShadow: p.sev === 0 ? 'var(--shadow-1), 0 0 20px rgba(239,68,68,0.10)' : 'var(--shadow-1)', overflow: 'hidden' },
+        headStyle: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', cursor: 'pointer', background: p.sev === 0 ? 'rgba(239,68,68,0.06)' : 'transparent', transition: 'background 120ms var(--ease)' },
+        chevStyle: { width: 16, height: 16, color: 'var(--fg-3)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 160ms var(--ease)', flex: 'none' },
+        onToggle: () => this.setState(s => ({ expanded: { ...s.expanded, [p.no]: !expanded } })),
+      };
+    }).filter(Boolean);
+
+    // ---- misc ----
+    const mm = Math.floor(S.secs / 60), ss = S.secs % 60;
+    const toolBtns = ['派送名單', '規格維護', '隔離申請', '簽核'].map(label => ({ label, onClick: () => this.setState({ modal: label }) }));
+
+    return {
+      railPlants, metrics, chips, statusChips, sourceChips, plants, toolBtns,
+      noAnomaly: chips.length === 0,
+      noResult: anyFilter && visibleItems === 0,
+      countdown: String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0'),
+      updatedAt: S.updatedAt || '--:--',
+      search: S.search,
+      onSearch: (e) => this.setState({ search: e.target.value }),
+      modalOpen: !!S.modal,
+      modalTitle: S.modal || '',
+      closeModal: () => this.setState({ modal: null }),
+      stop: (e) => e.stopPropagation(),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
