@@ -1,0 +1,199 @@
+{# ══════════════════════════════════════════════════════════════════════════
+   templates/b/partials/acl.html — ACL 使用者權限維護（V2 深色原生版）
+   對應 routers_b/ui_router_b.py::render_acl_modal_b（GET /ui/acl）：目前回傳空 context，
+   這頁是 11 頁中唯一「先渲染空殼、資料完全由前端二次請求」的頁面（見
+   docs/功能頁設計簡報_給設計工具.md 頁面 11／互動流程）——本檔沿用此模式，開啟後並行
+   fetch /acl/plants、/acl/roles、/acl/list 組出下拉與表格。
+   視覺照抄 design_handoff_voc_platform_V2/VOC Dashboard.dc.html 562–601 行 + buildACL()（~982–1008 行）。
+   偏差：
+     1. 設計稿角色下拉寫死 value=角色文字（隔離維護/隔離查詢），stype 下拉寫死 value=中文
+        （全區/水/空）；真實 API 要吃角色數字 id（/acl/roles 回傳）與 stype 代碼
+        '1'(空)/'2'(水)/'3'(全區)，本檔改成動態載入＋代碼對應，视觉排列不變。
+     2. 設計稿沒有編輯互動（buildACL 只有 onDelete），本檔同步只做新增＋刪除。
+     3. AclCreateReq 不吃 empname/notesid（純供畫面預覽用），故新增表單沿用設計稿版面，
+        不額外插入姓名/NotesID 預覽欄位。
+══════════════════════════════════════════════════════════════════════════ #}
+<div class="aclv2-root">
+
+  <div class="aclv2-titlebar">
+    <span class="aclv2-title">ACL 使用者權限</span>
+    <span class="aclv2-spacer"></span>
+    <button type="button" class="aclv2-close" onclick="document.getElementById('voc-modal').close()">✕</button>
+  </div>
+
+  <div class="aclv2-body">
+
+    <div class="aclv2-info">
+      僅開放「隔離維護」「隔離查詢」兩種角色管理；此名單目前尚未真正掛到各功能頁做守門（僅示意權限維護介面）。
+    </div>
+
+    <div class="aclv2-thead">
+      <span>廠區</span><span>角色</span><span>工號</span><span>姓名</span><span>水/空</span><span>Notes ID</span><span></span>
+    </div>
+    <div id="aclv2-tbody">
+      <div class="aclv2-empty">載入中…</div>
+    </div>
+
+    <div class="aclv2-add">
+      <div class="aclv2-add-title">新增權限</div>
+      <div class="aclv2-add-grid">
+        <select id="aclv2-f-plant" class="aclv2-in"><option value="">— 廠區 —</option></select>
+        <select id="aclv2-f-role" class="aclv2-in"><option value="">— 角色 —</option></select>
+        <input id="aclv2-f-empno" class="aclv2-in aclv2-mono" placeholder="工號">
+        <select id="aclv2-f-stype" class="aclv2-in">
+          <option value="3" selected>全區</option>
+          <option value="2">水</option>
+          <option value="1">空</option>
+        </select>
+        <button type="button" class="aclv2-btn-primary" onclick="aclv2Add()">新增</button>
+      </div>
+      <div id="aclv2-form-error" class="aclv2-form-error"></div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  .aclv2-root{background:var(--bg-2);color:var(--fg-1);font-family:var(--font-sans,'Inter',sans-serif);font-size:14px}
+  .aclv2-titlebar{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1)}
+  .aclv2-title{font-size:16px;font-weight:700;color:var(--fg-1)}
+  .aclv2-spacer{flex:1}
+  .aclv2-close{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px}
+  .aclv2-close:hover{color:var(--fg-1)}
+  .aclv2-body{padding:20px 22px}
+
+  .aclv2-info{font-size:11.5px;color:var(--fg-2);background:var(--info-bg);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;line-height:1.6}
+
+  .aclv2-thead,.aclv2-row{display:grid;grid-template-columns:80px 90px 90px 100px 90px 1fr 40px;gap:8px;align-items:center;padding:8px 10px}
+  .aclv2-thead{background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-2)}
+  .aclv2-row{border-bottom:1px solid var(--border-1)}
+  .aclv2-row:hover{background:var(--bg-3)}
+  .aclv2-mono{font-family:var(--font-mono)}
+  .aclv2-strong{font-weight:700}
+  .aclv2-fs12{font-size:12px}
+  .aclv2-fg2{color:var(--fg-2)}
+  .aclv2-fg3{color:var(--fg-3)}
+  .aclv2-del{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:13px}
+  .aclv2-del:hover{color:var(--err)}
+  .aclv2-empty{color:var(--fg-3);font-size:12.5px;padding:16px 10px;text-align:center}
+
+  .aclv2-add{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-2)}
+  .aclv2-add-title{font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px}
+  .aclv2-add-grid{display:grid;grid-template-columns:80px 110px 90px 100px auto;gap:8px;align-items:center}
+  .aclv2-in{padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;font-family:inherit;width:100%}
+  .aclv2-in:focus{outline:none;border-color:var(--accent)}
+  input.aclv2-in{padding:7px 8px}
+  .aclv2-form-error{font-size:11.5px;color:var(--err);margin-top:6px;min-height:14px}
+  .aclv2-btn-primary{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap;font-family:inherit}
+  .aclv2-btn-primary:hover{background:var(--blue-hover)}
+</style>
+
+<script>
+(function () {
+  function toast(msg, isErr) {
+    if (window.vbToast) { window.vbToast(msg, { type: isErr ? 'error' : 'success' }); }
+    else { alert(msg); }
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function extractErrorMsg(data) {
+    if (data && Array.isArray(data.detail)) return data.detail.map(e => (typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
+    if (data && typeof data.detail === 'string') return data.detail;
+    return '操作失敗，請重試';
+  }
+  async function parseResponse(res) {
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* 非 JSON 回應忽略 */ }
+    return { ok: res.ok, data };
+  }
+
+  let aclv2Roles = [];   // [{roleid, roletype}]
+
+  function stypeDisplay(v) { return v === 'ALL' ? '全區' : v; }
+
+  function roleIdByName(roletype) {
+    const r = aclv2Roles.find(x => x.roletype === roletype);
+    return r ? r.roleid : null;
+  }
+
+  async function aclv2LoadList() {
+    const tbody = document.getElementById('aclv2-tbody');
+    tbody.innerHTML = '<div class="aclv2-empty">載入中…</div>';
+    try {
+      const res = await fetch('/acl/list');
+      const rows = await res.json();
+      if (!res.ok) { tbody.innerHTML = '<div class="aclv2-empty">查詢失敗，請重試</div>'; return; }
+      if (!rows.length) { tbody.innerHTML = '<div class="aclv2-empty">尚無權限名單</div>'; return; }
+      tbody.innerHTML = rows.map(r => `
+        <div class="aclv2-row" data-plantno="${esc(r.plantno)}" data-roletype="${esc(r.roletype)}" data-empno="${esc(r.empno)}">
+          <span class="aclv2-mono aclv2-strong">${esc(r.plantno)}</span>
+          <span class="aclv2-fs12 aclv2-fg2">${esc(r.roletype)}</span>
+          <span class="aclv2-mono">${esc(r.empno)}</span>
+          <span class="aclv2-fs12">${esc(r.empname || '—')}</span>
+          <span class="aclv2-fs12 aclv2-fg3">${esc(stypeDisplay(r.stype))}</span>
+          <span class="aclv2-mono aclv2-fs12 aclv2-fg3">${esc(r.notesid || '—')}</span>
+          <button type="button" class="aclv2-del" onclick="aclv2Delete(this.closest('.aclv2-row'))">✕</button>
+        </div>`).join('');
+    } catch (e) {
+      tbody.innerHTML = '<div class="aclv2-empty">查詢失敗，請重試</div>';
+    }
+  }
+
+  async function aclv2Init() {
+    try {
+      const [plants, roles] = await Promise.all([
+        fetch('/acl/plants').then(r => r.json()).catch(() => []),
+        fetch('/acl/roles').then(r => r.json()).catch(() => []),
+      ]);
+      aclv2Roles = roles;
+      const plantSel = document.getElementById('aclv2-f-plant');
+      plantSel.innerHTML += plants.map(p => `<option value="${esc(p.plantno)}">${esc(p.plantno)}</option>`).join('');
+      const roleSel = document.getElementById('aclv2-f-role');
+      roleSel.innerHTML += roles.map(r => `<option value="${r.roleid}">${esc(r.roletype)}</option>`).join('');
+    } catch (e) { /* 下拉載不到不擋名單顯示 */ }
+    aclv2LoadList();
+  }
+
+  window.aclv2Add = async function () {
+    const errBox = document.getElementById('aclv2-form-error');
+    errBox.textContent = '';
+    const plantno = document.getElementById('aclv2-f-plant').value;
+    const roleId = parseInt(document.getElementById('aclv2-f-role').value, 10);
+    const empno = document.getElementById('aclv2-f-empno').value.trim();
+    const stype = document.getElementById('aclv2-f-stype').value;
+    if (!plantno) { errBox.textContent = '請選擇廠區'; return; }
+    if (!roleId) { errBox.textContent = '請選擇角色'; return; }
+    if (!empno) { errBox.textContent = '請輸入工號'; return; }
+    try {
+      const { ok, data } = await parseResponse(await fetch('/acl/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantno, role_id: roleId, empno, stype }),
+      }));
+      if (ok) {
+        toast(data.message || '已新增 ACL 權限');
+        document.getElementById('aclv2-f-empno').value = '';
+        aclv2LoadList();
+      } else {
+        errBox.textContent = extractErrorMsg(data);
+      }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+
+  window.aclv2Delete = async function (row) {
+    const plantno = row.dataset.plantno, roletype = row.dataset.roletype, empno = row.dataset.empno;
+    const roleId = roleIdByName(roletype);
+    if (!confirm('確定刪除 ' + plantno + ' / ' + roletype + ' / ' + empno + ' 這筆權限？')) return;
+    try {
+      const { ok, data } = await parseResponse(await fetch('/acl/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantno, role_id: roleId, empno }),
+      }));
+      if (ok) { toast(data.message || '已刪除'); aclv2LoadList(); }
+      else { toast(extractErrorMsg(data), true); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+
+  aclv2Init();
+})();
+</script>

@@ -1,0 +1,235 @@
+{# ══════════════════════════════════════════════════════════════════════════
+   templates/b/partials/maillist.html — 派送名單維護（V2 深色原生版）
+   對應 routers_b/ui_router_b.py::render_maillist_modal_b（GET /ui/maillist）context：
+     maillist: [{plantno, rpttype, empno, empname, notesid, mailtype, mail(bool), signgrp(bool)}]
+     plants:   [str]           — 廠區代碼清單
+     rpttypes: [str]           — 報表類型清單
+     disabled: bool            — 全域暫停寄信旗標目前狀態（true=已暫停）
+   視覺照抄 design_handoff_voc_platform_V2/VOC Dashboard.dc.html 261–307 行 + buildML()（~732–774 行）。
+   互動改接真 API（/maillist/employee/{empno}、/maillist/add|update|delete|toggle）。
+   V2 設計稿本身只做「新增＋刪除」（buildML 沒有 onEdit），本檔比照設計稿不做行內編輯；
+   要修改請先刪除再依新資料新增（見任務回報的偏差說明）。
+══════════════════════════════════════════════════════════════════════════ #}
+<div class="mlv2-root">
+
+  <div class="mlv2-titlebar">
+    <span class="mlv2-title">派送名單維護</span>
+    <span class="mlv2-spacer"></span>
+    <button type="button" class="mlv2-close" onclick="document.getElementById('voc-modal').close()">✕</button>
+  </div>
+
+  <div class="mlv2-body">
+
+    {# ── 全域暫停寄信（高風險操作） ── #}
+    <div id="mlv2-pause-box" class="mlv2-pause-box">
+      <div class="mlv2-pause-text">
+        <b id="mlv2-pause-label">全域暫停寄信</b> — 啟用後全平台派報 Email 全部停發，不分個別設定，屬高風險操作
+      </div>
+      <button type="button" id="mlv2-pause-btn" class="mlv2-pause-btn" onclick="mlv2TogglePause()"></button>
+    </div>
+
+    {# ── 名單表格 ── #}
+    <div class="mlv2-thead">
+      <span>廠區</span><span>報表類型</span><span>工號</span><span>姓名</span>
+      <span>Notes ID</span><span>方式</span><span>Email</span><span>簽核</span><span></span>
+    </div>
+    <div id="mlv2-tbody">
+      {% for r in maillist %}
+      <div class="mlv2-row" data-plantno="{{ r.plantno }}" data-rpttype="{{ r.rpttype }}" data-empno="{{ r.empno }}">
+        <span class="mlv2-mono mlv2-strong">{{ r.plantno }}</span>
+        <span class="mlv2-fs12">{{ r.rpttype }}</span>
+        <span class="mlv2-mono mlv2-fs12">{{ r.empno }}</span>
+        <span class="mlv2-fs12 mlv2-fg2">{{ r.empname or '—' }}</span>
+        <span class="mlv2-mono mlv2-fs11 mlv2-fg3">{{ r.notesid or '—' }}</span>
+        <span class="mlv2-badge {{ 'mlv2-badge-to' if r.mailtype == 'TO' else 'mlv2-badge-cc' }}">{{ r.mailtype }}</span>
+        <span class="mlv2-flag {{ 'mlv2-flag-on' if r.mail else 'mlv2-flag-off' }}">{{ '✓' if r.mail else '—' }}</span>
+        <span class="mlv2-flag {{ 'mlv2-flag-sign' if r.signgrp else 'mlv2-flag-off' }}">{{ '✓' if r.signgrp else '—' }}</span>
+        <button type="button" class="mlv2-del" onclick="mlv2Delete(this.closest('.mlv2-row'))">✕</button>
+      </div>
+      {% else %}
+      <div class="mlv2-empty">尚無派送名單</div>
+      {% endfor %}
+    </div>
+
+    {# ── 新增名單 ── #}
+    <div class="mlv2-add">
+      <div class="mlv2-add-title">新增名單</div>
+      <div class="mlv2-add-grid">
+        <select id="mlv2-f-plant" class="mlv2-in">
+          {% for p in plants %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+        <select id="mlv2-f-rpttype" class="mlv2-in">
+          {% for t in rpttypes %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+        <input id="mlv2-f-empno" class="mlv2-in mlv2-mono" placeholder="工號" onchange="mlv2LookupEmp()">
+        <span id="mlv2-f-autotxt" class="mlv2-hint"></span>
+        <select id="mlv2-f-mailtype" class="mlv2-in">
+          <option value="TO">TO</option><option value="CC">CC</option>
+        </select>
+        <select id="mlv2-f-mail" class="mlv2-in">
+          <option value="1">發信</option><option value="0">不發</option>
+        </select>
+        <select id="mlv2-f-signgrp" class="mlv2-in">
+          <option value="0">非簽核</option><option value="1">簽核人</option>
+        </select>
+        <button type="button" class="mlv2-btn-primary" onclick="mlv2Add()">新增</button>
+      </div>
+      <div class="mlv2-hint" style="margin-top:8px">手機／簡訊欄位已停用（B 棧資料層無此欄位）</div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  .mlv2-root{background:var(--bg-2);color:var(--fg-1);font-family:var(--font-sans,'Inter',sans-serif);font-size:14px}
+  .mlv2-titlebar{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1)}
+  .mlv2-title{font-size:16px;font-weight:700;color:var(--fg-1)}
+  .mlv2-spacer{flex:1}
+  .mlv2-close{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px}
+  .mlv2-close:hover{color:var(--fg-1)}
+  .mlv2-body{padding:20px 22px}
+
+  .mlv2-pause-box{display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:10px;padding:12px 16px;margin-bottom:16px;
+    background:var(--bg-1);border:1px solid var(--border-1);transition:background 180ms var(--ease,ease),border-color 180ms var(--ease,ease)}
+  .mlv2-pause-box.is-paused{background:var(--err-bg);border-color:rgba(239,68,68,0.4)}
+  .mlv2-pause-text{font-size:12.5px;color:var(--fg-1);line-height:1.6}
+  .mlv2-pause-box.is-paused #mlv2-pause-label{color:var(--err)}
+  .mlv2-pause-btn{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+    background:transparent;color:var(--err);border:1.5px solid var(--err)}
+  .mlv2-pause-box.is-paused .mlv2-pause-btn{background:var(--err);color:#fff}
+
+  .mlv2-thead,.mlv2-row{display:grid;grid-template-columns:80px 100px 90px 100px 90px 64px 64px 56px 40px;gap:8px;align-items:center;padding:8px 10px}
+  .mlv2-thead{background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-2)}
+  .mlv2-row{border-bottom:1px solid var(--border-1)}
+  .mlv2-row:hover{background:var(--bg-3)}
+  .mlv2-mono{font-family:var(--font-mono)}
+  .mlv2-strong{font-weight:700}
+  .mlv2-fs12{font-size:12px}
+  .mlv2-fs11{font-size:11px}
+  .mlv2-fg2{color:var(--fg-2)}
+  .mlv2-fg3{color:var(--fg-3)}
+  .mlv2-badge{display:inline-flex;justify-content:center;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;font-family:var(--font-mono)}
+  .mlv2-badge-to{background:var(--accent-soft);color:var(--accent)}
+  .mlv2-badge-cc{background:var(--muted-bg);color:var(--fg-2)}
+  .mlv2-flag{text-align:center;font-weight:700}
+  .mlv2-flag-on{color:var(--ok)}
+  .mlv2-flag-sign{color:var(--accent)}
+  .mlv2-flag-off{color:var(--fg-3)}
+  .mlv2-del{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:13px}
+  .mlv2-del:hover{color:var(--err)}
+  .mlv2-empty{color:var(--fg-3);font-size:12.5px;padding:16px 10px;text-align:center}
+
+  .mlv2-add{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-2)}
+  .mlv2-add-title{font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px}
+  .mlv2-add-grid{display:grid;grid-template-columns:80px 110px 100px 1fr 90px 90px 90px auto;gap:8px;align-items:center}
+  .mlv2-in{padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;font-family:inherit;width:100%}
+  .mlv2-in:focus{outline:none;border-color:var(--accent)}
+  input.mlv2-in{padding:7px 8px}
+  .mlv2-hint{font-size:11.5px;color:var(--fg-3)}
+  .mlv2-btn-primary{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap;font-family:inherit}
+  .mlv2-btn-primary:hover{background:var(--blue-hover)}
+</style>
+
+<script>
+(function () {
+  // ── toast：優先用全域 window.vbToast，不存在時 fallback alert ──────────────
+  function toast(msg, isErr) {
+    if (window.vbToast) { window.vbToast(msg, { type: isErr ? 'error' : 'success' }); }
+    else { alert(msg); }
+  }
+  function extractErrorMsg(data) {
+    if (data && Array.isArray(data.detail)) return data.detail.map(e => (typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
+    if (data && typeof data.detail === 'string') return data.detail;
+    return '操作失敗，請重試';
+  }
+  async function parseResponse(res) {
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* 非 JSON 回應忽略 */ }
+    return { ok: res.ok, data };
+  }
+  function reloadModal() {
+    if (window.htmx) { htmx.ajax('GET', '/ui/maillist', { target: '#modal-container', swap: 'innerHTML' }); }
+  }
+
+  // ── 全域暫停寄信 ─────────────────────────────────────────────────────────
+  let mlv2Paused = {{ 'true' if disabled else 'false' }};
+  function renderPauseBox() {
+    const box = document.getElementById('mlv2-pause-box');
+    const btn = document.getElementById('mlv2-pause-btn');
+    box.classList.toggle('is-paused', mlv2Paused);
+    btn.textContent = mlv2Paused ? '已暫停・點擊恢復' : '啟用暫停';
+  }
+  window.mlv2TogglePause = async function () {
+    const nextEnable = mlv2Paused; // 目前已暫停 → 點擊要恢復(enable=true)；目前寄信中 → 點擊要暫停(enable=false)
+    try {
+      const { ok, data } = await parseResponse(await fetch('/maillist/toggle?enable=' + nextEnable, { method: 'POST' }));
+      if (ok) {
+        mlv2Paused = !!data.disabled;
+        renderPauseBox();
+        toast(mlv2Paused ? '已啟用全域暫停寄信，全平台派報 Email 停發' : '已恢復派報 Email 寄送', mlv2Paused);
+      } else {
+        toast(extractErrorMsg(data), true);
+      }
+    } catch (e) {
+      toast('網路錯誤，請重試', true);
+    }
+  };
+  renderPauseBox();
+
+  // ── 工號自動帶出姓名／NotesID（MailListAddReq 需要實際值才能存檔顯示正確） ──
+  let mlv2AutoEmpname = '', mlv2AutoNotesid = '';
+  window.mlv2LookupEmp = async function () {
+    const empno = document.getElementById('mlv2-f-empno').value.trim();
+    const hint = document.getElementById('mlv2-f-autotxt');
+    mlv2AutoEmpname = ''; mlv2AutoNotesid = '';
+    hint.textContent = '';
+    if (!empno) return;
+    try {
+      const res = await fetch('/maillist/employee/' + encodeURIComponent(empno));
+      const d = await res.json();
+      mlv2AutoEmpname = d.empname || '';
+      mlv2AutoNotesid = d.notesid || '';
+      hint.textContent = (mlv2AutoEmpname || mlv2AutoNotesid)
+        ? ('已帶出：' + (mlv2AutoEmpname || '（無姓名）') + ' / ' + (mlv2AutoNotesid || '（無 NotesID）'))
+        : '群組／值班工號，Email 收件請洽 Notes 管理';
+    } catch (e) { /* 帶不出就留空，允許手動送出 */ }
+  };
+
+  // ── 新增 ────────────────────────────────────────────────────────────────
+  window.mlv2Add = async function () {
+    const empno = document.getElementById('mlv2-f-empno').value.trim();
+    if (!empno) { toast('工號為必填', true); return; }
+    const payload = {
+      plantno: document.getElementById('mlv2-f-plant').value,
+      rpttype: document.getElementById('mlv2-f-rpttype').value,
+      empno: empno,
+      empname: mlv2AutoEmpname,
+      notesid: mlv2AutoNotesid,
+      mailtype: document.getElementById('mlv2-f-mailtype').value,
+      mail: document.getElementById('mlv2-f-mail').value === '1',
+      signgrp: document.getElementById('mlv2-f-signgrp').value === '1',
+    };
+    try {
+      const { ok, data } = await parseResponse(await fetch('/maillist/add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      }));
+      if (ok) { toast(data.message || '已新增名單'); reloadModal(); }
+      else { toast(extractErrorMsg(data), true); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+
+  // ── 刪除（破壞性操作，confirm 二次確認） ───────────────────────────────────
+  window.mlv2Delete = async function (row) {
+    const plantno = row.dataset.plantno, rpttype = row.dataset.rpttype, empno = row.dataset.empno;
+    if (!confirm('確定刪除 ' + plantno + ' / ' + rpttype + ' / ' + empno + ' 這筆派送名單？')) return;
+    try {
+      const { ok, data } = await parseResponse(await fetch('/maillist/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantno, rpttype, empno }),
+      }));
+      if (ok) { toast(data.message || '已刪除'); reloadModal(); }
+      else { toast(extractErrorMsg(data), true); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+})();
+</script>

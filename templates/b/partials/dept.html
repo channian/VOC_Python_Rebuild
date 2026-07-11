@@ -1,0 +1,148 @@
+{# ══════════════════════════════════════════════════════════════════════════
+   templates/b/partials/dept.html — 部門權限維護（V2 深色原生版）
+   對應 routers_b/ui_router_b.py::render_dept_modal_b（GET /dept/ui）context：
+     depts:  [{plantid, deptno, plantno, deptname}]  — list_dept_data() 回傳形狀（無 remark 欄，見下）
+     plants: [{plantid, plantno}]
+     plantid, deptno: str（查詢字串回填用，本檔比照設計稿不提供篩選 UI，故不使用）
+     error:  str，查詢失敗訊息
+     is_all_plant: callable(plantid) -> bool
+   視覺照抄 design_handoff_voc_platform_V2/VOC Dashboard.dc.html 533–560 行 + buildDEPT()（~953–980 行）。
+   偏差：設計稿假資料的列有 remark 欄，但 models_b.Dept 實際未儲存 remark（僅供 tranlog 稽核，
+   不回顯），故表格拿掉「備註」顯示欄，只留廠區／部門代碼／部門名稱／操作；新增表單仍保留備註
+   輸入（照樣送到後端記 tranlog）。設計稿也沒有編輯互動（buildDEPT 只有 onDelete），本檔同步
+   只做新增＋刪除。
+══════════════════════════════════════════════════════════════════════════ #}
+<div class="dpv2-root">
+
+  <div class="dpv2-titlebar">
+    <span class="dpv2-title">部門權限維護</span>
+    <span class="dpv2-spacer"></span>
+    <button type="button" class="dpv2-close" onclick="document.getElementById('voc-modal').close()">✕</button>
+  </div>
+
+  <div class="dpv2-body">
+
+    {% if error %}
+    <div class="dpv2-error-banner">{{ error }}</div>
+    {% endif %}
+
+    <div class="dpv2-thead">
+      <span>廠區</span><span>部門代碼</span><span>部門名稱</span><span></span>
+    </div>
+    <div id="dpv2-tbody">
+      {% for r in depts %}
+      <div class="dpv2-row" data-plantid="{{ r.plantid }}" data-plantno="{{ r.plantno }}" data-deptno="{{ r.deptno }}">
+        <span class="dpv2-mono dpv2-strong">{{ r.plantno }}{{ '（全廠）' if is_all_plant(r.plantid) else '' }}</span>
+        <span class="dpv2-mono">{{ r.deptno }}</span>
+        <span class="dpv2-fs12 dpv2-fg2">{{ r.deptname or '—' }}</span>
+        <button type="button" class="dpv2-del" onclick="dpv2Delete(this.closest('.dpv2-row'))">✕</button>
+      </div>
+      {% else %}
+      <div class="dpv2-empty">尚無部門資料</div>
+      {% endfor %}
+    </div>
+
+    <div class="dpv2-add">
+      <div class="dpv2-add-title">新增部門</div>
+      <div class="dpv2-add-grid">
+        <select id="dpv2-f-plant" class="dpv2-in">
+          {% for p in plants %}<option value="{{ p.plantid }}">{{ p.plantno }}{{ '（全廠）' if is_all_plant(p.plantid) else '' }}</option>{% endfor %}
+        </select>
+        <input id="dpv2-f-deptno" class="dpv2-in dpv2-mono" placeholder="部門代碼">
+        <input id="dpv2-f-remark" class="dpv2-in" placeholder="備註">
+        <button type="button" class="dpv2-btn-primary" onclick="dpv2Add()">新增</button>
+      </div>
+      <div id="dpv2-form-error" class="dpv2-form-error"></div>
+      <div class="dpv2-hint" style="margin-top:8px">部門名稱目前無正式中文全名來源，有效代碼即直接顯示代碼本身；「全廠」為固定值（plantid=29）</div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  .dpv2-root{background:var(--bg-2);color:var(--fg-1);font-family:var(--font-sans,'Inter',sans-serif);font-size:14px}
+  .dpv2-titlebar{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1)}
+  .dpv2-title{font-size:16px;font-weight:700;color:var(--fg-1)}
+  .dpv2-spacer{flex:1}
+  .dpv2-close{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px}
+  .dpv2-close:hover{color:var(--fg-1)}
+  .dpv2-body{padding:20px 22px}
+
+  .dpv2-error-banner{background:var(--err-bg);color:var(--err);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px}
+
+  .dpv2-thead,.dpv2-row{display:grid;grid-template-columns:90px 110px 1fr 40px;gap:8px;align-items:center;padding:8px 10px}
+  .dpv2-thead{background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-2)}
+  .dpv2-row{border-bottom:1px solid var(--border-1)}
+  .dpv2-row:hover{background:var(--bg-3)}
+  .dpv2-mono{font-family:var(--font-mono)}
+  .dpv2-strong{font-weight:700}
+  .dpv2-fs12{font-size:12px}
+  .dpv2-fg2{color:var(--fg-2)}
+  .dpv2-del{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:13px}
+  .dpv2-del:hover{color:var(--err)}
+  .dpv2-empty{color:var(--fg-3);font-size:12.5px;padding:16px 10px;text-align:center}
+
+  .dpv2-add{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-2)}
+  .dpv2-add-title{font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px}
+  .dpv2-add-grid{display:grid;grid-template-columns:100px 130px 1fr auto;gap:8px;align-items:center}
+  .dpv2-in{padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;font-family:inherit;width:100%}
+  .dpv2-in:focus{outline:none;border-color:var(--accent)}
+  .dpv2-hint{font-size:11px;color:var(--fg-3)}
+  .dpv2-form-error{font-size:11.5px;color:var(--err);margin-top:6px;min-height:14px}
+  .dpv2-btn-primary{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap;font-family:inherit}
+  .dpv2-btn-primary:hover{background:var(--blue-hover)}
+</style>
+
+<script>
+(function () {
+  function toast(msg, isErr) {
+    if (window.vbToast) { window.vbToast(msg, { type: isErr ? 'error' : 'success' }); }
+    else { alert(msg); }
+  }
+  function extractErrorMsg(data) {
+    if (data && Array.isArray(data.detail)) return data.detail.map(e => (typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
+    if (data && typeof data.detail === 'string') return data.detail;
+    return '操作失敗，請重試';
+  }
+  async function parseResponse(res) {
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* 非 JSON 回應忽略 */ }
+    return { ok: res.ok, data };
+  }
+  function reloadModal() {
+    if (window.htmx) { htmx.ajax('GET', '/dept/ui', { target: '#modal-container', swap: 'innerHTML' }); }
+  }
+
+  window.dpv2Add = async function () {
+    const errBox = document.getElementById('dpv2-form-error');
+    errBox.textContent = '';
+    const plantid = parseInt(document.getElementById('dpv2-f-plant').value, 10);
+    const deptno = document.getElementById('dpv2-f-deptno').value.trim();
+    const remark = document.getElementById('dpv2-f-remark').value.trim();
+    if (!plantid) { errBox.textContent = '請選擇廠區'; return; }
+    if (!deptno) { errBox.textContent = '請輸入部門代碼'; return; }
+    try {
+      const { ok, data } = await parseResponse(await fetch('/dept/add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantid, deptno, remark }),
+      }));
+      if (ok) { toast(data.message || '已新增部門'); reloadModal(); }
+      else { errBox.textContent = extractErrorMsg(data); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+
+  window.dpv2Delete = async function (row) {
+    const plantid = parseInt(row.dataset.plantid, 10);
+    const plantno = row.dataset.plantno, deptno = row.dataset.deptno;
+    if (!confirm('確定刪除 ' + plantno + ' / ' + deptno + ' 這筆部門資料？')) return;
+    try {
+      const { ok, data } = await parseResponse(await fetch('/dept/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantid, deptno }),
+      }));
+      if (ok) { toast(data.message || '已刪除'); reloadModal(); }
+      else { toast(extractErrorMsg(data), true); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+})();
+</script>
