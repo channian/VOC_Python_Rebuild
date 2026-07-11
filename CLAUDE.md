@@ -14,14 +14,19 @@ FastAPI + SQLAlchemy + Jinja2 + HTMX。DB 目前接 MSSQL（`VOC` database）。
 main.py              # A 棧入口（MSSQL，公司平行測試中，勿隨意改動）
 database.py          # A 棧 Engine（VOC_DB_URL from .env）
 models/ schemas/ services/ routers/   # A 棧（MSSQL 方言 SQL）
-templates/           # home.html + partials/*.html（兩棧共用）
-static/css/voc.css   # 設計系統
+templates/           # home.html + partials/*.html（兩棧共用；A 棧與 B 的 /home/classic 用）
+static/css/voc.css   # A 棧設計系統（亮色）
 tests/               # 純邏輯測試（不依賴 DB）
 ─── B 棧（Schema B / PostgreSQL，Phase A 起）───
 main_b.py database_b.py models_b.py   # B 棧入口/Engine(VOC_B_DB_URL)/全表定義
 services_b/ routers_b/                # B 棧資料層（SQLAlchemy 2.0 可攜，禁 raw text()）
                                       # 純邏輯一律 import services/ 重用，兩棧同源
-scripts/dev_pg.sh seed_test_data.py run_sync_worker.py demo_closed_loop.py
+templates/b/         # B 棧新版深色 UI（V2 設計稿落地，2026-07-11）：login/dashboard/
+                     #   history(曲線)/spec/report 五頁 + partials/（9 個原生深色 modal）
+                     #   設計稿源 design_handoff_voc_platform_V2/，分工見 docs/V2實作計畫.md
+static/css/voc_b.css # B 棧深色設計 token（照抄設計系統 colors_and_type.css）
+scripts/dev_pg.sh seed_test_data.py seed_demo_data.py run_sync_worker.py run_dispatch_worker.py
+migration/           # A→B 搬遷（保留給 Phase C 正式搬遷；功能測試改用 seed_demo_data）
 tests_integration/   # 真 PG 整合測試（無 PG 自動 skip）
 docs/                # PhaseA執行規格書 / schema_B_設計提案 v2 / PM執行路線圖
 ```
