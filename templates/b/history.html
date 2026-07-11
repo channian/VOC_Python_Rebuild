@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>歷史曲線 | VOC 監測平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/voc_b.css">
+{# 本頁特有樣式：一律用 voc_b.css 提供的 design token 變數，不寫死顏色值 #}
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg-1);color:var(--fg-1);font-family:var(--font-sans,'Inter',sans-serif);
+    font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh;
+    background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);
+    background-size:32px 32px;background-attachment:fixed;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{color:var(--accent-hover)}
+  input::placeholder{color:var(--fg-3)}
+  input[type="date"]{color-scheme:dark}
+  @keyframes vb-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+  .vb-page{min-height:100vh;display:flex;flex-direction:column}
+
+  .vb-header{
+    height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);
+    display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:10;
+  }
+  .vb-back{
+    display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--fg-2);
+    padding:7px 12px;border:1.5px solid var(--border-2);border-radius:6px;transition:all 180ms var(--ease);
+    background:transparent;cursor:pointer;
+  }
+  .vb-back:hover{color:var(--fg-1);border-color:var(--border-3)}
+  .vb-back svg{width:14px;height:14px}
+  .vb-title-block h1{margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)}
+  .vb-title-block .vb-sub{font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px}
+  .vb-spacer{flex:1}
+  .vb-summary{
+    display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);
+    padding:6px 12px;border:1px solid var(--border-1);border-radius:999px;background:var(--bg-1);white-space:nowrap;
+  }
+  .vb-summary .dot{
+    width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);
+    animation:vb-pulse 1.5s ease-in-out infinite;
+  }
+  .vb-export-btn{
+    display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:6px;font-size:12.5px;
+    font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;box-shadow:var(--glow-blue);
+    font-family:inherit;transition:all 180ms var(--ease);
+  }
+  .vb-export-btn:hover{background:var(--blue-hover);transform:translateY(-1px)}
+  .vb-export-btn svg{width:14px;height:14px}
+
+  .vb-content{padding:20px 28px 48px;max-width:1440px;width:100%;margin:0 auto}
+
+  .vb-query-card{
+    background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);
+    padding:16px 18px;display:flex;flex-direction:column;gap:14px;margin-bottom:20px;
+  }
+  .vb-query-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .vb-query-row.vb-align-top{align-items:flex-start;position:relative}
+  .vb-query-label{
+    width:88px;flex:none;font-size:10.5px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--fg-2);
+  }
+  .vb-query-row.vb-align-top .vb-query-label{padding-top:9px}
+
+  .vb-select-wrap{position:relative;min-width:220px}
+  .vb-select{
+    width:100%;appearance:none;padding:8px 34px 8px 14px;background:var(--bg-3);border:1.5px solid var(--border-3);
+    border-radius:6px;color:var(--fg-1);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;outline:none;
+  }
+  .vb-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .vb-select-chevron{
+    width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);
+    color:var(--fg-3);pointer-events:none;
+  }
+
+  .vb-metric-btn{
+    display:inline-flex;align-items:center;gap:8px;min-width:260px;padding:8px 14px;background:var(--bg-3);
+    border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px;font-weight:600;
+    font-family:inherit;cursor:pointer;
+  }
+  .vb-metric-btn:hover{border-color:var(--accent)}
+  .vb-metric-btn span.vb-metric-summary{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vb-metric-btn svg{width:14px;height:14px;color:var(--fg-3);flex:none}
+
+  .vb-metric-panel{
+    position:absolute;top:calc(100% + 6px);left:0;z-index:20;min-width:260px;max-height:320px;overflow-y:auto;
+    background:var(--bg-3);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-2);padding:6px;
+    display:none;
+  }
+  .vb-metric-panel.vb-open{display:block}
+  .vb-metric-row{
+    display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;
+  }
+  .vb-metric-row:hover{background:var(--bg-4)}
+  .vb-metric-checkbox{
+    width:16px;height:16px;border-radius:4px;flex:none;display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--border-3);background:transparent;
+  }
+  .vb-metric-checkbox.checked{border-color:var(--accent);background:var(--accent)}
+  .vb-metric-checkbox svg{width:11px;height:11px;color:#fff;display:none}
+  .vb-metric-checkbox.checked svg{display:block}
+  .vb-metric-name{color:var(--fg-1)}
+  .vb-metric-unit{font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-left:auto}
+  .vb-metric-actions{border-top:1px solid var(--border-1);margin-top:4px;padding-top:6px;display:flex;gap:8px}
+  .vb-metric-actions button{
+    flex:1;padding:6px;border-radius:6px;font-size:11.5px;font-family:inherit;cursor:pointer;
+  }
+  .vb-metric-clear{background:transparent;border:1px solid var(--border-2);color:var(--fg-2)}
+  .vb-metric-clear:hover{border-color:var(--border-3);color:var(--fg-1)}
+  .vb-metric-done{background:var(--blue);border:none;color:#fff;font-weight:600}
+  .vb-metric-done:hover{background:var(--blue-hover)}
+  .vb-query-hint{font-size:11.5px;color:var(--fg-3);padding-top:9px}
+
+  .vb-chip{
+    padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;
+    transition:all 120ms var(--ease);background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);
+  }
+  .vb-chip:hover{border-color:var(--border-3)}
+  .vb-chip.vb-active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+  .vb-custom-range{display:flex;align-items:center;gap:8px;margin-left:4px}
+  .vb-date-input{
+    padding:6px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);
+    font-size:12.5px;font-family:var(--font-mono);outline:none;
+  }
+  .vb-date-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .vb-date-sep{color:var(--fg-3);font-size:12px}
+
+  .vb-panels{display:flex;flex-direction:column;gap:16px}
+  .vb-panel{
+    background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);
+    padding:18px 20px 14px;
+  }
+  .vb-panel-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .vb-panel-name{font-size:15px;font-weight:700;color:var(--fg-1)}
+  .vb-panel-unit{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3)}
+  .vb-exceed-pill{
+    display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:11px;
+    font-weight:700;font-family:var(--font-mono);background:var(--err-bg);color:var(--err);
+  }
+  .vb-exceed-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--err);box-shadow:0 0 6px var(--err-glow)}
+  .vb-panel-stats{
+    font-family:var(--font-mono);font-size:12px;color:var(--fg-2);display:flex;gap:16px;margin-left:auto;
+  }
+  .vb-panel-stats b{color:var(--fg-1)}
+
+  .vb-chart-wrap{position:relative;height:240px;margin-top:16px;margin-left:56px;margin-right:68px}
+  .vb-chart-wrap svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+  .vb-grid-label{
+    position:absolute;right:calc(100% + 10px);transform:translateY(-50%);font-family:var(--font-mono);
+    font-size:10.5px;color:var(--fg-3);white-space:nowrap;
+  }
+  .vb-thres-label{
+    position:absolute;left:calc(100% + 8px);transform:translateY(-50%);font-family:var(--font-mono);
+    font-size:10.5px;font-weight:600;white-space:nowrap;
+  }
+  .vb-xlabels{
+    display:flex;justify-content:space-between;margin:8px 68px 0 56px;font-family:var(--font-mono);
+    font-size:10.5px;color:var(--fg-3);
+  }
+  .vb-panel-nodata{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:12.5px;
+  }
+
+  .vb-empty{
+    padding:56px;text-align:center;color:var(--fg-2);background:var(--bg-2);border:1px solid var(--border-1);
+    border-radius:12px;
+  }
+  .vb-empty svg{width:32px;height:32px;color:var(--fg-3);margin-bottom:10px}
+  .vb-empty .vb-empty-main{font-size:14px}
+  .vb-empty .vb-empty-sub{font-size:12px;color:var(--fg-3);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="vb-page">
+
+  <header class="vb-header">
+    <a href="/home" class="vb-back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+      儀表板
+    </a>
+    <div class="vb-title-block">
+      <h1>歷史曲線</h1>
+      <div class="vb-sub">VOC PLATFORM / HISTORY TRENDS</div>
+    </div>
+    <div class="vb-spacer"></div>
+    <div class="vb-summary" id="vb-summary">
+      <span class="dot"></span>
+      <span id="vb-summary-text">—</span>
+    </div>
+    <button class="vb-export-btn" id="vb-export-btn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+      匯出 CSV
+    </button>
+  </header>
+
+  <div class="vb-content">
+
+    <section class="vb-query-card">
+      <div class="vb-query-row">
+        <span class="vb-query-label">廠棟 PLANT</span>
+        <div class="vb-select-wrap">
+          <select class="vb-select" id="vb-plant-select"></select>
+          <svg class="vb-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+        </div>
+      </div>
+
+      <div class="vb-query-row vb-align-top">
+        <span class="vb-query-label">指標 METRIC</span>
+        <div style="position:relative">
+          <button class="vb-metric-btn" id="vb-metric-btn" type="button">
+            <span class="vb-metric-summary" id="vb-metric-summary">請選擇指標</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <div class="vb-metric-panel" id="vb-metric-panel">
+            <div id="vb-metric-list"></div>
+            <div class="vb-metric-actions">
+              <button class="vb-metric-clear" id="vb-metric-clear" type="button">清除</button>
+              <button class="vb-metric-done" id="vb-metric-done" type="button">完成</button>
+            </div>
+          </div>
+        </div>
+        <span class="vb-query-hint">可複選，每個指標各自一張趨勢圖</span>
+      </div>
+
+      <div class="vb-query-row">
+        <span class="vb-query-label">時間 RANGE</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center" id="vb-range-chips"></div>
+        <div class="vb-custom-range" id="vb-custom-range" style="display:none">
+          <input type="date" class="vb-date-input" id="vb-from-date">
+          <span class="vb-date-sep">至</span>
+          <input type="date" class="vb-date-input" id="vb-to-date">
+        </div>
+      </div>
+    </section>
+
+    <div class="vb-panels" id="vb-panels"></div>
+
+    <div class="vb-empty" id="vb-empty" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+      <div class="vb-empty-main">請至少選擇一個指標</div>
+      <div class="vb-empty-sub">點選上方指標項目即可繪製趨勢圖</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── 後端注入的初始資料（切換條件後改用 fetch 重新取得，見下方） ─────────────
+const INITIAL_PLANTS = {{ plants | tojson }};
+const INITIAL_PLANT = {{ plant | tojson }};
+const INITIAL_METRICS = {{ metrics | tojson }};
+
+// ── Tweaks（README「畫面 3：歷史曲線頁」預設值，先寫死成 JS 常數）───────────
+const TWEAKS = { defaultRange: '7D', showOoc: true, markExceed: true };
+const RANGE_CHIPS = [
+  { key: '24H', label: '24H' },
+  { key: '7D', label: '7D' },
+  { key: '30D', label: '30D' },
+  { key: '90D', label: '90D' },
+  { key: 'custom', label: '自訂區間' },
+];
+
+const state = {
+  plant: INITIAL_PLANT || '',
+  metrics: INITIAL_METRICS || [],   // [{item, display_name, unit}]
+  selected: (INITIAL_METRICS || []).slice(0, 3).map(m => m.item),
+  range: TWEAKS.defaultRange,
+  customFrom: '',
+  customTo: '',
+  metricOpen: false,
+};
+
+// ── DOM refs ─────────────────────────────────────────────────────────────
+const $plantSelect = document.getElementById('vb-plant-select');
+const $metricBtn = document.getElementById('vb-metric-btn');
+const $metricSummary = document.getElementById('vb-metric-summary');
+const $metricPanel = document.getElementById('vb-metric-panel');
+const $metricList = document.getElementById('vb-metric-list');
+const $metricClear = document.getElementById('vb-metric-clear');
+const $metricDone = document.getElementById('vb-metric-done');
+const $rangeChips = document.getElementById('vb-range-chips');
+const $customRange = document.getElementById('vb-custom-range');
+const $fromDate = document.getElementById('vb-from-date');
+const $toDate = document.getElementById('vb-to-date');
+const $panels = document.getElementById('vb-panels');
+const $empty = document.getElementById('vb-empty');
+const $summaryText = document.getElementById('vb-summary-text');
+const $exportBtn = document.getElementById('vb-export-btn');
+
+// ── 小工具 ───────────────────────────────────────────────────────────────
+// 數字格式：固定 2 位小數（缺值一律顯示 em dash）
+function fmt(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '—';
+  return Number(v).toFixed(2);
+}
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
+function fmtTick(iso, range) {
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  if (range === '24H') return hh + ':00';
+  if (range === 'custom') return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hh + ':' + mm;
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
+
+// ── 廠棟下拉 ─────────────────────────────────────────────────────────────
+function renderPlantSelect() {
+  $plantSelect.innerHTML = '';
+  INITIAL_PLANTS.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.plantno;
+    opt.textContent = p.plantno;
+    if (p.plantno === state.plant) opt.selected = true;
+    $plantSelect.appendChild(opt);
+  });
+}
+$plantSelect.addEventListener('change', async e => {
+  state.plant = e.target.value;
+  await refreshMetrics();
+  refreshAll();
+});
+
+// ── 指標多選下拉 ─────────────────────────────────────────────────────────
+async function refreshMetrics() {
+  if (!state.plant) { state.metrics = []; state.selected = []; renderMetricList(); return; }
+  try {
+    const res = await fetch('/trend/metrics?plant=' + encodeURIComponent(state.plant));
+    state.metrics = res.ok ? await res.json() : [];
+  } catch (e) {
+    state.metrics = [];
+  }
+  // 切換廠棟後，維持仍存在於新廠棟指標清單中的既有勾選；一個都不剩時預設前 3 個
+  const available = new Set(state.metrics.map(m => m.item));
+  let kept = state.selected.filter(k => available.has(k));
+  if (kept.length === 0) kept = state.metrics.slice(0, 3).map(m => m.item);
+  state.selected = kept;
+  renderMetricList();
+}
+
+function metricLabel(item) {
+  const m = state.metrics.find(x => x.item === item);
+  return m ? (m.display_name || m.item) : item;
+}
+
+function renderMetricSummary() {
+  const n = state.selected.length;
+  if (n === 0) $metricSummary.textContent = '請選擇指標';
+  else if (n <= 3) $metricSummary.textContent = state.selected.map(metricLabel).join('、');
+  else $metricSummary.textContent = state.selected.slice(0, 3).map(metricLabel).join('、') + ' 等 ' + n + ' 項';
+}
+
+function renderMetricList() {
+  $metricList.innerHTML = '';
+  state.metrics.forEach(m => {
+    const checked = state.selected.includes(m.item);
+    const row = document.createElement('div');
+    row.className = 'vb-metric-row';
+    row.innerHTML =
+      '<span class="vb-metric-checkbox' + (checked ? ' checked' : '') + '">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>' +
+      '</span>' +
+      '<span class="vb-metric-name">' + (m.display_name || m.item) + '</span>' +
+      '<span class="vb-metric-unit">' + (m.unit || '') + '</span>';
+    row.addEventListener('click', () => {
+      const idx = state.selected.indexOf(m.item);
+      if (idx >= 0) state.selected.splice(idx, 1);
+      else state.selected.push(m.item);
+      renderMetricList();
+      renderMetricSummary();
+      refreshAll();
+    });
+    $metricList.appendChild(row);
+  });
+  renderMetricSummary();
+}
+
+$metricBtn.addEventListener('click', () => {
+  state.metricOpen = !state.metricOpen;
+  $metricPanel.classList.toggle('vb-open', state.metricOpen);
+});
+$metricDone.addEventListener('click', () => {
+  state.metricOpen = false;
+  $metricPanel.classList.remove('vb-open');
+});
+$metricClear.addEventListener('click', () => {
+  state.selected = [];
+  renderMetricList();
+  renderMetricSummary();
+  refreshAll();
+});
+document.addEventListener('click', e => {
+  if (state.metricOpen && !e.target.closest('#vb-metric-panel') && !e.target.closest('#vb-metric-btn')) {
+    state.metricOpen = false;
+    $metricPanel.classList.remove('vb-open');
+  }
+});
+
+// ── 時間區間 chip ────────────────────────────────────────────────────────
+function renderRangeChips() {
+  $rangeChips.innerHTML = '';
+  RANGE_CHIPS.forEach(rc => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'vb-chip' + (state.range === rc.key ? ' vb-active' : '');
+    btn.textContent = rc.label;
+    btn.addEventListener('click', () => {
+      state.range = rc.key;
+      renderRangeChips();
+      $customRange.style.display = state.range === 'custom' ? 'flex' : 'none';
+      if (state.range !== 'custom' || (state.customFrom && state.customTo)) refreshAll();
+    });
+    $rangeChips.appendChild(btn);
+  });
+}
+$fromDate.addEventListener('change', e => { state.customFrom = e.target.value; if (state.customFrom && state.customTo) refreshAll(); });
+$toDate.addEventListener('change', e => { state.customTo = e.target.value; if (state.customFrom && state.customTo) refreshAll(); });
+
+// ── 趨勢圖 SVG（viewBox 0 0 1000 240，畫法照 .dc.html 高保真原型） ──────────
+function buildPanel(series, metricMeta) {
+  const points = series.points || [];
+  const valid = points.filter(p => p.v !== null && p.v !== undefined);
+  const oos = series.oos;
+  const ooc = series.ooc;
+
+  const card = document.createElement('section');
+  card.className = 'vb-panel';
+
+  const head = document.createElement('div');
+  head.className = 'vb-panel-head';
+  const stats = series.stats || {};
+  const latestExceed = oos !== null && stats.latest !== null && stats.latest >= oos;
+  const latestOoc = !latestExceed && ooc !== null && stats.latest !== null && stats.latest >= ooc;
+  const latestColor = latestExceed ? 'var(--err)' : latestOoc ? 'var(--warn)' : 'var(--accent)';
+
+  head.innerHTML =
+    '<span class="vb-panel-name">' + (metricMeta.display_name || series.item) + '</span>' +
+    '<span class="vb-panel-unit">' + state.plant + (series.unit ? ' ・ ' + series.unit : '') + '</span>' +
+    (stats.exceed_count > 0
+      ? '<span class="vb-exceed-pill"><span class="dot"></span>超標 ' + stats.exceed_count + ' 次</span>'
+      : '') +
+    '<span class="vb-panel-stats">' +
+      '<span>最新 <b style="color:' + latestColor + '">' + fmt(stats.latest) + '</b></span>' +
+      '<span>平均 <b>' + fmt(stats.avg) + '</b></span>' +
+      '<span>最大 <b>' + fmt(stats.max) + '</b></span>' +
+      '<span>最小 <b>' + fmt(stats.min) + '</b></span>' +
+    '</span>';
+  card.appendChild(head);
+
+  const chartWrap = document.createElement('div');
+  chartWrap.className = 'vb-chart-wrap';
+
+  if (valid.length === 0) {
+    const nodata = document.createElement('div');
+    nodata.className = 'vb-panel-nodata';
+    nodata.textContent = '此區間無資料';
+    chartWrap.appendChild(nodata);
+    card.appendChild(chartWrap);
+    const xlabs = document.createElement('div');
+    xlabs.className = 'vb-xlabels';
+    card.appendChild(xlabs);
+    return card;
+  }
+
+  const values = valid.map(p => p.v);
+  let dMin = Math.min(...values), dMax = Math.max(...values);
+  let lo = Math.min(dMin, ooc !== null && ooc !== undefined ? ooc : dMin);
+  let hi = Math.max(dMax, oos !== null && oos !== undefined ? oos : dMax);
+  const pad = (hi - lo) * 0.10 || 1;
+  lo -= pad; hi += pad;
+
+  const times = points.map(p => new Date(p.t).getTime());
+  const tMin = Math.min(...times), tMax = Math.max(...times);
+  const tSpan = (tMax - tMin) || 1;
+
+  const Y = v => 234 - ((v - lo) / (hi - lo)) * 228;
+  const X = i => times.length > 1 ? ((times[i] - tMin) / tSpan) * 1000 : 500;
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 1000 240');
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  // 5 條水平網格線 + 數值刻度
+  const gridLabelsHost = document.createElement('div');
+  [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+    const v = hi - f * (hi - lo);
+    const y = Y(v);
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', '0'); line.setAttribute('x2', '1000');
+    line.setAttribute('y1', y.toFixed(1)); line.setAttribute('y2', y.toFixed(1));
+    line.setAttribute('stroke', 'var(--border-1)'); line.setAttribute('stroke-width', '1');
+    svg.appendChild(line);
+
+    const label = document.createElement('span');
+    label.className = 'vb-grid-label';
+    label.style.top = ((y / 240) * 100).toFixed(2) + '%';
+    label.textContent = fmt(v);
+    gridLabelsHost.appendChild(label);
+  });
+
+  // OOS / OOC 門檻虛線
+  const thresLabelsHost = document.createElement('div');
+  function addThres(v, color, label) {
+    if (v === null || v === undefined) return;
+    const y = Y(v);
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', '0'); line.setAttribute('x2', '1000');
+    line.setAttribute('y1', y.toFixed(1)); line.setAttribute('y2', y.toFixed(1));
+    line.setAttribute('stroke', color); line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-dasharray', '7 6'); line.setAttribute('opacity', '0.75');
+    svg.appendChild(line);
+
+    const lbl = document.createElement('span');
+    lbl.className = 'vb-thres-label';
+    lbl.style.top = ((y / 240) * 100).toFixed(2) + '%';
+    lbl.style.color = color;
+    lbl.textContent = label + ' ' + fmt(v);
+    thresLabelsHost.appendChild(lbl);
+  }
+  addThres(oos, 'var(--err)', 'OOS');
+  if (TWEAKS.showOoc) addThres(ooc, 'var(--warn)', 'OOC');
+
+  // 面積 + 主線（value 為 null 的點跳過，形成一段連續線；已知簡化，見任務回報）
+  let linePath = '';
+  points.forEach((p, i) => {
+    if (p.v === null || p.v === undefined) return;
+    linePath += (linePath ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1) + ' ';
+  });
+  const areaPath = linePath + 'L 1000 240 L 0 240 Z';
+
+  const area = document.createElementNS(svgNS, 'path');
+  area.setAttribute('d', areaPath);
+  area.setAttribute('fill', 'rgba(34,211,238,0.07)');
+  area.setAttribute('stroke', 'none');
+  svg.appendChild(area);
+
+  const line = document.createElementNS(svgNS, 'path');
+  line.setAttribute('d', linePath.trim());
+  line.setAttribute('fill', 'none');
+  line.setAttribute('stroke', 'var(--accent)');
+  line.setAttribute('stroke-width', '2');
+  line.setAttribute('vector-effect', 'non-scaling-stroke');
+  line.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(line);
+
+  // 超標/超管制資料點標記
+  if (TWEAKS.markExceed) {
+    points.forEach((p, i) => {
+      if (p.v === null || p.v === undefined) return;
+      let color = null;
+      if (oos !== null && oos !== undefined && p.v >= oos) color = 'var(--err)';
+      else if (ooc !== null && ooc !== undefined && p.v >= ooc) color = 'var(--warn)';
+      if (!color) return;
+      const c = document.createElementNS(svgNS, 'circle');
+      c.setAttribute('cx', X(i).toFixed(1));
+      c.setAttribute('cy', Y(p.v).toFixed(1));
+      c.setAttribute('r', '3.5');
+      c.setAttribute('fill', color);
+      svg.appendChild(c);
+    });
+  }
+
+  chartWrap.appendChild(svg);
+  chartWrap.appendChild(gridLabelsHost);
+  chartWrap.appendChild(thresLabelsHost);
+  card.appendChild(chartWrap);
+
+  // 時間刻度（最多 7 個）
+  const xlabs = document.createElement('div');
+  xlabs.className = 'vb-xlabels';
+  const nLab = Math.min(7, points.length);
+  for (let k = 0; k < nLab; k++) {
+    const i = nLab === 1 ? 0 : Math.round(k * (points.length - 1) / (nLab - 1));
+    const span = document.createElement('span');
+    span.textContent = fmtTick(points[i].t, state.range);
+    xlabs.appendChild(span);
+  }
+  card.appendChild(xlabs);
+
+  return card;
+}
+
+// ── 主資料流：切換條件時重新 fetch /trend/series ────────────────────────
+async function refreshAll() {
+  renderRangeChips();
+  if (!state.plant || state.selected.length === 0) {
+    $panels.innerHTML = '';
+    $empty.style.display = 'block';
+    $summaryText.textContent = state.plant ? (state.plant + ' ・ 尚未選擇指標') : '尚未選擇廠棟';
+    return;
+  }
+  if (state.range === 'custom' && (!state.customFrom || !state.customTo)) {
+    $panels.innerHTML = '';
+    $empty.style.display = 'block';
+    $summaryText.textContent = state.plant + ' ・ 請選擇自訂區間日期';
+    return;
+  }
+
+  const params = new URLSearchParams({ plant: state.plant, items: state.selected.join(','), range: state.range });
+  if (state.range === 'custom') {
+    params.set('from', state.customFrom);
+    params.set('to', state.customTo);
+  }
+
+  let seriesList;
+  try {
+    const res = await fetch('/trend/series?' + params.toString());
+    if (!res.ok) throw new Error('查詢失敗');
+    seriesList = await res.json();
+  } catch (e) {
+    $panels.innerHTML = '<div class="vb-empty"><div class="vb-empty-main">查詢失敗，請稍後再試</div></div>';
+    $empty.style.display = 'none';
+    return;
+  }
+
+  $empty.style.display = 'none';
+  $panels.innerHTML = '';
+  let totalPoints = 0;
+  let minT = null, maxT = null;
+  seriesList.forEach(series => {
+    const meta = state.metrics.find(m => m.item === series.item) || { display_name: series.item };
+    $panels.appendChild(buildPanel(series, meta));
+    totalPoints += (series.points || []).length;
+    (series.points || []).forEach(p => {
+      const t = new Date(p.t).getTime();
+      if (minT === null || t < minT) minT = t;
+      if (maxT === null || t > maxT) maxT = t;
+    });
+  });
+
+  if (minT !== null && maxT !== null) {
+    $summaryText.textContent = state.plant + ' ・ ' + fmtDate(new Date(minT).toISOString()) + ' – ' + fmtDate(new Date(maxT).toISOString()) + ' ・ ' + totalPoints + ' 點';
+  } else {
+    $summaryText.textContent = state.plant + ' ・ 此區間無資料';
+  }
+}
+
+// ── 匯出 CSV：直接開 /trend/series.csv ──────────────────────────────────
+$exportBtn.addEventListener('click', () => {
+  if (!state.plant || state.selected.length === 0) return;
+  const params = new URLSearchParams({ plant: state.plant, items: state.selected.join(','), range: state.range });
+  if (state.range === 'custom') {
+    params.set('from', state.customFrom);
+    params.set('to', state.customTo);
+  }
+  window.open('/trend/series.csv?' + params.toString(), '_blank');
+});
+
+// ── 初始化 ───────────────────────────────────────────────────────────────
+renderPlantSelect();
+renderMetricList();
+renderRangeChips();
+refreshAll();
+</script>
+</body>
+</html>

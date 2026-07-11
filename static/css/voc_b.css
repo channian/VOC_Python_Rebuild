@@ -1,0 +1,327 @@
+/* =========================================================================
+   VOC Platform B 棧設計系統 — Kepware Monitor Design System (Dark Tech Theme)
+   來源：design_handoff_voc_platform/assets/colors_and_type.css（原樣收錄，勿改動 token）
+   本檔僅供 templates/b/*.html 使用，一律以 vb- 前綴命名以免與既有 static/css/voc.css（A 棧）衝突。
+   ========================================================================= */
+
+/* ---------- Color tokens（原樣收錄） ---------- */
+:root {
+  /* Surfaces — deep near-black → elevated slate */
+  --bg-0: #05070d;            /* app base (behind everything) */
+  --bg-1: #0a0f1a;            /* page surface */
+  --bg-2: #0f172a;            /* card */
+  --bg-3: #172033;            /* elevated card / input */
+  --bg-4: #1e293b;            /* hover surface */
+  --bg-grid: rgba(96, 165, 250, 0.05);  /* tech grid overlay */
+
+  /* Foreground */
+  --fg-1: #e6edf7;            /* primary text */
+  --fg-2: #94a3b8;            /* secondary / labels */
+  --fg-3: #64748b;            /* tertiary / placeholders */
+  --fg-4: #3f4b63;            /* disabled */
+
+  /* Borders */
+  --border-1: #1e293b;
+  --border-2: #293548;
+  --border-3: #3b4a66;        /* input border */
+
+  /* Primary — cyan-blue accent (SCADA feel) */
+  --accent: #22d3ee;          /* cyan-400 */
+  --accent-hover: #06b6d4;
+  --accent-soft: rgba(34, 211, 238, 0.12);
+  --accent-glow: rgba(34, 211, 238, 0.35);
+
+  /* Secondary — blue for primary actions */
+  --blue: #3b82f6;
+  --blue-hover: #2563eb;
+  --blue-soft: rgba(59, 130, 246, 0.12);
+  --blue-glow: rgba(59, 130, 246, 0.4);
+
+  /* Semantic — industrial status colors */
+  --ok:     #22c55e;
+  --ok-bg:  rgba(34, 197, 94, 0.1);
+  --ok-glow:rgba(34, 197, 94, 0.35);
+
+  --warn:   #f59e0b;
+  --warn-bg:rgba(245, 158, 11, 0.1);
+  --warn-glow:rgba(245, 158, 11, 0.35);
+
+  --err:    #ef4444;
+  --err-bg: rgba(239, 68, 68, 0.1);
+  --err-glow:rgba(239, 68, 68, 0.45);
+
+  --info:   #60a5fa;
+  --info-bg:rgba(96, 165, 250, 0.1);
+
+  --muted:  #475569;          /* offline / stale */
+  --muted-bg:rgba(71, 85, 105, 0.15);
+
+  /* Shadows & glow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-1:  0 2px 6px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2:  0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-3:  0 16px 40px rgba(0, 0, 0, 0.6);
+  --glow-accent: 0 0 0 1px rgba(34, 211, 238, 0.25), 0 0 20px rgba(34, 211, 238, 0.15);
+  --glow-blue:   0 0 0 1px rgba(59, 130, 246, 0.3),  0 0 16px rgba(59, 130, 246, 0.2);
+
+  /* Radii */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* Spacing scale (4px base) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 48px;
+  --sp-9: 64px;
+
+  /* Type — CJK-friendly stack, mono for values/IDs */
+  --font-sans:  "Inter", -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  --font-mono:  "JetBrains Mono", "Cascadia Code", "Fira Code", "SF Mono", Consolas, monospace;
+  --font-display: "Inter", -apple-system, "Microsoft JhengHei", sans-serif;
+
+  /* Type scale */
+  --fs-display: 32px;
+  --fs-h1: 24px;
+  --fs-h2: 20px;
+  --fs-h3: 16px;
+  --fs-body: 14px;
+  --fs-sm: 13px;
+  --fs-xs: 12px;
+  --fs-micro: 11px;  /* ALL CAPS labels */
+
+  /* Line heights */
+  --lh-tight: 1.2;
+  --lh-normal: 1.5;
+  --lh-loose: 1.7;
+
+  /* Letter-spacing */
+  --ls-caps: 0.08em;   /* uppercase labels */
+  --ls-tight: -0.01em;
+
+  /* Animation */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --t-fast: 120ms;
+  --t-med: 200ms;
+  --t-slow: 320ms;
+}
+
+/* ---------- Semantic typography classes（原樣收錄） ---------- */
+.t-display {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-1);
+}
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  color: var(--fg-1);
+}
+.t-h2 {
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  color: var(--fg-1);
+}
+.t-h3 {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  line-height: var(--lh-normal);
+  color: var(--fg-1);
+}
+.t-body {
+  font-size: var(--fs-body);
+  font-weight: 400;
+  line-height: var(--lh-normal);
+  color: var(--fg-1);
+}
+.t-secondary {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: var(--lh-normal);
+  color: var(--fg-2);
+}
+.t-label {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  color: var(--fg-2);
+}
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--fg-1);
+  font-variant-numeric: tabular-nums;
+}
+.t-metric {
+  font-family: var(--font-mono);
+  font-size: var(--fs-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-1);
+}
+
+/* ---------- Base reset for demos（原樣收錄） ---------- */
+.ds-root {
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================================================
+   以下為 B 棧三頁（登入 / 儀表板 / 歷史曲線）共用基礎樣式
+   來源：VOC 登入.dc.html 的 <helmet><style> 區塊
+   ========================================================================= */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+input::placeholder {
+  color: var(--fg-3);
+}
+
+/* 32px 網格底紋（登入頁背景疊加） */
+.vb-grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+@keyframes vb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =========================================================================
+   可重用元件 class（vb- 前綴，voc-b 縮寫）
+   ========================================================================= */
+
+/* 卡片（登入頁主卡片 / 儀表板卡片共用） */
+.vb-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+}
+
+/* 深色輸入框，含 focus 環 */
+.vb-input {
+  padding: 10px 14px;
+  background: var(--bg-3);
+  border: 1.5px solid var(--border-3);
+  border-radius: var(--r-sm);
+  color: var(--fg-1);
+  font-size: 13.5px;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+  transition: box-shadow 180ms var(--ease), border-color 180ms var(--ease);
+}
+.vb-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 藍色主按鈕，含 hover translateY */
+.vb-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px;
+  border-radius: var(--r-sm);
+  background: var(--blue);
+  border: none;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: var(--glow-blue);
+  transition: background var(--t-med) var(--ease), transform var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease);
+}
+.vb-btn-primary:hover {
+  background: var(--blue-hover);
+  transform: translateY(-1px);
+}
+.vb-btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: .75;
+  transform: none;
+}
+
+/* 微標籤（10.5px 大寫） */
+.vb-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--fg-2);
+}
+
+/* VOC 漸層 Logo 文字 */
+.vb-logo-gradient {
+  font-weight: 800;
+  letter-spacing: .01em;
+  background: linear-gradient(90deg, #eab308, #22c55e, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1;
+}
+
+/* 青色脈動點（logo 右下角 / 即時資料指示） */
+.vb-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  animation: pulse 1.5s ease-in-out infinite;
+}

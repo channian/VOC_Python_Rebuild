@@ -36,6 +36,7 @@ from schemas.warning_schema import WaterUrgentRequest
 
 from services_b.dashboard_service import get_dashboard_rows
 from services_b.control_service import is_item_isolated
+from services_b import dashboard_page_service
 from services_b import maillist_service, dept_service, acl_service, history_service, report_service, warning_service
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,21 @@ def _isolation_checker(db: Session):
 
 @router.get("/home", name="home_dashboard_b")
 def read_home_b(request: Request, db: Session = Depends(get_b_db)):
-    """B 棧首頁儀表板，資料來源 spec + reading_current（取代 VOC_SPEC + VOC_SCADA_WEB）。"""
+    """
+    B 棧首頁儀表板 —— 新版深色 SCADA 風格儀表板
+    （design_handoff_voc_platform/VOC Dashboard.dc.html 高保真還原，見 templates/b/dashboard.html）。
+    資料來源 spec + reading_current（取代 VOC_SPEC + VOC_SCADA_WEB），
+    純轉換（燈號分類/分組/摘要）交給 services_b.dashboard_page_service。
+    """
+    ctx = dashboard_page_service.get_dashboard_page_data(db, _isolation_checker(db))
+    return templates.TemplateResponse(
+        request=request, name="b/dashboard.html", context={"ctx": ctx}
+    )
+
+
+@router.get("/home/classic", name="home_dashboard_b_classic")
+def read_home_b_classic(request: Request, db: Session = Depends(get_b_db)):
+    """B 棧首頁儀表板（舊版樣式對照入口）：沿用 A 棧共用的 templates/home.html 版面，資料仍走 B 棧。"""
     dashboard_data = get_dashboard_rows(db, isolation_checker=_isolation_checker(db))
     return templates.TemplateResponse(
         request=request, name="home.html", context={"voc_list": dashboard_data}

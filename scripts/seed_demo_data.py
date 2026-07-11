@@ -19,6 +19,8 @@ scripts/seed_demo_data.py — 豐富版展示資料（直接寫 B，不經 A 轉
   python scripts/seed_demo_data.py
 """
 
+import hashlib
+import math
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -31,7 +33,7 @@ from migration.context import MigrationContext, Person, PersonnelBinding, load_p
 from migration.normalize.personnel import build_personnel  # noqa: E402
 from models_b import (  # noqa: E402
     AclUserRole, Curve, Dept, Isolation, IsolationItem, Item, KepwareSim,
-    MailTypeModel, Plant, ReadingCurrent, Spec, TagMapping,
+    MailTypeModel, Plant, ReadingCurrent, ReadingHistory, Spec, TagMapping,
 )
 from scripts.seed_test_data import _clear_test_scope, _seed_catalog, _upsert  # noqa: E402
 from services.flow_service import FlowStatus, Ttype  # noqa: E402
@@ -149,7 +151,10 @@ def _seed_k71(session) -> None:
                  scada_oos_low=D("20"), scada_oos_high=D("38")),  # 實際顯示由隔離覆蓋為保養中
         _reading("K71", "雨水溝1", D("0"), raw="0", rain=D("0.0")),
     ])
-    session.add(Curve(plant_no="K71", item="pH1", url="http://curve.example/K71/pH1"))
+    # 歷史曲線頁連結：指向新儀表板配套工作包在做的 /trend/ui（每廠一頁，故 K71 兩個
+    # 項目的曲線連結共用同一個 plant 參數格式），讓儀表板「曲線 ↗」可實際點得進去。
+    session.add(Curve(plant_no="K71", item="pH1", url="/trend/ui?plant=K71"))
+    session.add(Curve(plant_no="K71", item="COD", url="/trend/ui?plant=K71"))
     session.flush()
 
     # 溫度1 現行有效隔離（已核准）→ 儀表板保養中 + 派報抑制
@@ -186,6 +191,7 @@ def _seed_k72(session) -> None:
         _reading("K72", "VOC3", None, status="nd", raw="N.D"),
         _reading("K72", "VOC4", D("0.05"), status="below_lod", raw="<0.05"),
     ])
+    session.add(Curve(plant_no="K72", item="VOC1", url="/trend/ui?plant=K72"))
     session.flush()
 
 
@@ -206,7 +212,97 @@ def _seed_k14b(session) -> None:
         _reading("K14B", "COD3", D("90")),   # OOC80 <= 90 < OOS100 → 橙（中水通知有異常可列）
         _reading("K14B", "SS2", D("20")),
     ])
+    session.add(Curve(plant_no="K14B", item="COD3", url="/trend/ui?plant=K14B"))
     session.flush()
+
+
+def _pseudo_jitter(item: str, hour_idx: int) -> float:
+    """確定性偽隨機（禁用 random 模組）：md5((item, hour_idx)) 雜湊映射到 [-1, 1)。
+
+    同一個 (item, hour_idx) 組合永遠回傳同一個值——只靠 datetime.now() 決定「現在是幾點」
+    這個時間錨點，數值本身不吃任何非確定來源，所以同一天重跑 seed 兩次，每筆讀值都一樣
+    （配合 _clear_test_scope 先清後灌，天然冪等，不會累加/翻倍）。
+    """
+    digest = hashlib.md5(f"{item}:{hour_idx}".encode("utf-8")).hexdigest()
+    n = int(digest[:8], 16)
+    return (n % 2000 - 1000) / 1000.0
+
+
+# K71 COD 最後 6 小時的爬升覆寫序列（越過 OOS=100，終點 120 銜接 _seed_k71 現況
+# reading_current COD=120 紅燈，讓「曲線頁」與「儀表板目前讀值」的敘事一致）。
+_COD_RAMP = [D("70"), D("82"), D("94"), D("106"), D("113"), D("120")]
+
+# (plant_no, item, 基準值, 正弦波振幅)：基準值取自 _seed_k71/_seed_k72/_seed_k14b 已種入的
+# reading_current 讀值，讓歷史曲線的最新一點與儀表板目前顯示的讀值銜接得起來。
+_HISTORY_SERIES = [
+    ("K71", "pH1", D("7.20"), D("0.35")),
+    ("K71", "COD", D("55.00"), D("4.00")),   # 前 162 小時正常波動，最後 6 小時被 _COD_RAMP 覆寫
+    ("K71", "SS",  D("35.00"), D("3.00")),
+    ("K71", "Cu",  D("1.00"),  D("0.08")),
+    ("K71", "Ni",  D("2.30"),  D("0.10")),
+    ("K72", "VOC1", D("10.00"), D("1.00")),
+    ("K72", "VOC2", D("45.00"), D("2.00")),
+    ("K14B", "COD3", D("90.00"), D("4.00")),
+]
+
+# 各項目對應的 SPEC 三階管制值快照（沿用 _seed_k71/_seed_k72/_seed_k14b 已種入的規格數字，
+# 只有 pH1 是雙邊項目才需要 *_low）。
+_HISTORY_SPEC_SNAPSHOT = {
+    ("K71", "pH1"):   dict(oos=D("9"), ooc=D("8.5"), alert=D("8.2"),
+                            oos_low=D("6"), ooc_low=D("6.5"), alert_low=D("6.8")),
+    ("K71", "COD"):   dict(oos=D("100"), ooc=D("80"), alert=D("60")),
+    ("K71", "SS"):    dict(oos=D("50"), ooc=D("40"), alert=D("30")),
+    ("K71", "Cu"):    dict(oos=D("3.0"), ooc=D("2.5"), alert=D("2.0")),
+    ("K71", "Ni"):    dict(oos=D("3.0"), ooc=D("2.5"), alert=None),
+    ("K72", "VOC1"):  dict(oos=D("50"), ooc=D("40"), alert=D("30")),
+    ("K72", "VOC2"):  dict(oos=D("50"), ooc=D("40"), alert=D("30")),
+    ("K14B", "COD3"): dict(oos=D("100"), ooc=D("80"), alert=D("60")),
+}
+
+_HISTORY_HOURS = 24 * 7  # 過去 7 天、每小時一筆
+
+
+def _seed_reading_history(session) -> int:
+    """K71 pH1/COD/SS/Cu/Ni、K72 VOC1/VOC2、K14B COD3：過去 7 天、每小時一筆 reading_history。
+
+    新儀表板的歷史曲線頁（另一工作包在做）資料源是 reading_history；原本 demo 種子只有
+    reading_current 沒有時序，曲線會是空的，這裡補上。
+
+    數值造型：以「目前 reading_current 基準值」為中心的正弦波（模擬日夜週期）+ 依
+    (item, 小時索引) 的確定性偽隨機小雜訊（見 _pseudo_jitter；禁用 random 模組，時間基準
+    只有 datetime.now() 可用）。K71 COD 最後 6 小時另外覆寫為 _COD_RAMP 爬升序列，越過
+    OOS=100；其他項目全程只在基準值附近小幅波動。每筆同時快照當下生效的 SPEC 三階管制值。
+    """
+    now = datetime.now(timezone.utc)
+    base_hour = now.replace(minute=0, second=0, microsecond=0)
+
+    rows = []
+    for plant_no, item, baseline, wave_amp in _HISTORY_SERIES:
+        snap = _HISTORY_SPEC_SNAPSHOT[(plant_no, item)]
+        is_cod_ramp = (plant_no, item) == ("K71", "COD")
+
+        for hour_idx in range(_HISTORY_HOURS):
+            hours_ago = _HISTORY_HOURS - 1 - hour_idx  # 167（7 天前）→ 0（現在這一小時）
+            measured_at = base_hour - timedelta(hours=hours_ago)
+
+            if is_cod_ramp and hours_ago < len(_COD_RAMP):
+                value = _COD_RAMP[len(_COD_RAMP) - 1 - hours_ago]
+            else:
+                wave = math.sin(2 * math.pi * hour_idx / 24.0)
+                jitter = _pseudo_jitter(item, hour_idx)
+                value = baseline + wave_amp * D(str(round(wave, 4))) + (wave_amp * D("0.4")) * D(str(round(jitter, 4)))
+                value = value.quantize(D("0.01"))
+
+            rows.append(ReadingHistory(
+                plant_no=plant_no, item=item, value=value, status="normal",
+                raw_text=str(value), measured_at=measured_at,
+                spec_oos_high=snap.get("oos"), spec_ooc_high=snap.get("ooc"), spec_alert_high=snap.get("alert"),
+                spec_oos_low=snap.get("oos_low"), spec_ooc_low=snap.get("ooc_low"), spec_alert_low=snap.get("alert_low"),
+            ))
+
+    session.add_all(rows)
+    session.flush()
+    return len(rows)
 
 
 def _seed_shared(session, binding: PersonnelBinding) -> None:
@@ -259,12 +355,15 @@ def seed_demo() -> None:
         _seed_k71(session)
         _seed_k72(session)
         _seed_k14b(session)
+        history_count = _seed_reading_history(session)
         session.commit()
         print("[seed_demo_data] 完成。內容速覽：")
         print("  K71（水）：COD=紅 / SS,Ni=黃 / Cu=橙(SCADA≠SPEC) / pH=綠 / 氨氮=QA /")
         print("            導電度=斷訊 / 硝酸鹽=建置中 / 溫度1=隔離保養中 / 雨水溝1=預警頁")
         print("  K72（空）：VOC2=橙 / VOC3=N.D / VOC4=<0.05 / VOC1=綠")
         print("  K14B（中水）：COD3=橙（中水緊急通知頁可列出）")
+        print(f"  reading_history：{history_count} 筆（8 個項目 × 過去 7 天每小時一筆，"
+              f"K71 COD 最後 6 小時爬升越過 OOS=100，曲線頁 /trend/ui?plant=... 有資料可畫）")
         print(f"  申請人：{[p.empno for p in binding.applicants]}／簽核人：{[p.empno for p in binding.signers]}")
         print("  → .env 的 MOCK_USER_EMPNO 請設成上面其中一個工號來切身分")
     except Exception:

@@ -47,7 +47,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from routers_b import control_router_b, spec_router_b, ui_router_b
+from routers_b import auth_router_b, control_router_b, spec_router_b, trend_router_b, ui_router_b
 
 app = FastAPI(
     title="VOC 廠務法規許可標準化管理平台（Schema B / PostgreSQL 版）",
@@ -64,6 +64,12 @@ app.include_router(ui_router_b.router)
 #   spec_router_b   ：/ui/spec、/spec/*、/ui/qa、/qa/update、/ui/reason、/warning/water_urgent/ui
 app.include_router(control_router_b.router)
 app.include_router(spec_router_b.router)
+# 新版 UI（2026-07-11，依 design_handoff_voc_platform 高保真設計移植）——
+#   auth_router_b ：/login（Phase A 門面登入，Phase 3 換 LDAP）
+#   trend_router_b：/trend/*（歷史曲線頁，資料源 reading_history，補上舊系統缺原始碼的功能）
+#   新儀表板在 ui_router_b 的 /home（舊版保留於 /home/classic 供對照）
+app.include_router(auth_router_b.router)
+app.include_router(trend_router_b.router)
 
 
 @app.get("/", include_in_schema=False)

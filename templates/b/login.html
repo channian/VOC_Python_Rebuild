@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOC 監測平台 － 登入</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/voc_b.css">
+</head>
+<body>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
+  background:
+    radial-gradient(600px 400px at 85% -10%, rgba(34,211,238,0.08), transparent 60%),
+    radial-gradient(500px 360px at 10% 110%, rgba(59,130,246,0.06), transparent 60%),
+    var(--bg-0);">
+
+  <div class="vb-grid-overlay"></div>
+
+  <div class="vb-card" style="position:relative;width:400px;max-width:92vw;padding:36px 34px 30px;display:flex;flex-direction:column;gap:22px">
+
+    <!-- logo -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+      <div style="position:relative">
+        <span class="vb-logo-gradient" style="font-size:40px">VOC</span>
+        <span class="vb-pulse-dot" style="position:absolute;right:-4px;bottom:-2px"></span>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:15px;color:var(--fg-1)">VOC 監測平台</div>
+        <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">WASTE / VOC MONITOR</div>
+      </div>
+    </div>
+
+    <div style="height:1px;background:var(--border-1)"></div>
+
+    <!-- form -->
+    <form id="vb-login-form" method="post" action="/login" style="display:flex;flex-direction:column;gap:14px">
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="vb-label" for="vb-username">帳號 ACCOUNT</label>
+        <input class="vb-input" type="text" id="vb-username" name="username" placeholder="AD帳號" autocomplete="username">
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="vb-label" for="vb-password">密碼 PASSWORD</label>
+        <div style="position:relative">
+          <input class="vb-input" type="password" id="vb-password" name="password" placeholder="••••••••" autocomplete="current-password" style="padding-right:42px">
+          <button type="button" id="vb-toggle-pw" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--fg-3);cursor:pointer;padding:4px;display:flex">
+            <svg id="vb-eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            <svg id="vb-eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:none"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-2.16 3.19m-3.4 1.98A9.12 9.12 0 0 1 12 17c-6.5 0-10-7-10-7a13.4 13.4 0 0 1 4.06-4.94"></path><path d="M1 1l22 22"></path><path d="M9.53 9.53A3 3 0 0 0 12 15a3 3 0 0 0 2.47-4.47"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-2);cursor:pointer;user-select:none">
+        <span id="vb-remember-box" style="width:16px;height:16px;border-radius:4px;flex:none;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent)">
+          <svg id="vb-remember-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;color:#fff"><path d="M20 6 9 17l-5-5"></path></svg>
+        </span>
+        記住此裝置
+        <input type="checkbox" name="remember" id="vb-remember-input" checked style="display:none">
+      </label>
+
+      <div id="vb-error" style="display:none;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);color:var(--err);font-size:12.5px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;flex:none"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+        帳號或密碼錯誤，請重新輸入
+      </div>
+
+      <button type="submit" id="vb-submit-btn" class="vb-btn-primary" style="margin-top:4px">
+        <span id="vb-spinner" style="display:none;width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;animation:vb-spin 0.7s linear infinite"></span>
+        <span id="vb-submit-text">登入</span>
+      </button>
+    </form>
+
+    <div style="text-align:center;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);letter-spacing:.04em">VOC PLATFORM ・ PHASE A</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('vb-login-form');
+  var errorBar = document.getElementById('vb-error');
+  var submitBtn = document.getElementById('vb-submit-btn');
+  var submitText = document.getElementById('vb-submit-text');
+  var spinner = document.getElementById('vb-spinner');
+  var pwInput = document.getElementById('vb-password');
+  var toggleBtn = document.getElementById('vb-toggle-pw');
+  var eyeOpen = document.getElementById('vb-eye-open');
+  var eyeClosed = document.getElementById('vb-eye-closed');
+  var rememberBox = document.getElementById('vb-remember-box');
+  var rememberCheck = document.getElementById('vb-remember-check');
+  var rememberInput = document.getElementById('vb-remember-input');
+
+  var pwHidden = true;
+  toggleBtn.addEventListener('click', function () {
+    pwHidden = !pwHidden;
+    pwInput.type = pwHidden ? 'password' : 'text';
+    eyeOpen.style.display = pwHidden ? 'flex' : 'none';
+    eyeClosed.style.display = pwHidden ? 'none' : 'flex';
+  });
+
+  rememberBox.addEventListener('click', function () {
+    var checked = !rememberInput.checked;
+    rememberInput.checked = checked;
+    rememberBox.style.background = checked ? 'var(--accent)' : 'transparent';
+    rememberBox.style.borderColor = checked ? 'var(--accent)' : 'var(--border-3)';
+    rememberCheck.style.display = checked ? 'block' : 'none';
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var user = form.username.value.trim();
+    var pass = form.password.value;
+    if (!user || !pass) {
+      errorBar.style.display = 'flex';
+      return;
+    }
+    errorBar.style.display = 'none';
+    submitBtn.disabled = true;
+    spinner.style.display = 'inline-block';
+    submitText.textContent = '登入中…';
+    setTimeout(function () {
+      form.submit();
+    }, 700);
+  });
+})();
+</script>
+
+</body>
+</html>

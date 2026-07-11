@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOC 監測平台 － 首頁儀表板</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+{# 設計系統 token + 共用元件（D1 工作包，含 .vb-* 基礎 class）#}
+<link rel="stylesheet" href="/static/css/voc_b.css">
+{# modal 暗色蓋版，讓既有 partials/*.html（A 棧亮色系）套進 <dialog> 後不違和（D4 工作包）#}
+<link rel="stylesheet" href="/static/css/voc_b_modal_dark.css">
+
+{# HTMX：CLAUDE.md 教訓——hx-vals 對 JSON body 端點無效，本頁工具選單一律走既有 modal
+   partials（maillist_modal.html 等已用 fetch()+Content-Type:application/json），
+   這裡載入 json-enc 只是與 home.html 對齊、避免未來有人在本頁加 hx-vals 誤用 #}
+<script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+<script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/json-enc.js" defer></script>
+
+<style>
+body{
+  background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);
+  background-size:32px 32px;background-attachment:fixed;
+}
+
+/* ── 版面骨架 ─────────────────────────────────────────────── */
+.vb-shell{display:flex;min-height:100vh;align-items:stretch}
+.vb-aside{width:236px;flex:none;background:var(--bg-2);border-right:1px solid var(--border-1);position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column}
+.vb-aside-head{display:flex;align-items:center;gap:10px;padding:14px;border-bottom:1px solid var(--border-1)}
+.vb-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.vb-header{height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:10}
+.vb-content{padding:20px 28px 48px;max-width:1440px;width:100%}
+
+/* ── 側欄：廠區清單 ───────────────────────────────────────── */
+.vb-rail-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--fg-3);padding:14px 16px 6px}
+.vb-rail-list{padding:0 8px;display:flex;flex-direction:column;gap:2px}
+.vb-rail-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;color:var(--fg-2);transition:background 120ms var(--ease);text-decoration:none;border:none;background:transparent;width:100%;text-align:left;font-family:inherit}
+.vb-rail-item:hover{background:var(--bg-3)}
+.vb-rail-item.is-critical{background:var(--err-bg)}
+.vb-rail-bar{width:3px;height:18px;border-radius:2px;flex:none}
+.vb-rail-no{font-weight:600;font-family:var(--font-mono);font-size:13px}
+.vb-rail-fill{flex:1}
+.vb-rail-normal{font-size:10.5px;padding:1px 7px;border-radius:999px;color:var(--fg-3)}
+
+/* ── 側欄：工具 TOOLS 分區 ────────────────────────────────── */
+.vb-tool-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;color:var(--fg-2);transition:background 120ms var(--ease);border:none;background:transparent;width:100%;text-align:left;font-family:var(--font-mono);font-size:11.5px}
+.vb-tool-item:hover{background:var(--bg-3);color:var(--fg-1)}
+.vb-tool-icon{width:14px;height:14px;flex:none;color:var(--fg-3)}
+
+/* ── 側欄：LEGEND ─────────────────────────────────────────── */
+.vb-legend-list{display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--fg-2)}
+.vb-legend-row{display:flex;align-items:center;gap:8px}
+
+/* ── 燈號圖示（勿更改圖形或配色）───────────────────────────── */
+.vb-ic-R{width:9px;height:9px;border-radius:50%;background:var(--err);box-shadow:0 0 8px var(--err-glow);animation:pulse 1.4s ease-in-out infinite;flex:none;display:inline-block}
+.vb-ic-O{width:10px;height:9px;clip-path:polygon(50% 0,100% 100%,0 100%);background:var(--warn);flex:none;display:inline-block}
+.vb-ic-O2{width:7px;height:7px;border:2px dashed var(--warn);transform:rotate(45deg);flex:none;display:inline-block}
+.vb-ic-Y{width:8px;height:8px;background:#eab308;transform:rotate(45deg);flex:none;display:inline-block}
+.vb-ic-G{width:7px;height:7px;border-radius:50%;border:2px solid var(--ok);background:transparent;flex:none;display:inline-block}
+.vb-ic-X{width:9px;height:9px;border:1px solid var(--muted);background:repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px);flex:none;display:inline-block}
+.vb-ic-legend-R{width:10px;height:10px;border-radius:50%;background:var(--err);box-shadow:0 0 6px var(--err-glow);flex:none;display:inline-block}
+.vb-ic-legend-O{width:10px;height:9px;clip-path:polygon(50% 0,100% 100%,0 100%);background:var(--warn);flex:none;display:inline-block}
+.vb-ic-legend-O2{width:8px;height:8px;border:2px dashed var(--warn);transform:rotate(45deg);flex:none;display:inline-block}
+.vb-ic-legend-Y{width:9px;height:9px;background:#eab308;transform:rotate(45deg);flex:none;display:inline-block}
+.vb-ic-legend-G{width:8px;height:8px;border-radius:50%;border:2px solid var(--ok);flex:none;display:inline-block}
+.vb-ic-legend-X{width:9px;height:9px;border:1px solid var(--muted);background:repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px);flex:none;display:inline-block}
+
+/* ── pill（狀態膠囊）─────────────────────────────────────────── */
+.vb-pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;font-family:var(--font-mono);white-space:nowrap;border:1px solid transparent}
+.vb-pill-R{background:var(--err-bg);color:var(--err)}
+.vb-pill-O{background:var(--warn-bg);color:var(--warn)}
+.vb-pill-O2{background:var(--warn-bg);color:var(--warn);border:1px dashed var(--warn)}
+.vb-pill-Y{background:rgba(234,179,8,.12);color:#eab308}
+.vb-pill-B,.vb-pill-M{background:var(--muted-bg);color:var(--fg-2)}
+.vb-pill-G{color:var(--fg-3)}
+
+/* ── 資料更新徽章 / 工具按鈕列 ────────────────────────────────── */
+.vb-update-badge{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);padding:6px 12px;border:1px solid var(--border-1);border-radius:999px;background:var(--bg-1)}
+.vb-toolbtn{display:inline-flex;align-items:center;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;transition:all 180ms var(--ease);white-space:nowrap}
+.vb-toolbtn:hover{color:var(--fg-1);border-color:var(--border-3);transform:translateY(-1px)}
+
+/* ── 摘要卡 ───────────────────────────────────────────────── */
+.vb-stats{display:flex;gap:16px;margin-bottom:16px;align-items:stretch}
+.vb-stat-card{width:128px;flex:none;background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-1);cursor:pointer;transition:border-color 160ms var(--ease);font-family:inherit;text-align:left}
+.vb-stat-card.has-glow{border-color:rgba(239,68,68,0.45);box-shadow:var(--shadow-1),0 0 16px rgba(239,68,68,0.12)}
+.vb-stat-card.is-active{border-color:var(--accent)}
+.vb-stat-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);display:flex;align-items:center;gap:7px}
+.vb-stat-num{font-family:var(--font-mono);font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:6px}
+.vb-anomaly-card{flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;padding:14px 18px;box-shadow:var(--shadow-1)}
+.vb-anomaly-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:9px}
+.vb-anomaly-chips{display:flex;gap:8px;flex-wrap:wrap}
+.vb-chip-anomaly{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;font-size:12.5px;cursor:pointer;font-family:inherit;border:1px solid transparent;transition:filter 120ms var(--ease)}
+.vb-chip-anomaly:hover{filter:brightness(1.25)}
+
+/* ── 篩選列 ───────────────────────────────────────────────── */
+.vb-filter-row{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.vb-chip{padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 120ms var(--ease);background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2)}
+.vb-chip:hover{border-color:var(--border-3)}
+.vb-chip.is-active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.vb-divider-v{width:1px;height:20px;background:var(--border-2)}
+.vb-search-wrap{position:relative;width:240px;margin-left:auto}
+.vb-search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--fg-3)}
+.vb-search-input{width:100%;padding:8px 12px 8px 36px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px;font-family:inherit;outline:none}
+.vb-search-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+/* ── 廠區手風琴 ───────────────────────────────────────────── */
+.vb-plant-list{display:flex;flex-direction:column;gap:10px}
+.vb-plant{background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);overflow:hidden}
+.vb-plant.sev-0{border-color:rgba(239,68,68,.5);box-shadow:var(--shadow-1),0 0 20px rgba(239,68,68,.10)}
+.vb-plant.sev-1,.vb-plant.sev-2{border-color:rgba(245,158,11,.4)}
+.vb-plant-head{display:flex;align-items:center;gap:12px;padding:12px 18px;cursor:pointer;transition:background 120ms var(--ease)}
+.vb-plant-head:hover{background:var(--bg-3)}
+.vb-plant.sev-0 .vb-plant-head{background:rgba(239,68,68,.06)}
+.vb-chevron{width:16px;height:16px;color:var(--fg-3);transition:transform 160ms var(--ease);flex:none}
+.vb-plant.is-open .vb-plant-head > .vb-chevron{transform:rotate(90deg)}
+.vb-row-chevron{width:14px;height:14px;color:var(--fg-3);transition:transform 160ms var(--ease);flex:none}
+.vb-item-row.is-open .vb-row-chevron{transform:rotate(180deg)}
+.vb-plant-no{font-family:var(--font-mono);font-weight:700;font-size:15px;color:var(--fg-1)}
+.vb-plant-desc{font-size:12px;color:var(--fg-3)}
+.vb-plant-count{font-size:12px;color:var(--fg-3);font-family:var(--font-mono);margin-left:auto}
+.vb-plant-body{border-top:1px solid var(--border-1);display:none}
+.vb-plant.is-open .vb-plant-body{display:block}
+.vb-plant-hidden-note{padding:8px 18px;font-size:12px;color:var(--fg-3);background:var(--bg-2)}
+
+.vb-row-grid{display:grid;grid-template-columns:96px 1fr 120px 76px 72px 1fr 84px 28px;gap:10px;align-items:center}
+.vb-item-header-row{padding:7px 18px;background:var(--bg-1);border-bottom:1px solid var(--border-1);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)}
+.vb-item-row{padding:9px 18px;border-bottom:1px solid var(--border-1);cursor:pointer;transition:background 120ms var(--ease);background:transparent}
+.vb-item-row:hover{background:var(--bg-3)}
+.vb-item-row.key-R{background:var(--err-bg)}
+.vb-item-row.key-B,.vb-item-row.key-M{background:repeating-linear-gradient(45deg, rgba(71,85,105,0.10) 0 6px, transparent 6px 12px)}
+.vb-item-name{font-weight:600;font-size:13.5px;color:var(--fg-1)}
+.vb-item-val{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:14px;color:var(--fg-1)}
+.vb-item-val.key-R,.vb-item-val.key-O,.vb-item-val.key-O2{font-weight:700}
+.vb-item-val.key-R{color:var(--err)}
+.vb-item-val.key-O,.vb-item-val.key-O2{color:var(--warn)}
+.vb-item-val.key-Y{color:#eab308}
+.vb-item-val.key-B,.vb-item-val.key-M{color:var(--fg-3)}
+.vb-item-unit{font-family:var(--font-mono);font-size:12px;color:var(--fg-3)}
+.vb-src-pill{font-family:var(--font-mono);font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;justify-self:start;letter-spacing:.04em}
+.vb-src-1{background:var(--info-bg);color:var(--info)}
+.vb-src-2{background:var(--accent-soft);color:var(--accent)}
+.vb-src-3{background:var(--muted-bg);color:var(--fg-2)}
+.vb-item-remark{font-size:12px;color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vb-curve-link{font-size:12px;font-family:var(--font-mono);color:var(--accent)}
+
+.vb-subpanel{padding:14px 18px 16px 124px;background:var(--bg-1);border-bottom:1px solid var(--border-1);display:none}
+.vb-item-row.is-open + .vb-subpanel{display:block}
+.vb-subpanel-cols{display:flex;gap:32px;flex-wrap:wrap}
+.vb-subpanel-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:7px}
+.vb-subpanel-vals{display:flex;gap:14px;font-family:var(--font-mono);font-size:12.5px;flex-wrap:wrap}
+.vb-sync-vals{display:flex;gap:10px;align-items:center;font-family:var(--font-mono);font-size:12.5px;flex-wrap:wrap}
+.vb-sync-badge{padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.vb-sync-ok{background:var(--ok-bg);color:var(--ok)}
+.vb-sync-mismatch{background:var(--warn-bg);color:var(--warn);border:1px dashed var(--warn)}
+
+.vb-empty-state{padding:48px;text-align:center;color:var(--fg-2);background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px}
+.vb-empty-state .sub{font-size:12px;color:var(--fg-3);margin-top:6px}
+[data-vb-hidden="true"]{display:none !important}
+
+/* dialog#voc-modal 本體的深色（背景/邊框/圓角/陰影）由 static/css/voc_b_modal_dark.css
+   統一蓋版（見該檔頭註解），這裡只補尺寸/版面相關屬性（該檔不管這塊，兩邊不衝突）。 */
+#voc-modal{border:none;padding:0;max-width:min(90vw,960px);width:100%;max-height:90vh;overflow:auto}
+</style>
+</head>
+<body>
+
+<div class="vb-shell">
+
+  {# ═══ 左側廠區導覽 rail ═══ #}
+  <aside class="vb-aside">
+    <div class="vb-aside-head">
+      <div style="position:relative;flex:none">
+        <span class="vb-logo-gradient" style="font-size:22px">VOC</span>
+        <span class="vb-pulse-dot" style="position:absolute;right:-2px;bottom:-3px"></span>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:var(--fg-1)">VOC 監測平台</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase">WASTE / VOC MONITOR</div>
+      </div>
+    </div>
+
+    <div class="vb-rail-label">廠區 PLANTS — 異常置頂</div>
+    <div class="vb-rail-list">
+      {% for p in ctx.plants %}
+      <button type="button" class="vb-rail-item{% if p.severity <= 1 %} is-critical{% endif %}" data-rail-plant="{{ p.plantno }}" onclick="vbGoToPlant('{{ p.plantno }}')">
+        {% set sev_color = 'var(--err)' if p.severity == 0 else ('var(--warn)' if p.severity in (1,2) else ('#eab308' if p.severity == 3 else ('var(--muted)' if p.severity in (4,5) else 'var(--border-2)'))) %}
+        <span class="vb-rail-bar" style="background:{{ sev_color }}{% if p.severity == 0 %};box-shadow:0 0 8px var(--err-glow){% endif %}"></span>
+        <span class="vb-rail-no">{{ p.plantno }}</span>
+        <span class="vb-rail-fill"></span>
+        {% if p.pills %}
+          {% for pill in p.pills %}
+          <span class="vb-pill vb-pill-{{ pill.key }}">{{ pill.txt }}</span>
+          {% endfor %}
+        {% else %}
+          <span class="vb-rail-normal">正常</span>
+        {% endif %}
+      </button>
+      {% endfor %}
+    </div>
+
+    <div style="flex:1"></div>
+
+    {# ═══ 工具 TOOLS 分區（設計稿沒有的其他分頁功能）═══ #}
+    <div style="padding:14px 16px 6px;border-top:1px solid var(--border-1)">
+      <div class="vb-rail-label" style="padding:0 0 8px">工具 TOOLS</div>
+      <div class="vb-rail-list" style="padding:0">
+        {% for tool in [
+          ('派送名單', '/ui/maillist'), ('規格維護', '/ui/spec'), ('隔離申請', '/ui/control'),
+          ('簽核管理', '/ui/flow'), ('QA 手測', '/ui/qa'), ('異常查詢', '/ui/history'),
+          ('異常回覆', '/ui/reason'), ('異常報表', '/report/ui'), ('中水緊急通知', '/warning/water_urgent/ui'),
+          ('部門權限', '/dept/ui'),
+        ] %}
+        <button type="button" class="vb-tool-item"
+                hx-get="{{ tool[1] }}" hx-target="#modal-container" hx-swap="innerHTML"
+                onclick="document.getElementById('voc-modal').showModal()">
+          <svg class="vb-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          {{ tool[0] }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="padding:14px 16px;border-top:1px solid var(--border-1)">
+      <div class="vb-rail-label" style="padding:0 0 8px">燈號 LEGEND</div>
+      <div class="vb-legend-list">
+        <div class="vb-legend-row"><span class="vb-ic-legend-R"></span>R 超過 OOS</div>
+        <div class="vb-legend-row"><span class="vb-ic-legend-O"></span>O 數值超標（OOC~OOS）</div>
+        <div class="vb-legend-row"><span class="vb-ic-legend-O2"></span>O≠ 管制值不同步</div>
+        <div class="vb-legend-row"><span class="vb-ic-legend-Y"></span>Y 預警／超允收</div>
+        <div class="vb-legend-row"><span class="vb-ic-legend-G"></span>G 正常</div>
+        <div class="vb-legend-row"><span class="vb-ic-legend-X"></span>斷訊／保養中</div>
+      </div>
+    </div>
+  </aside>
+
+  {# ═══ 主內容 ═══ #}
+  <main class="vb-main">
+
+    <header class="vb-header">
+      <div>
+        <h1 style="margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)">首頁儀表板</h1>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px">VOC PLATFORM / DASHBOARD</div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="vb-update-badge">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);animation:pulse 1.5s ease-in-out infinite;display:inline-block"></span>
+        資料更新 <span id="vb-updated-at">--:--</span> ・ 下次刷新 <b style="color:var(--accent)" id="vb-countdown">--:--</b>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="vb-toolbtn" hx-get="/ui/maillist" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">派送名單</button>
+        <button type="button" class="vb-toolbtn" hx-get="/ui/spec" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">規格維護</button>
+        <button type="button" class="vb-toolbtn" hx-get="/ui/control" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">隔離申請</button>
+        <button type="button" class="vb-toolbtn" hx-get="/ui/flow" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">簽核</button>
+      </div>
+    </header>
+
+    <div class="vb-content">
+
+      {# ── 摘要橫條 ── #}
+      <div class="vb-stats">
+        {% set stat_defs = [('R','紅燈 R','vb-ic-R'), ('O','橙燈 O','vb-ic-O'), ('Y','黃燈 Y','vb-ic-Y'), ('BM','斷訊／保養','vb-ic-X')] %}
+        {% for skey, slabel, sicon in stat_defs %}
+        {% set n = ctx.stats[skey] %}
+        <button type="button" class="vb-stat-card{% if skey == 'R' and n > 0 %} has-glow{% endif %}" data-status-chip="{{ 'X' if skey == 'BM' else skey }}" onclick="vbSetStatusFilter('{{ 'X' if skey == 'BM' else skey }}')">
+          <div class="vb-stat-label"><span class="{{ sicon }}"></span>{{ slabel }}</div>
+          <div class="vb-stat-num" style="color:{{ ('var(--err)' if skey=='R' else 'var(--warn)' if skey=='O' else '#eab308' if skey=='Y' else 'var(--fg-2)') if n > 0 else 'var(--fg-3)' }}">{{ n }}</div>
+        </button>
+        {% endfor %}
+
+        <div class="vb-anomaly-card">
+          <div class="vb-anomaly-title">異常速覽 ACTIVE ANOMALIES</div>
+          <div class="vb-anomaly-chips">
+            {% for a in ctx.active_anomalies %}
+            <button type="button" class="vb-chip-anomaly vb-pill-{{ a.key }}" onclick="vbFocusAnomaly('{{ a.plantno }}', '{{ a.plantno }}|{{ a.item }}')">
+              <span class="{{ 'vb-ic-' ~ a.key }}"></span>{{ a.plantno }}・{{ a.item }}{% if a.key == 'O2' %}（設定不同步）{% else %} <span style="font-family:var(--font-mono);font-weight:600">{{ a.rvalue_raw }}</span>{% endif %}
+            </button>
+            {% endfor %}
+            {% if not ctx.active_anomalies %}
+            <span style="color:var(--fg-3);font-size:13px">目前無 R／O 級異常</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# ── 篩選列 ── #}
+      <div class="vb-filter-row">
+        <button type="button" class="vb-chip is-active" data-status-chip="all" onclick="vbSetStatusFilter('all')">全部</button>
+        <button type="button" class="vb-chip" data-status-chip="abn" onclick="vbSetStatusFilter('abn')">只看異常</button>
+        <button type="button" class="vb-chip" data-status-chip="R" onclick="vbSetStatusFilter('R')">R</button>
+        <button type="button" class="vb-chip" data-status-chip="O" onclick="vbSetStatusFilter('O')">O</button>
+        <button type="button" class="vb-chip" data-status-chip="Y" onclick="vbSetStatusFilter('Y')">Y</button>
+        <button type="button" class="vb-chip" data-status-chip="X" onclick="vbSetStatusFilter('X')">斷訊／保養</button>
+        <span class="vb-divider-v"></span>
+        <button type="button" class="vb-chip" data-source-chip="1" onclick="vbSetSourceFilter(1)">SCADA</button>
+        <button type="button" class="vb-chip" data-source-chip="2" onclick="vbSetSourceFilter(2)">CWMS</button>
+        <button type="button" class="vb-chip" data-source-chip="3" onclick="vbSetSourceFilter(3)">QA手測</button>
+        <div class="vb-search-wrap">
+          <svg class="vb-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <input id="vb-search" class="vb-search-input" placeholder="搜尋廠區／項目…" oninput="vbApplyFilters()">
+        </div>
+      </div>
+
+      {# ── 廠區手風琴 ── #}
+      <div class="vb-plant-list" id="vb-plant-list">
+        {% for p in ctx.plants %}
+        <section class="vb-plant sev-{{ p.severity }}{% if p.severity <= 2 %} is-open{% endif %}" id="vb-plant-{{ p.plantno }}" data-plant="{{ p.plantno }}" data-default-open="{{ 'true' if p.severity <= 2 else 'false' }}">
+          <div class="vb-plant-head" onclick="vbTogglePlant('{{ p.plantno }}')">
+            <svg class="vb-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+            <span class="vb-plant-no">{{ p.plantno }}</span>
+            {% for pill in p.pills %}
+            <span class="vb-pill vb-pill-{{ pill.key }}"><span class="{{ 'vb-ic-' ~ pill.key }}"></span>{{ pill.txt }}</span>
+            {% endfor %}
+            <span class="vb-plant-count" data-plant-count>共 {{ p.rows|length }} 項</span>
+          </div>
+
+          <div class="vb-plant-body">
+            <div class="vb-row-grid vb-item-header-row">
+              <span>狀態</span><span>監測項目</span><span style="text-align:right">最新讀值</span><span>單位</span><span>來源</span><span>備註</span><span>歷史</span><span></span>
+            </div>
+
+            {% for row in p.rows %}
+            {% set rid = row.plantno ~ '|' ~ row.item %}
+            <div class="vb-row-grid vb-item-row key-{{ row.key }}" data-row="{{ rid }}" data-plantno="{{ row.plantno }}" data-item="{{ row.item }}" data-key="{{ row.key }}" data-source="{{ row.source }}" onclick="vbToggleRow(this)">
+              <span class="vb-pill vb-pill-{{ row.key }}"><span class="{{ 'vb-ic-' ~ row.key }}"></span>{{ {'R':'R','O':'O','O2':'O≠','Y':'Y','G':'G','B':'斷訊','M':'保養'}[row.key] }}</span>
+              <span class="vb-item-name">{{ row.item }}</span>
+              <span class="vb-item-val key-{{ row.key }}">{{ row.rvalue_raw }}</span>
+              <span class="vb-item-unit">{{ row.unit }}</span>
+              <span class="vb-src-pill vb-src-{{ row.source }}">{{ {1:'SCADA',2:'CWMS',3:'QA手測'}[row.source] }}</span>
+              <span class="vb-item-remark" title="{{ row.remark }}">{{ row.remark }}</span>
+              <span>
+                {% if row.url %}
+                <a class="vb-curve-link" href="/trend/ui?plant={{ row.plantno }}" onclick="event.stopPropagation()">曲線 ↗</a>
+                {% endif %}
+              </span>
+              <svg class="vb-row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+            </div>
+            <div class="vb-subpanel">
+              <div class="vb-subpanel-cols">
+                <div>
+                  <div class="vb-subpanel-label">SPEC 門檻 THRESHOLDS</div>
+                  <div class="vb-subpanel-vals">
+                    <span><span style="color:var(--err)">OOS</span> <b style="color:var(--fg-1)">{{ row.oos }}</b></span>
+                    <span><span style="color:var(--warn)">OOC</span> <b style="color:var(--fg-1)">{{ row.ooc }}</b></span>
+                    <span><span style="color:#eab308">Alert</span> <b style="color:var(--fg-1)">{{ row.alert_spec }}</b></span>
+                    <span><span style="color:var(--fg-2)">允收</span> <b style="color:var(--fg-1)">{{ row.recv }}</b></span>
+                    <span><span style="color:var(--fg-3)">法規</span> <b style="color:var(--fg-2)">{{ row.law_spec }}</b></span>
+                  </div>
+                </div>
+                <div>
+                  <div class="vb-subpanel-label">系統管制值比對 SYNC</div>
+                  <div class="vb-sync-vals">
+                    <span style="color:var(--fg-2)">SCADA OOS <b style="color:var(--fg-1)">{{ row.scada_oos }}</b></span>
+                    <span class="vb-sync-badge {{ 'vb-sync-ok' if row.scada_oos == row.oos else 'vb-sync-mismatch' }}">{{ '一致' if row.scada_oos == row.oos else '不同步' }}</span>
+                    <span style="color:var(--fg-2)">OOC <b style="color:var(--fg-1)">{{ row.scada_ooc }}</b></span>
+                    <span class="vb-sync-badge {{ 'vb-sync-ok' if row.scada_ooc == row.ooc else 'vb-sync-mismatch' }}">{{ '一致' if row.scada_ooc == row.ooc else '不同步' }}</span>
+                    <span style="color:var(--fg-2)">CWMS OOS <b style="color:var(--fg-1)">{{ row.cwms_oos }}</b></span>
+                    <span class="vb-sync-badge {{ 'vb-sync-ok' if row.cwms_oos == row.oos else 'vb-sync-mismatch' }}">{{ '一致' if row.cwms_oos == row.oos else '不同步' }}</span>
+                    <span style="color:var(--fg-2)">OOC <b style="color:var(--fg-1)">{{ row.cwms_ooc }}</b></span>
+                    <span class="vb-sync-badge {{ 'vb-sync-ok' if row.cwms_ooc == row.ooc else 'vb-sync-mismatch' }}">{{ '一致' if row.cwms_ooc == row.ooc else '不同步' }}</span>
+                  </div>
+                </div>
+                {% if row.is_rain %}
+                <div>
+                  <div class="vb-subpanel-label">24H 累積雨量</div>
+                  <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-3)">{{ row.rain_24h or '—（資料暫缺）' }}</div>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endfor %}
+      </div>
+
+      <div id="vb-empty-state" class="vb-empty-state" data-vb-hidden="true">
+        <div style="font-size:14px">沒有符合篩選條件的監測項目</div>
+        <div class="sub">調整燈號／來源篩選或清除搜尋關鍵字</div>
+      </div>
+
+      {% if not ctx.plants %}
+      <div class="vb-empty-state">
+        <div style="font-size:14px">目前尚無廠區資料</div>
+        <div class="sub">請確認資料庫連線是否正常，或您是否具有檢視權限</div>
+      </div>
+      {% endif %}
+    </div>
+  </main>
+</div>
+
+{# ══════════════════════════════════════════════════════════
+   Modal 容器 — 原生 <dialog>，不用 Bootstrap Modal（CLAUDE.md）
+   關閉一律 document.getElementById('voc-modal').close()
+  ══════════════════════════════════════════════════════════ #}
+<dialog id="voc-modal">
+  <div id="modal-container">
+    <div style="display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--fg-3);">載入中…</div>
+  </div>
+</dialog>
+
+<script id="vb-dashboard-data" type="application/json">{{ ctx|tojson }}</script>
+<script>
+(function () {
+  "use strict";
+
+  // ── Tweaks（照 README「畫面 2」Tweaks 段落固定值）──────────
+  var REFRESH_MINUTES = 15;
+  var DISTINGUISH_SYNC_ORANGE = true; // eslint-disable-line no-unused-vars
+  var COMPACT_ROWS = false; // eslint-disable-line no-unused-vars
+
+  // ── 倒數刷新 + 最後更新時間（純前端計時，到 0 整頁 reload）──
+  function pad(n) { return String(n).padStart(2, "0"); }
+  var secs = REFRESH_MINUTES * 60;
+  function fmtNow() {
+    var d = new Date();
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+  document.getElementById("vb-updated-at").textContent = fmtNow();
+  function tick() {
+    var m = Math.floor(secs / 60), s = secs % 60;
+    document.getElementById("vb-countdown").textContent = pad(m) + ":" + pad(s);
+    if (secs <= 0) { location.reload(); return; }
+    secs--;
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  // ── Modal 關閉後重置 ─────────────────────────────────────
+  var modal = document.getElementById("voc-modal");
+  modal.addEventListener("click", function (e) { if (e.target === modal) modal.close(); });
+  modal.addEventListener("close", function () {
+    document.getElementById("modal-container").innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--fg-3);">載入中…</div>';
+  });
+
+  // ── 篩選狀態 ──────────────────────────────────────────────
+  window.__vbState = { fStatus: "all", fSource: 0 };
+
+  window.vbSetStatusFilter = function (key) {
+    window.__vbState.fStatus = (window.__vbState.fStatus === key) ? "all" : key;
+    vbSyncChipUI();
+    vbApplyFilters();
+  };
+  window.vbSetSourceFilter = function (key) {
+    window.__vbState.fSource = (window.__vbState.fSource === key) ? 0 : key;
+    vbSyncChipUI();
+    vbApplyFilters();
+  };
+
+  function vbSyncChipUI() {
+    var st = window.__vbState;
+    document.querySelectorAll("[data-status-chip]").forEach(function (el) {
+      el.classList.toggle("is-active", el.getAttribute("data-status-chip") === st.fStatus);
+    });
+    document.querySelectorAll("[data-source-chip]").forEach(function (el) {
+      el.classList.toggle("is-active", Number(el.getAttribute("data-source-chip")) === st.fSource);
+    });
+  }
+
+  function vbMatches(row) {
+    var st = window.__vbState;
+    var key = row.getAttribute("data-key");
+    if (st.fStatus === "abn" && ["R", "O", "O2", "Y"].indexOf(key) === -1) return false;
+    if (st.fStatus === "R" && key !== "R") return false;
+    if (st.fStatus === "O" && key !== "O" && key !== "O2") return false;
+    if (st.fStatus === "Y" && key !== "Y") return false;
+    if (st.fStatus === "X" && key !== "B" && key !== "M") return false;
+    if (st.fSource !== 0 && Number(row.getAttribute("data-source")) !== st.fSource) return false;
+    var q = (document.getElementById("vb-search").value || "").trim().toLowerCase();
+    if (q) {
+      var plant = (row.getAttribute("data-plantno") || "").toLowerCase();
+      var item = (row.getAttribute("data-item") || "").toLowerCase();
+      if (plant.indexOf(q) === -1 && item.indexOf(q) === -1) return false;
+    }
+    return true;
+  }
+
+  window.vbApplyFilters = function () {
+    var st = window.__vbState;
+    var q = (document.getElementById("vb-search").value || "").trim();
+    var anyFilter = st.fStatus !== "all" || st.fSource !== 0 || q !== "";
+    var totalVisible = 0;
+
+    document.querySelectorAll(".vb-plant").forEach(function (section) {
+      var rows = section.querySelectorAll(".vb-item-row");
+      var visible = 0;
+      rows.forEach(function (row) {
+        var ok = vbMatches(row);
+        row.setAttribute("data-vb-hidden", ok ? "false" : "true");
+        // 子面板顯示完全交給 CSS 的 `.vb-item-row.is-open + .vb-subpanel` 規則，
+        // 這裡只需要在列被篩掉時順便收合，避免「列隱藏、子面板卻還開著」的孤兒面板。
+        if (!ok) row.classList.remove("is-open");
+        if (ok) visible++;
+      });
+      totalVisible += visible;
+
+      var countEl = section.querySelector("[data-plant-count]");
+      var total = rows.length;
+      countEl.textContent = anyFilter ? (visible + "/" + total + " 項") : ("共 " + total + " 項");
+
+      if (anyFilter) {
+        section.setAttribute("data-vb-hidden", visible === 0 ? "true" : "false");
+        if (visible > 0) section.classList.add("is-open");
+      } else {
+        section.setAttribute("data-vb-hidden", "false");
+        section.classList.toggle("is-open", section.getAttribute("data-default-open") === "true");
+      }
+    });
+
+    document.getElementById("vb-empty-state").setAttribute("data-vb-hidden", (anyFilter && totalVisible === 0) ? "false" : "true");
+  };
+
+  window.vbTogglePlant = function (plantno) {
+    var section = document.getElementById("vb-plant-" + CSS.escape(plantno));
+    if (section) section.classList.toggle("is-open");
+  };
+
+  window.vbToggleRow = function (rowEl) {
+    rowEl.classList.toggle("is-open");
+    var sub = rowEl.nextElementSibling;
+    if (sub && sub.classList.contains("vb-subpanel")) {
+      sub.setAttribute("data-vb-hidden", sub.getAttribute("data-vb-hidden") === "true" ? "false" : "true");
+    }
+  };
+
+  window.vbGoToPlant = function (plantno) {
+    var section = document.getElementById("vb-plant-" + CSS.escape(plantno));
+    if (!section) return;
+    section.classList.add("is-open");
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  window.vbFocusAnomaly = function (plantno, rowId) {
+    window.__vbState.fStatus = "all";
+    window.__vbState.fSource = 0;
+    document.getElementById("vb-search").value = "";
+    vbSyncChipUI();
+    vbApplyFilters();
+    var section = document.getElementById("vb-plant-" + CSS.escape(plantno));
+    if (section) {
+      section.classList.add("is-open");
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    var row = document.querySelector('.vb-item-row[data-row="' + rowId + '"]');
+    if (row && !row.classList.contains("is-open")) vbToggleRow(row);
+  };
+
+  vbSyncChipUI();
+})();
+</script>
+</body>
+</html>

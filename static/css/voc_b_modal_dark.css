@@ -1,0 +1,202 @@
+/* ============================================================================
+   voc_b_modal_dark.css — B 棧新儀表板（深色 SCADA 風）專用「Modal 蓋版」樣式
+
+   背景：templates/partials/*.html（maillist_modal / spec_modal / flow_modal /
+   qa_modal / control_modal / history_modal / reason_modal / report_modal /
+   water_urgent_modal / dept_modal / acl_modal / warning_modal / control_items）
+   是 A 棧與 B 棧共用的既有檔案，本檔「不可」修改，且它們是亮色系
+   （直接吃 static/css/voc.css 的 --voc-* 系列 CSS 變數 + 少量 inline style）。
+
+   蓋版策略（只加這一個檔案，選擇器一律鎖在 dialog#voc-modal 作用域內）：
+   1. 【核心手法】voc.css 的 --voc-primary/--voc-text/--voc-border/--status-*/
+      --data-* 這些自訂屬性會沿 DOM 繼承。在 dialog#voc-modal 這一層「重新
+      定義」同名變數，底下所有 partial（不管是 class 規則、<style> 區塊，
+      還是 inline style="color:var(--voc-text)"）取值時都會拿到這裡蓋版後
+      的深色數值 —— 不必逐一改各 partial 的每一行 style，也完全不影響
+      A 棧（voc.css 的 :root 定義沒被動到）。
+   2. 少數 partial 用「字面色值」而非變數（例如 control_modal.html 廠區下拉
+      的 background:white、.dashboard-table th 的 background:#f1f5f9、
+      .btn-voc-outline/.btn-voc-danger 的 background:white），這類變數繼承
+      蓋不到，才用具體選擇器 + 必要時 !important 蓋掉（原因見各段註解）。
+   3. --voc-bg-alt 是 maillist_modal / dept_modal / acl_modal / water_urgent_modal
+      表單底色用到的變數，但 voc.css 從未定義它（連 A 棧亮色版都吃不到值，
+      是既有的隱性小 bug）。這裡順手在 dialog 作用域內補上深色版定義，
+      範圍鎖定在本 dialog、不影響 A 棧任何頁面。
+   ============================================================================ */
+
+dialog#voc-modal {
+  /* ── 重新對應 voc.css 的設計變數 → design_handoff_voc_platform 深色 token ── */
+  --voc-primary:      var(--blue);
+  --voc-primary-dark: var(--blue-hover);
+
+  --voc-bg-main: var(--bg-3);   /* 原本淺灰底（列表列底色/表單面板底），深色版用 elevated surface */
+  --voc-bg-card: var(--bg-2);
+  --voc-bg-alt:  var(--bg-3);   /* 補上原本未定義的變數，見檔頭說明 3 */
+
+  --voc-text:       var(--fg-1);
+  --voc-text-muted: var(--fg-2);
+  --voc-border:     var(--border-1);
+
+  /* 四階燈號色：沿用原本色相語意（紅/橙/黃/灰），但提高在深色底下的飽和度/亮度以維持可讀性 */
+  --status-red:        #f87171;
+  --status-red-bg:     var(--err-bg);
+  --status-orange:     #fb923c;
+  --status-orange-bg:  rgba(251, 146, 60, 0.14);
+  --status-yellow:     #fbbf24;
+  --status-yellow-bg:  rgba(251, 191, 36, 0.14);
+  --status-green:      var(--ok);
+  --status-green-bg:   var(--ok-bg);
+  --status-gray:       var(--fg-3);
+  --status-gray-bg:    var(--muted-bg);
+
+  /* 資料來源底色（最新讀值欄）：原本是米白/淺橙/淺灰，深色版改半透明色塊 */
+  --data-scada: rgba(234, 179, 8, 0.16);
+  --data-cwms:  rgba(251, 146, 60, 0.16);
+  --data-qa:    rgba(148, 163, 184, 0.14);
+
+  /* ── Dialog 本體：--bg-2 底、--border-1 邊框、14px 圓角、--shadow-2 ──
+     home.html 對 <dialog id="voc-modal"> 有 inline style（border/border-radius/
+     box-shadow），inline style 特異度最高，這三個屬性需要 !important 才蓋得掉；
+     background 沒被 inline 設定，理論上不需要 !important，但一併加上避免任何
+     其他來源的 inline 蓋掉深色底。 */
+  background:    var(--bg-2) !important;
+  color:         var(--fg-1);
+  border:        1px solid var(--border-1) !important;
+  border-radius: var(--r-lg) !important;
+  box-shadow:    var(--shadow-2) !important;
+
+  /* 讓瀏覽器原生控件（datetime-local 的行事曆/時鐘圖示、checkbox 勾勾、
+     捲軸）改用深色配色，不然會出現「黑圖示疊在深色底看不到」的狀況
+     （control_modal.html 大量使用 type="datetime-local"，影響最明顯）。 */
+  color-scheme: dark;
+
+  scrollbar-color: var(--border-3) var(--bg-2);
+  scrollbar-width: thin;
+}
+
+dialog#voc-modal::backdrop {
+  background: rgba(5, 7, 13, 0.7);
+}
+
+/* ── 捲軸（dialog 本身 overflow:auto + 各 partial 內部 overflow-x:auto 的表格容器）── */
+dialog#voc-modal ::-webkit-scrollbar        { width: 8px; height: 8px; }
+dialog#voc-modal ::-webkit-scrollbar-track  { background: var(--bg-2); }
+dialog#voc-modal ::-webkit-scrollbar-thumb  { background: var(--border-3); border-radius: 4px; }
+dialog#voc-modal ::-webkit-scrollbar-thumb:hover { background: var(--fg-3); }
+
+/* ============================================================================
+   表格（.dashboard-table，spec/maillist/history/reason/report/dept/acl/
+   control/warning 等 modal 皆用同一個 class）
+   ============================================================================ */
+
+/* voc.css 的 .dashboard-table { background:white; box-shadow:...; } 是字面值，
+   非變數繼承蓋不到，改用 dialog 作用域選擇器（ID 特異度已足夠蓋過，不需要 !important）。 */
+dialog#voc-modal .dashboard-table {
+  background:  var(--bg-2);
+  box-shadow:  none;
+}
+
+/* 表頭底色 #f1f5f9 是字面值，同樣需要具體選擇器蓋版；文字/邊框已透過
+   --voc-text-muted / --voc-border 變數繼承自動變深色，這裡只補 background。 */
+dialog#voc-modal .dashboard-table th {
+  background: var(--bg-3);
+  color:      var(--fg-2);
+}
+
+/* td 的 border/文字色本來就是 var(--voc-border) / 繼承色，已透過上面的變數
+   重新定義自動蓋成深色，這裡不需要重覆宣告。 */
+
+/* ============================================================================
+   表單控件：input / select / textarea / option
+   ============================================================================ */
+
+/* 各 partial 的 .xx-in / inline style 大多只設定 border/padding/font-size，
+   沒有設定 background——瀏覽器原生表單控件的預設底色是不透明白色（不是
+   CSS 繼承得到的初始值），所以一定要在這裡明確蓋掉，且優先權要贏過
+   control_modal.html 廠區下拉那個 inline style="...background:white;"，
+   故用 !important（蓋版 CSS 的正當用途：字面 inline 顏色無法用變數繼承解決）。 */
+dialog#voc-modal input:not([type="checkbox"]):not([type="radio"]),
+dialog#voc-modal select,
+dialog#voc-modal textarea {
+  background:   var(--bg-3) !important;
+  color:        var(--fg-1) !important;
+  border-color: var(--border-3);
+}
+
+dialog#voc-modal input:not([type="checkbox"]):not([type="radio"]):focus,
+dialog#voc-modal select:focus,
+dialog#voc-modal textarea:focus {
+  outline:    none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+dialog#voc-modal input[readonly] {
+  background: var(--bg-2) !important;
+  color:      var(--fg-2) !important;
+  cursor:     not-allowed;
+}
+
+dialog#voc-modal input:disabled,
+dialog#voc-modal select:disabled,
+dialog#voc-modal button:disabled {
+  opacity: .5;
+  cursor:  not-allowed;
+}
+
+dialog#voc-modal option {
+  background: var(--bg-3);
+  color:      var(--fg-1);
+}
+
+dialog#voc-modal ::placeholder {
+  color:   var(--fg-3);
+  opacity: 1;
+}
+
+/* checkbox / radio（隔離項目勾選、MT 廠全部、通知廠區勾選等） */
+dialog#voc-modal input[type="checkbox"],
+dialog#voc-modal input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* control_items.html 隔離項目 label 卡片：background:var(--voc-bg-main) 已由
+   變數繼承自動變深色，這裡不需要額外規則。 */
+
+/* ============================================================================
+   按鈕（.btn-voc-primary / .btn-voc-outline / .btn-voc-danger）
+   ============================================================================ */
+
+/* .btn-voc-primary 的 background/border/hover 全部走 var(--voc-primary)/
+   var(--voc-primary-dark)，已透過上面的變數重新定義自動變成 --blue 系，
+   不需要額外規則；這裡只加一點深色主題慣有的發光陰影。 */
+dialog#voc-modal .btn-voc-primary {
+  box-shadow: var(--glow-blue);
+}
+
+/* .btn-voc-outline / .btn-voc-danger 的 background:white 是字面值，需蓋版。
+   border-color / color 走 var(--voc-border) / var(--status-red)，已自動變深色。 */
+dialog#voc-modal .btn-voc-outline {
+  background: var(--bg-3);
+}
+
+dialog#voc-modal .btn-voc-danger {
+  background: var(--bg-3);
+}
+
+/* 關閉鈕（✕，統一 pattern：onclick="document.getElementById('voc-modal').close()"）
+   顏色已透過 --voc-text-muted 繼承變深色，這裡加 hover 效果讓互動更明確。 */
+dialog#voc-modal button[onclick*="voc-modal').close()"] {
+  transition: color var(--t-fast) var(--ease);
+}
+dialog#voc-modal button[onclick*="voc-modal').close()"]:hover {
+  color: var(--fg-1) !important;
+}
+
+/* ============================================================================
+   其餘：連結 / 徽章 / 燈號列底色 / 空狀態文字
+   這些全部是 var(--voc-primary) / var(--status-*) / var(--data-*) /
+   var(--voc-text-muted) 的用法（.history-link、report_modal 排行連結、
+   spec_modal 來源徽章、maillist_modal TO/CC 徽章、tr.row-R/O/Y/G/- 等），
+   已經隨著上面的變數重新定義全部自動變成深色配色，不需要逐一列出覆寫。
+   ============================================================================ */
