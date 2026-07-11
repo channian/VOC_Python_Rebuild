@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>規格維護 | VOC 監測平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/voc_b.css">
+{# 本頁特有樣式：一律用 voc_b.css 提供的 design token 變數，不寫死顏色值。
+   版面／欄寬／間距照 design_handoff_voc_platform_V2/VOC 規格維護.dc.html 逐一還原。 #}
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg-1);color:var(--fg-1);font-family:var(--font-sans,'Inter',sans-serif);
+    font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh;
+    background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);
+    background-size:32px 32px;background-attachment:fixed;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{color:var(--accent-hover)}
+  input::placeholder,textarea::placeholder{color:var(--fg-3)}
+  select,input,textarea{font-family:inherit}
+
+  .vb-page{min-height:100vh;display:flex;flex-direction:column}
+
+  .vb-header{
+    height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);
+    display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:20;
+  }
+  .vb-back{
+    display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--fg-2);
+    transition:color 180ms var(--ease);
+  }
+  .vb-back:hover{color:var(--fg-1)}
+  .vb-back svg{width:16px;height:16px}
+  .vb-header-sep{width:1px;height:20px;background:var(--border-2)}
+  .vb-title-block h1{margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)}
+  .vb-title-block .vb-sub{font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px}
+  .vb-spacer{flex:1}
+  .vb-filter-select{
+    padding:7px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;
+    color:var(--fg-1);font-size:12.5px;outline:none;cursor:pointer;
+  }
+  .vb-filter-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+  .vb-content{padding:20px 28px 64px;max-width:1440px;width:100%;margin:0 auto}
+
+  /* 現況落差提示 */
+  .spec-gap-notice{
+    display:flex;gap:10px;align-items:flex-start;background:var(--warn-bg);
+    border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:12px 16px;margin-bottom:16px;
+    font-size:12.5px;color:var(--fg-2);line-height:1.6;
+  }
+  .spec-gap-notice svg{width:16px;height:16px;color:var(--warn);flex:none;margin-top:1px}
+  .spec-gap-notice b{color:var(--warn)}
+  .spec-gap-dismiss{margin-left:8px;cursor:pointer;color:var(--accent)}
+  .spec-gap-dismiss:hover{color:var(--accent-hover)}
+
+  /* Tabs */
+  .spec-tabbar{display:flex;gap:4px;border-bottom:1px solid var(--border-1);margin-bottom:18px}
+  .spec-tab{
+    padding:10px 16px;font-size:13px;font-weight:600;font-family:inherit;background:transparent;border:none;
+    border-bottom:2px solid transparent;color:var(--fg-3);cursor:pointer;transition:all 160ms var(--ease);
+  }
+  .spec-tab:hover{color:var(--fg-1)}
+  .spec-tab.active{color:var(--fg-1);border-bottom-color:var(--accent)}
+  .spec-tab-badge{
+    margin-left:6px;font-family:var(--font-mono);font-size:10.5px;font-weight:700;padding:1px 7px;
+    border-radius:999px;background:var(--warn-bg);color:var(--warn);
+  }
+  .spec-tab.active .spec-tab-badge{background:var(--accent);color:var(--bg-0)}
+  .spec-tab-badge[hidden]{display:none}
+
+  .spec-section[hidden]{display:none}
+
+  /* 清單頁籤 */
+  .spec-card{background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);overflow:hidden}
+  .spec-grid-list{display:grid;grid-template-columns:84px 120px 100px 110px 96px 96px 96px 1fr 84px;gap:10px;align-items:center}
+  .spec-row-header{
+    padding:10px 18px;background:var(--bg-1);border-bottom:1px solid var(--border-1);
+    font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);
+  }
+  .spec-row-header span.hd-oos{color:var(--err)}
+  .spec-row-header span.hd-ooc{color:var(--warn)}
+  .spec-row-header span.hd-alert{color:#eab308}
+  .spec-row-view{padding:10px 18px;border-bottom:1px solid var(--border-1);transition:background 120ms var(--ease)}
+  .spec-row-view:hover{background:var(--bg-3)}
+  .spec-row-edit{padding:8px 18px;border-bottom:1px solid var(--border-1);background:var(--bg-3)}
+  .spec-cell-plantno{font-family:var(--font-mono);font-weight:700;color:var(--fg-1)}
+  .spec-cell-item{font-weight:600}
+  .spec-src-badge{font-family:var(--font-mono);font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;justify-self:start;display:inline-block}
+  .spec-cell-mono{font-family:var(--font-mono);font-size:12.5px}
+  .spec-cell-law{color:var(--fg-2)}
+  .spec-cell-oos{color:var(--err);font-weight:600}
+  .spec-cell-ooc{color:var(--warn);font-weight:600}
+  .spec-cell-alert{color:#eab308;font-weight:600}
+  .spec-cell-remark{font-size:12px;color:var(--fg-3)}
+  .spec-btn-edit{
+    padding:5px 10px;border-radius:6px;font-size:11.5px;font-weight:600;background:transparent;color:var(--fg-2);
+    border:1.5px solid var(--border-2);cursor:pointer;justify-self:start;font-family:inherit;
+  }
+  .spec-btn-edit:hover{color:var(--fg-1);border-color:var(--border-3)}
+  .spec-edit-select,.spec-edit-input{
+    padding:5px 7px;background:var(--bg-1);border:1.5px solid var(--border-3);border-radius:6px;
+    color:var(--fg-1);font-size:12px;width:100%;font-family:inherit;
+  }
+  .spec-edit-input{font-family:var(--font-mono)}
+  .spec-edit-actions{display:flex;gap:6px}
+  .spec-btn-save{
+    padding:5px 9px;border-radius:6px;font-size:11.5px;font-weight:600;background:var(--blue);color:#fff;
+    border:none;cursor:pointer;font-family:inherit;
+  }
+  .spec-btn-save:hover{background:var(--blue-hover)}
+  .spec-btn-cancel{
+    padding:5px 9px;border-radius:6px;font-size:11.5px;background:transparent;color:var(--fg-2);
+    border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;
+  }
+  .spec-row-errors{padding:10px 18px 12px 18px;background:var(--err-bg);border-bottom:1px solid var(--border-1);font-size:12px;color:var(--err)}
+  .spec-row-errors div{padding:2px 0}
+  .spec-empty{padding:40px;text-align:center;color:var(--fg-3);font-size:13px}
+  .spec-list-footer{margin-top:10px;font-size:11.5px;color:var(--fg-3)}
+
+  /* 送簽申請頁籤 */
+  .spec-apply-wrap{max-width:760px}
+  .spec-form-errors{
+    background:var(--err-bg);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:14px 16px;margin-bottom:16px;
+  }
+  .spec-form-errors-title{font-size:13px;font-weight:700;color:var(--err);margin-bottom:6px}
+  .spec-form-errors div.err-line{font-size:12.5px;color:var(--err);padding:2px 0}
+  .spec-apply-card{background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);padding:22px}
+  .spec-apply-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 18px}
+  .spec-field-label{font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px}
+  .spec-field-input{
+    width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;
+    color:var(--fg-1);font-size:13px;font-family:inherit;
+  }
+  .spec-field-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);outline:none}
+  .spec-field-mono{font-family:var(--font-mono)}
+  .spec-apply-remark{margin-top:16px}
+  .spec-apply-remark textarea{resize:vertical}
+  .spec-apply-hint{margin-top:10px;font-size:11.5px;color:var(--fg-3);line-height:1.6}
+  .spec-apply-submit-row{display:flex;justify-content:flex-end;margin-top:18px}
+  .spec-btn-submit{
+    padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;background:var(--blue);color:#fff;
+    border:none;cursor:pointer;box-shadow:var(--glow-blue);font-family:inherit;transition:all 180ms var(--ease);
+  }
+  .spec-btn-submit:hover{background:var(--blue-hover);transform:translateY(-1px)}
+  .spec-btn-submit:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+  /* 我的申請頁籤 */
+  .spec-grid-mine{display:grid;grid-template-columns:150px 84px 90px 120px 150px 110px 1fr;gap:10px;align-items:center}
+  .spec-status-pill{
+    display:inline-flex;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:700;font-family:var(--font-mono);
+  }
+
+  /* 待簽核頁籤 */
+  .spec-todo-list{display:flex;flex-direction:column;gap:10px}
+  .spec-todo-card{background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);padding:16px 18px}
+  .spec-todo-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .spec-todo-formno{font-family:var(--font-mono);font-size:12.5px;color:var(--fg-3)}
+  .spec-todo-plantno{font-family:var(--font-mono);font-weight:700;font-size:15px}
+  .spec-todo-item{font-weight:600}
+  .spec-todo-ftype{padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+  .spec-todo-detail{font-size:12.5px;color:var(--fg-2)}
+  .spec-todo-meta{font-family:var(--font-mono);font-size:12px;color:var(--fg-3);margin-left:auto}
+  .spec-todo-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-1)}
+  .spec-btn-reject{
+    padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:transparent;color:var(--err);
+    border:1.5px solid rgba(239,68,68,0.4);cursor:pointer;font-family:inherit;
+  }
+  .spec-btn-reject:hover{background:var(--err-bg)}
+  .spec-btn-approve{
+    padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--ok);color:#062012;
+    border:none;cursor:pointer;font-family:inherit;
+  }
+  .spec-reject-form{margin-top:12px;padding-top:12px;border-top:1px solid var(--border-1)}
+  .spec-reject-form textarea{
+    width:100%;padding:8px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;
+    color:var(--fg-1);font-size:12.5px;resize:vertical;font-family:inherit;
+  }
+  .spec-reject-error{font-size:12px;color:var(--err);margin-top:4px}
+  .spec-reject-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+  .spec-btn-reject-cancel{
+    padding:7px 14px;border-radius:6px;font-size:12.5px;background:transparent;color:var(--fg-2);
+    border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;
+  }
+  .spec-btn-reject-confirm{
+    padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--err);color:#fff;
+    border:none;cursor:pointer;font-family:inherit;
+  }
+  .spec-todo-empty{
+    padding:48px;text-align:center;color:var(--fg-2);background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;
+  }
+
+  /* toast */
+  .vb-toast{
+    position:fixed;bottom:24px;right:24px;z-index:200;min-width:320px;max-width:420px;background:var(--bg-2);
+    border:1px solid rgba(34,197,94,0.35);border-radius:10px;box-shadow:var(--shadow-3);padding:14px 16px;
+    display:flex;gap:10px;align-items:flex-start;animation:vb-toast-in 180ms var(--ease-out);
+  }
+  .vb-toast.err{border-color:rgba(239,68,68,0.4)}
+  .vb-toast-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex:none;background:var(--ok);box-shadow:0 0 6px var(--ok-glow)}
+  .vb-toast.err .vb-toast-dot{background:var(--err);box-shadow:0 0 6px var(--err-glow)}
+  .vb-toast-msg{flex:1;font-size:13px;color:var(--fg-1);line-height:1.6;white-space:pre-line}
+  .vb-toast-close{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:14px;padding:2px;font-family:inherit}
+  .vb-toast-close:hover{color:var(--fg-1)}
+  @keyframes vb-toast-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="vb-page">
+
+  <header class="vb-header">
+    <a href="/home" class="vb-back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+      儀表板
+    </a>
+    <span class="vb-header-sep"></span>
+    <div class="vb-title-block">
+      <h1>規格維護</h1>
+      <div class="vb-sub">SPEC MAINTENANCE</div>
+    </div>
+    <div class="vb-spacer"></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select id="filter-plantno" class="vb-filter-select"></select>
+      <select id="filter-item" class="vb-filter-select"></select>
+    </div>
+  </header>
+
+  <div class="vb-content">
+
+    <!-- 現況落差提示 -->
+    <div id="gap-notice" class="spec-gap-notice">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+      <div>
+        <b>現況說明：</b>就地編輯（立即生效）與送簽申請（需簽核）目前後端未做角色區分；「待簽核」頁籤對任何開啟此頁的人皆可見/可操作；雙邊 OOC/Alert 寬窄方向判斷待業務確認正確性。以上為既有系統落差，非本次改版範圍。
+        <span class="spec-gap-dismiss" id="gap-dismiss">知道了，隱藏提示</span>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="spec-tabbar" role="tablist">
+      <button type="button" class="spec-tab" data-tab="list">規格清單</button>
+      <button type="button" class="spec-tab" data-tab="apply">送簽申請</button>
+      <button type="button" class="spec-tab" data-tab="mine">我的申請</button>
+      <button type="button" class="spec-tab" data-tab="todo">待簽核<span class="spec-tab-badge" id="todo-badge" hidden>0</span></button>
+    </div>
+
+    <!-- 頁籤：規格清單 -->
+    <section id="tab-list" class="spec-section">
+      <div class="spec-card">
+        <div class="spec-grid-list spec-row-header">
+          <span>廠區</span><span>項目</span><span>來源</span><span>法規許可值</span>
+          <span class="hd-oos">OOS</span><span class="hd-ooc">OOC</span><span class="hd-alert">Alert</span>
+          <span>備註</span><span></span>
+        </div>
+        <div id="spec-list-body"></div>
+        <div id="spec-list-empty" class="spec-empty" hidden>沒有符合篩選條件的規格</div>
+      </div>
+      <div class="spec-list-footer">共 <span id="spec-list-count">0</span> 筆・就地編輯儲存後立即生效，無需簽核</div>
+    </section>
+
+    <!-- 頁籤：送簽申請 -->
+    <section id="tab-apply" class="spec-section" hidden>
+      <div class="spec-apply-wrap">
+        <div id="apply-errors" class="spec-form-errors" hidden>
+          <div class="spec-form-errors-title">送出失敗，請修正以下 <span id="apply-error-count">0</span> 項：</div>
+          <div id="apply-error-lines"></div>
+        </div>
+        <div class="spec-apply-card">
+          <div class="spec-apply-grid">
+            <div>
+              <div class="spec-field-label">類別 *</div>
+              <select id="apply-ftype" class="spec-field-input">
+                <option value="I">新增</option><option value="M">修改</option><option value="D">刪除</option>
+              </select>
+            </div>
+            <div>
+              <div class="spec-field-label">來源 *</div>
+              <select id="apply-source" class="spec-field-input"></select>
+            </div>
+            <div>
+              <div class="spec-field-label">廠區 plantno *</div>
+              <input id="apply-plantno" list="apply-plantno-list" class="spec-field-input spec-field-mono" placeholder="例：K7">
+              <datalist id="apply-plantno-list"></datalist>
+            </div>
+            <div>
+              <div class="spec-field-label">項目 item *</div>
+              <input id="apply-item" list="apply-item-list" class="spec-field-input" placeholder="例：pH、COD">
+              <datalist id="apply-item-list"></datalist>
+            </div>
+            <div>
+              <div class="spec-field-label">法規許可值 LAW</div>
+              <input id="apply-law" class="spec-field-input spec-field-mono" placeholder="單邊 80，或雙邊 6-9">
+            </div>
+            <div>
+              <div class="spec-field-label">OOS</div>
+              <input id="apply-oos" class="spec-field-input spec-field-mono" placeholder="單邊 80，或雙邊 6-9">
+            </div>
+            <div>
+              <div class="spec-field-label">OOC</div>
+              <input id="apply-ooc" class="spec-field-input spec-field-mono" placeholder="需比 Alert 寬">
+            </div>
+            <div>
+              <div class="spec-field-label">Alert</div>
+              <input id="apply-alert" class="spec-field-input spec-field-mono" placeholder="單邊 80，或雙邊 6-9">
+            </div>
+          </div>
+          <div class="spec-apply-remark">
+            <div class="spec-field-label">備註</div>
+            <textarea id="apply-remark" class="spec-field-input" rows="2"></textarea>
+          </div>
+          <div class="spec-apply-hint">pH 項目門檻須雙邊（如 6-9）；非 pH 項目須單邊。每段最多小數 2 位，雙邊下限不可大於等於上限。OOC 範圍須比 Alert 寬（雙邊方向待業務確認）。</div>
+          <div class="spec-apply-submit-row">
+            <button type="button" id="apply-submit-btn" class="spec-btn-submit">送出簽核申請</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 頁籤：我的申請 -->
+    <section id="tab-mine" class="spec-section" hidden>
+      <div class="spec-card">
+        <div class="spec-grid-mine spec-row-header">
+          <span>申請單號</span><span>廠區</span><span>類別</span><span>項目</span><span>申請時間</span><span>狀態</span><span>備註</span>
+        </div>
+        <div id="spec-mine-body"></div>
+        <div id="spec-mine-empty" class="spec-empty" hidden>目前沒有申請紀錄</div>
+      </div>
+    </section>
+
+    <!-- 頁籤：待簽核 -->
+    <section id="tab-todo" class="spec-section" hidden>
+      <div id="spec-todo-list" class="spec-todo-list"></div>
+      <div id="spec-todo-empty" class="spec-todo-empty" hidden>
+        <div style="font-size:14px">目前沒有待簽核的規格申請</div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="toast-root"></div>
+
+<script>
+/* ── 後端 context（與 /ui/spec 現行 render 形狀相同）───────────────────────
+   specs 列形狀：{plantno, item, LAW, OOS, OOC, alert, source, sourceid, seqno}
+   sources 形狀：[{sourceid, source}]
+   CLAUDE.md 決策 #6：JSON body 端點一律 fetch + Content-Type: application/json，禁 hx-vals。 */
+const SPEC_SOURCES = {{ sources | tojson }};
+const INITIAL_SPECS = {{ specs | tojson }};
+const DEFAULT_TAB = 'list';
+const SHOW_GAP_NOTICE_DEFAULT = true;
+
+const FTYPE_LABEL = { I: '新增', M: '修改', D: '刪除' };
+const STATUS_LABEL = { 0: '待簽核', 1: '簽核中', 7: '核准', 8: '否決', 12: '取消' };
+const STATUS_COLOR = {
+  0: ['var(--fg-2)', 'var(--muted-bg)'], 1: ['var(--warn)', 'var(--warn-bg)'],
+  7: ['var(--ok)', 'var(--ok-bg)'], 8: ['var(--err)', 'var(--err-bg)'], 12: ['var(--fg-3)', 'var(--muted-bg)'],
+};
+const SRC_STYLE = {
+  1: ['SCADA', 'var(--info)', 'var(--info-bg)'], 2: ['CWMS', 'var(--accent)', 'var(--accent-soft)'],
+  3: ['QA手測', 'var(--fg-2)', 'var(--muted-bg)'],
+};
+
+// ── 全域小工具 ──────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function extractErrors(data) {
+  if (data && Array.isArray(data.detail)) return data.detail.map((e) => (typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e)));
+  if (data && typeof data.detail === 'string') return [data.detail];
+  return ['發生未知錯誤，請重試'];
+}
+
+async function parseResponse(res) {
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* 非 JSON 回應時忽略 */ }
+  return { ok: res.ok, data };
+}
+
+let toastTimer = null;
+function showToast(type, msg) {
+  const root = document.getElementById('toast-root');
+  root.innerHTML = `
+    <div class="vb-toast ${type === 'err' ? 'err' : ''}">
+      <span class="vb-toast-dot"></span>
+      <div class="vb-toast-msg">${esc(msg)}</div>
+      <button type="button" class="vb-toast-close" onclick="document.getElementById('toast-root').innerHTML=''">✕</button>
+    </div>`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { root.innerHTML = ''; }, 4500);
+}
+
+// ── 現況落差提示 ────────────────────────────────────────────────────────
+document.getElementById('gap-dismiss').addEventListener('click', () => {
+  document.getElementById('gap-notice').style.display = 'none';
+});
+if (!SHOW_GAP_NOTICE_DEFAULT) document.getElementById('gap-notice').style.display = 'none';
+
+// ── Tabs ────────────────────────────────────────────────────────────────
+let currentTab = DEFAULT_TAB;
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.spec-tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
+  document.querySelectorAll('.spec-section').forEach((sec) => { sec.hidden = sec.id !== 'tab-' + tab; });
+  if (tab === 'mine') loadApplies();
+  if (tab === 'todo') loadTodos();
+}
+document.querySelectorAll('.spec-tab').forEach((btn) => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+function updateTodoBadge(count) {
+  const badge = document.getElementById('todo-badge');
+  badge.textContent = String(count);
+  badge.hidden = !count;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 頁籤 1：規格清單
+// ══════════════════════════════════════════════════════════════════════
+let masterSpecs = INITIAL_SPECS.slice();  // 用於篩選下拉選項的主清單（不隨篩選改變）
+let displayedSpecs = INITIAL_SPECS.slice();
+let filterPlantno = '';
+let filterItem = '';
+let editingKey = null;
+let editDrafts = {};   // key -> { source, law, oos, ooc, alert }
+let rowErrors = {};    // key -> string[]
+
+function rowKey(r) { return r.plantno + '|' + r.item; }
+
+function populateFilterOptions() {
+  const plants = [...new Set(masterSpecs.map((s) => s.plantno))].sort();
+  const items = [...new Set(masterSpecs.map((s) => s.item))].sort();
+  const plantSel = document.getElementById('filter-plantno');
+  const itemSel = document.getElementById('filter-item');
+  plantSel.innerHTML = '<option value="">全部廠區</option>' + plants.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  itemSel.innerHTML = '<option value="">全部項目</option>' + items.map((i) => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
+}
+
+async function reloadDisplayedSpecs() {
+  try {
+    const qs = new URLSearchParams();
+    if (filterPlantno) qs.set('plantno', filterPlantno);
+    if (filterItem) qs.set('item', filterItem);
+    const res = await fetch('/spec/list?' + qs.toString());
+    if (res.ok) {
+      displayedSpecs = await res.json();
+    } else {
+      // API 失敗時退回前端篩選現有資料，避免清單整個消失
+      displayedSpecs = masterSpecs.filter((r) => (!filterPlantno || r.plantno === filterPlantno) && (!filterItem || r.item === filterItem));
+    }
+  } catch (e) {
+    displayedSpecs = masterSpecs.filter((r) => (!filterPlantno || r.plantno === filterPlantno) && (!filterItem || r.item === filterItem));
+  }
+  renderList();
+}
+
+document.getElementById('filter-plantno').addEventListener('change', (e) => { filterPlantno = e.target.value; reloadDisplayedSpecs(); });
+document.getElementById('filter-item').addEventListener('change', (e) => { filterItem = e.target.value; reloadDisplayedSpecs(); });
+
+function sourceOptionsHtml(selectedId) {
+  return SPEC_SOURCES.map((s) => `<option value="${s.sourceid}"${String(s.sourceid) === String(selectedId) ? ' selected' : ''}>${esc(s.source)}</option>`).join('');
+}
+
+function srcBadgeHtml(sourceid, sourceLabel) {
+  const meta = SRC_STYLE[sourceid];
+  const label = sourceLabel || (meta ? meta[0] : '—');
+  const color = meta ? meta[1] : 'var(--fg-2)';
+  const bg = meta ? meta[2] : 'var(--muted-bg)';
+  return `<span class="spec-src-badge" style="color:${color};background:${bg}">${esc(label)}</span>`;
+}
+
+function renderList() {
+  const body = document.getElementById('spec-list-body');
+  const emptyEl = document.getElementById('spec-list-empty');
+  document.getElementById('spec-list-count').textContent = String(displayedSpecs.length);
+
+  if (displayedSpecs.length === 0) {
+    body.innerHTML = '';
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+
+  body.innerHTML = displayedSpecs.map((r) => {
+    const key = rowKey(r);
+    if (editingKey === key) {
+      const draft = editDrafts[key] || { source: r.sourceid, law: r.LAW, oos: r.OOS, ooc: r.OOC, alert: r.alert };
+      const errs = rowErrors[key] || [];
+      return `
+        <div>
+          <div class="spec-grid-list spec-row-edit">
+            <span class="spec-cell-plantno">${esc(r.plantno)}</span>
+            <span class="spec-cell-item">${esc(r.item)}</span>
+            <select class="spec-edit-select" data-field="source" data-key="${esc(key)}">${sourceOptionsHtml(draft.source)}</select>
+            <input class="spec-edit-input" data-field="law" data-key="${esc(key)}" value="${esc(draft.law)}">
+            <input class="spec-edit-input" data-field="oos" data-key="${esc(key)}" value="${esc(draft.oos)}">
+            <input class="spec-edit-input" data-field="ooc" data-key="${esc(key)}" value="${esc(draft.ooc)}">
+            <input class="spec-edit-input" data-field="alert" data-key="${esc(key)}" value="${esc(draft.alert)}">
+            <span></span>
+            <div class="spec-edit-actions">
+              <button type="button" class="spec-btn-save" data-action="save" data-key="${esc(key)}">存</button>
+              <button type="button" class="spec-btn-cancel" data-action="cancel" data-key="${esc(key)}">消</button>
+            </div>
+          </div>
+          ${errs.length ? `<div class="spec-row-errors">${errs.map((er) => `<div>・${esc(er)}</div>`).join('')}</div>` : ''}
+        </div>`;
+    }
+    return `
+      <div class="spec-grid-list spec-row-view">
+        <span class="spec-cell-plantno">${esc(r.plantno)}</span>
+        <span class="spec-cell-item">${esc(r.item)}</span>
+        ${srcBadgeHtml(r.sourceid, r.source)}
+        <span class="spec-cell-mono spec-cell-law">${esc(r.LAW || '—')}</span>
+        <span class="spec-cell-mono spec-cell-oos">${esc(r.OOS || '—')}</span>
+        <span class="spec-cell-mono spec-cell-ooc">${esc(r.OOC || '—')}</span>
+        <span class="spec-cell-mono spec-cell-alert">${esc(r.alert || '—')}</span>
+        <span class="spec-cell-remark">${esc(r.remark || '')}</span>
+        <button type="button" class="spec-btn-edit" data-action="edit" data-key="${esc(key)}">編輯</button>
+      </div>`;
+  }).join('');
+}
+
+// 事件委派：清單頁籤內的編輯/存/消 + 欄位變更
+document.getElementById('spec-list-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const key = btn.dataset.key;
+  const r = displayedSpecs.find((x) => rowKey(x) === key);
+  if (!r) return;
+  if (btn.dataset.action === 'edit') {
+    editingKey = key;
+    editDrafts[key] = { source: r.sourceid, law: r.LAW, oos: r.OOS, ooc: r.OOC, alert: r.alert };
+    renderList();
+  } else if (btn.dataset.action === 'cancel') {
+    editingKey = null;
+    delete rowErrors[key];
+    renderList();
+  } else if (btn.dataset.action === 'save') {
+    saveRow(r);
+  }
+});
+document.getElementById('spec-list-body').addEventListener('input', (e) => {
+  const el = e.target.closest('[data-field]');
+  if (!el) return;
+  const key = el.dataset.key;
+  if (!editDrafts[key]) return;
+  editDrafts[key][el.dataset.field] = el.value;
+});
+document.getElementById('spec-list-body').addEventListener('change', (e) => {
+  const el = e.target.closest('select[data-field]');
+  if (!el) return;
+  const key = el.dataset.key;
+  if (!editDrafts[key]) return;
+  editDrafts[key][el.dataset.field] = el.value;
+});
+
+async function saveRow(r) {
+  const key = rowKey(r);
+  const draft = editDrafts[key];
+  const body = {
+    plantno: r.plantno, item: r.item,
+    LAW: draft.law || '', OOS: draft.oos || '', OOC: draft.ooc || '', alert: draft.alert || '',
+    source_id: Number(draft.source), remark: r.remark || '',
+  };
+  try {
+    const { ok, data } = await parseResponse(await fetch('/spec/update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }));
+    if (!ok) {
+      rowErrors[key] = extractErrors(data);
+      renderList();
+      showToast('err', '儲存失敗：規格格式驗證未通過，請查看列下方錯誤訊息');
+      return;
+    }
+    // 就地更新本地資料，立即反映（不需整頁重新查詢）
+    const patch = { LAW: body.LAW, OOS: body.OOS, OOC: body.OOC, alert: body.alert, sourceid: body.source_id };
+    const srcMeta = SPEC_SOURCES.find((s) => String(s.sourceid) === String(body.source_id));
+    if (srcMeta) patch.source = srcMeta.source;
+    Object.assign(r, patch);
+    const master = masterSpecs.find((x) => rowKey(x) === key);
+    if (master) Object.assign(master, patch);
+    editingKey = null;
+    delete editDrafts[key];
+    delete rowErrors[key];
+    renderList();
+    showToast('ok', `已更新 ${r.plantno}・${r.item} 規格，立即生效`);
+  } catch (e) {
+    rowErrors[key] = ['網路錯誤，請重試'];
+    renderList();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 頁籤 2：送簽申請
+// ══════════════════════════════════════════════════════════════════════
+function populateApplyOptions() {
+  const sel = document.getElementById('apply-source');
+  sel.innerHTML = SPEC_SOURCES.map((s) => `<option value="${s.sourceid}">${esc(s.source)}</option>`).join('');
+  const plants = [...new Set(masterSpecs.map((s) => s.plantno))].sort();
+  const items = [...new Set(masterSpecs.map((s) => s.item))].sort();
+  document.getElementById('apply-plantno-list').innerHTML = plants.map((p) => `<option value="${esc(p)}">`).join('');
+  document.getElementById('apply-item-list').innerHTML = items.map((i) => `<option value="${esc(i)}">`).join('');
+}
+
+function showApplyErrors(errors) {
+  const box = document.getElementById('apply-errors');
+  if (!errors || !errors.length) { box.hidden = true; return; }
+  box.hidden = false;
+  document.getElementById('apply-error-count').textContent = String(errors.length);
+  document.getElementById('apply-error-lines').innerHTML = errors.map((er) => `<div class="err-line">・${esc(er)}</div>`).join('');
+}
+
+document.getElementById('apply-submit-btn').addEventListener('click', async () => {
+  const plantno = document.getElementById('apply-plantno').value.trim();
+  const item = document.getElementById('apply-item').value.trim();
+  const preErrors = [];
+  if (!plantno) preErrors.push('廠區為必填');
+  if (!item) preErrors.push('項目為必填');
+  if (preErrors.length) { showApplyErrors(preErrors); showToast('err', '送出失敗，請修正表單中 ' + preErrors.length + ' 項問題'); return; }
+
+  const body = {
+    ftype: document.getElementById('apply-ftype').value,
+    plantno, item,
+    LAW: document.getElementById('apply-law').value.trim(),
+    OOS: document.getElementById('apply-oos').value.trim(),
+    OOC: document.getElementById('apply-ooc').value.trim(),
+    alert: document.getElementById('apply-alert').value.trim(),
+    source_id: Number(document.getElementById('apply-source').value),
+    remark: document.getElementById('apply-remark').value.trim(),
+  };
+
+  const btn = document.getElementById('apply-submit-btn');
+  btn.disabled = true;
+  try {
+    const { ok, data } = await parseResponse(await fetch('/spec/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }));
+    if (!ok) {
+      const errors = extractErrors(data);
+      showApplyErrors(errors);
+      showToast('err', '送出失敗，請修正表單中 ' + errors.length + ' 項問題');
+      return;
+    }
+    showApplyErrors([]);
+    ['apply-plantno', 'apply-item', 'apply-law', 'apply-oos', 'apply-ooc', 'apply-alert', 'apply-remark'].forEach((id) => { document.getElementById(id).value = ''; });
+    showToast('ok', `已送出簽核申請（單號 ${data.formno || data.formid || ''}），已進入簽核流程`);
+    loadTodos();  // 更新待簽核 badge
+  } catch (e) {
+    showApplyErrors(['網路錯誤，請重試']);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// 頁籤 3：我的申請
+// ══════════════════════════════════════════════════════════════════════
+function rowFtypeLabel(row) { return row.ftype_label || FTYPE_LABEL[row.ftype] || row.ftype || '—'; }
+function rowTime(row) {
+  const raw = row.cdatetime || row.ctime || '';
+  return String(raw).replace('T', ' ').slice(0, 16);
+}
+function rowEmp(row) { return row.empstr || row.empno || '—'; }
+function rowStatusLabel(row) {
+  if (typeof row.fstatus === 'number') return STATUS_LABEL[row.fstatus] || String(row.fstatus);
+  return row.fstatus || '—';
+}
+function rowStatusColor(row) {
+  if (typeof row.fstatus === 'number') return STATUS_COLOR[row.fstatus] || STATUS_COLOR[0];
+  const byLabel = Object.entries(STATUS_LABEL).find(([, v]) => v === row.fstatus);
+  return byLabel ? STATUS_COLOR[Number(byLabel[0])] : STATUS_COLOR[0];
+}
+
+async function loadApplies() {
+  const body = document.getElementById('spec-mine-body');
+  const emptyEl = document.getElementById('spec-mine-empty');
+  body.innerHTML = `<div class="spec-empty">載入中...</div>`;
+  emptyEl.hidden = true;
+  try {
+    const res = await fetch('/spec/applies');
+    const rows = res.ok ? await res.json() : [];
+    if (!Array.isArray(rows) || rows.length === 0) {
+      body.innerHTML = '';
+      emptyEl.hidden = false;
+      return;
+    }
+    body.innerHTML = rows.map((m) => {
+      const [c, bg] = rowStatusColor(m);
+      return `
+        <div class="spec-grid-mine spec-row-view">
+          <span class="spec-cell-mono">${esc(m.formno)}</span>
+          <span class="spec-cell-plantno">${esc(m.plantno)}</span>
+          <span style="font-size:12.5px;color:var(--fg-2)">${esc(rowFtypeLabel(m))}</span>
+          <span class="spec-cell-item">${esc(m.item)}</span>
+          <span class="spec-cell-mono" style="font-size:12px;color:var(--fg-3)">${esc(rowTime(m))}</span>
+          <span class="spec-status-pill" style="background:${bg};color:${c}">${esc(rowStatusLabel(m))}</span>
+          <span class="spec-cell-remark">${esc(m.remark || '—')}</span>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = `<div class="spec-empty">載入失敗，請重試</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 頁籤 4：待簽核
+// ══════════════════════════════════════════════════════════════════════
+let todosCache = [];
+let rejectingKey = null;
+let rejectComment = {};
+let rejectErrorFlag = {};
+
+function todoKey(t) { return String(t.formid != null ? t.formid : t.formno); }
+
+async function loadTodos() {
+  try {
+    const res = await fetch('/spec/todos');
+    todosCache = res.ok ? await res.json() : [];
+  } catch (e) {
+    todosCache = [];
+  }
+  updateTodoBadge(todosCache.length);
+  if (!document.getElementById('tab-todo').hidden) renderTodos();
+}
+
+function todoDetail(t) {
+  const parts = [];
+  if (t.LAW) parts.push('LAW ' + t.LAW);
+  if (t.OOS) parts.push('OOS ' + t.OOS);
+  if (t.OOC) parts.push('OOC ' + t.OOC);
+  if (t.alert) parts.push('Alert ' + t.alert);
+  return parts.length ? parts.join(' ') : '（後端未提供異動明細，見程式碼註解）';
+}
+
+function renderTodos() {
+  const listEl = document.getElementById('spec-todo-list');
+  const emptyEl = document.getElementById('spec-todo-empty');
+  if (todosCache.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+  listEl.innerHTML = todosCache.map((t) => {
+    const key = todoKey(t);
+    const rejecting = rejectingKey === key;
+    return `
+      <div class="spec-todo-card">
+        <div class="spec-todo-head">
+          <span class="spec-todo-formno">${esc(t.formno)}</span>
+          <span class="spec-todo-plantno">${esc(t.plantno)}</span>
+          <span class="spec-todo-item">${esc(t.item)}</span>
+          <span class="spec-todo-ftype">${esc(rowFtypeLabel(t))}</span>
+          <span class="spec-todo-detail">${esc(todoDetail(t))}</span>
+          <span class="spec-todo-meta">申請人 ${esc(rowEmp(t))} ・ ${esc(rowTime(t))}</span>
+        </div>
+        ${rejecting ? `
+          <div class="spec-reject-form">
+            <div class="spec-field-label">否決原因（必填）</div>
+            <textarea rows="2" data-reject-key="${esc(key)}" placeholder="請說明否決原因，將寄送通知信給申請人">${esc(rejectComment[key] || '')}</textarea>
+            ${rejectErrorFlag[key] ? '<div class="spec-reject-error">請填寫否決原因</div>' : ''}
+            <div class="spec-reject-actions">
+              <button type="button" class="spec-btn-reject-cancel" data-action="cancel-reject" data-key="${esc(key)}">取消</button>
+              <button type="button" class="spec-btn-reject-confirm" data-action="confirm-reject" data-key="${esc(key)}">確認否決</button>
+            </div>
+          </div>
+        ` : `
+          <div class="spec-todo-actions">
+            <button type="button" class="spec-btn-reject" data-action="reject" data-key="${esc(key)}">否決</button>
+            <button type="button" class="spec-btn-approve" data-action="approve" data-key="${esc(key)}">核准</button>
+          </div>
+        `}
+      </div>`;
+  }).join('');
+}
+
+document.getElementById('spec-todo-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const key = btn.dataset.key;
+  const t = todosCache.find((x) => todoKey(x) === key);
+  if (!t) return;
+  if (btn.dataset.action === 'reject') { rejectingKey = key; renderTodos(); }
+  else if (btn.dataset.action === 'cancel-reject') { rejectingKey = null; renderTodos(); }
+  else if (btn.dataset.action === 'approve') { signTodo(t, 1, ''); }
+  else if (btn.dataset.action === 'confirm-reject') {
+    const comment = (rejectComment[key] || '').trim();
+    if (!comment) { rejectErrorFlag[key] = true; renderTodos(); return; }
+    signTodo(t, 9, comment);
+  }
+});
+document.getElementById('spec-todo-list').addEventListener('input', (e) => {
+  const el = e.target.closest('textarea[data-reject-key]');
+  if (!el) return;
+  rejectComment[el.dataset.rejectKey] = el.value;
+  rejectErrorFlag[el.dataset.rejectKey] = false;
+});
+
+async function signTodo(t, actionid, comment) {
+  const key = todoKey(t);
+  const body = { formid: t.formid, flowid: t.flowid || 0, actionid, comment: comment || '' };
+  try {
+    const { ok, data } = await parseResponse(await fetch('/spec/sign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }));
+    if (!ok) {
+      showToast('err', extractErrors(data).join('\n'));
+      return;
+    }
+    rejectingKey = null;
+    delete rejectComment[key];
+    delete rejectErrorFlag[key];
+    showToast(actionid === 1 ? 'ok' : 'err', (actionid === 1 ? '已核准 ' : '已否決 ') + t.plantno + '・' + t.item + '，已通知申請人');
+    loadTodos();
+  } catch (e) {
+    showToast('err', '網路錯誤，請重試');
+  }
+}
+
+// ── 初始化 ──────────────────────────────────────────────────────────────
+populateFilterOptions();
+populateApplyOptions();
+renderList();
+switchTab(DEFAULT_TAB);
+loadTodos();  // 一開始就抓一次，讓「待簽核」頁籤 badge 有正確件數
+</script>
+</body>
+</html>
