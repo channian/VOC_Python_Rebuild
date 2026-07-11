@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>異常報表 | VOC 監測平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/voc_b.css">
+{# 本頁特有樣式：一律用 voc_b.css 提供的 design token 變數，不寫死顏色值 #}
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg-1);color:var(--fg-1);font-family:var(--font-sans,'Inter',sans-serif);
+    font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh;
+    background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);
+    background-size:32px 32px;background-attachment:fixed;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{color:var(--accent-hover)}
+  input::placeholder{color:var(--fg-3)}
+
+  .rp-page{min-height:100vh;display:flex;flex-direction:column}
+
+  .rp-header{
+    height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);
+    display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:20;
+  }
+  .rp-back{
+    display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--fg-2);
+    background:transparent;border:none;cursor:pointer;padding:0;font-family:inherit;
+  }
+  .rp-back:hover{color:var(--fg-1)}
+  .rp-back svg{width:16px;height:16px}
+  .rp-sep{width:1px;height:20px;background:var(--border-2)}
+  .rp-title-block h1{margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)}
+  .rp-title-block .rp-sub{font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px}
+  .rp-spacer{flex:1}
+  .rp-drilldown-link{font-size:12.5px;color:var(--fg-2)}
+  .rp-drilldown-link:hover{color:var(--accent)}
+
+  .rp-content{padding:20px 28px 64px;max-width:1440px;width:100%;margin:0 auto}
+
+  /* 落差提示條 */
+  .rp-gap-banner{
+    display:flex;gap:10px;align-items:flex-start;background:var(--warn-bg);
+    border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:11px 16px;margin-bottom:16px;
+    font-size:12.5px;color:var(--fg-2);line-height:1.6;
+  }
+  .rp-gap-banner svg{width:16px;height:16px;color:var(--warn);flex:none;margin-top:1px}
+  .rp-gap-banner b{color:var(--warn)}
+  .rp-gap-close{
+    background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:13px;
+    padding:2px;margin-left:auto;flex:none;
+  }
+  .rp-gap-close:hover{color:var(--fg-1)}
+
+  /* 篩選列 */
+  .rp-filter-bar{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg-2);
+    border:1px solid var(--border-1);border-radius:12px;padding:14px 16px;margin-bottom:20px;
+    box-shadow:var(--shadow-1);
+  }
+  .rp-select{
+    padding:8px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;
+    color:var(--fg-1);font-size:12.5px;font-family:inherit;
+  }
+  .rp-date-input{
+    width:150px;padding:8px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;
+    color:var(--fg-1);font-family:var(--font-mono);font-size:12.5px;
+  }
+  .rp-date-sep{color:var(--fg-3)}
+  .rp-mt-label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--fg-2);cursor:pointer}
+  .rp-mt-label input{accent-color:var(--accent)}
+  .rp-date-error{font-size:12px;color:var(--err)}
+  .rp-total-count{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3)}
+
+  /* 長條圖 */
+  .rp-section{
+    background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);
+    padding:20px 22px;margin-bottom:20px;
+  }
+  .rp-section-title{
+    font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);
+    margin-bottom:14px;
+  }
+  .rp-bar-row{
+    display:grid;grid-template-columns:64px 1fr 56px;gap:12px;align-items:center;padding:4px 6px;
+    border-radius:6px;cursor:pointer;
+  }
+  .rp-bar-row:hover{background:var(--bg-3)}
+  .rp-bar-plant{font-family:var(--font-mono);font-weight:700;font-size:12.5px}
+  .rp-bar-track{height:16px;background:var(--bg-1);border-radius:4px;overflow:hidden;position:relative}
+  .rp-bar-fill{
+    position:absolute;inset:0;width:0;background:linear-gradient(90deg, var(--accent), var(--blue));
+    border-radius:4px;
+  }
+  .rp-bar-count{font-family:var(--font-mono);font-size:12.5px;text-align:right;color:var(--fg-2)}
+  .rp-empty-hint{font-size:12.5px;color:var(--fg-3);padding:8px 4px}
+
+  /* 兩欄：交叉表 / 排行榜 */
+  .rp-grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+  @media (max-width: 1000px){.rp-grid-2{grid-template-columns:1fr}}
+  .rp-pivot-wrap{overflow-x:auto}
+  .rp-pivot-table{min-width:400px;border-collapse:collapse;width:100%}
+  .rp-pivot-table th,.rp-pivot-table td{
+    padding:6px 8px;font-size:12px;text-align:center;font-family:var(--font-mono);
+    border-bottom:1px solid var(--border-1);
+  }
+  .rp-pivot-table thead th{
+    font-size:10.5px;color:var(--fg-2);font-weight:700;background:var(--bg-1);font-family:var(--font-mono);
+  }
+  .rp-pivot-table td.rp-pivot-itemcol,.rp-pivot-table th.rp-pivot-itemcol{
+    text-align:left;font-family:var(--font-sans);font-weight:600;color:var(--fg-1);background:var(--bg-1);
+    white-space:nowrap;
+  }
+  .rp-pivot-table td.rp-pivot-cell-has{
+    color:var(--warn);font-weight:700;background:var(--warn-bg);cursor:pointer;
+  }
+  .rp-pivot-table td.rp-pivot-cell-zero{color:var(--fg-3);background:var(--bg-1)}
+  .rp-pivot-table td.rp-pivot-total,.rp-pivot-table th.rp-pivot-total{
+    font-weight:700;color:var(--fg-1);background:var(--bg-3);
+  }
+  .rp-pivot-table tr.rp-pivot-totalrow td{font-weight:700;color:var(--fg-1);background:var(--bg-3)}
+  .rp-pivot-table tr.rp-pivot-totalrow td.rp-pivot-total{
+    font-weight:800;color:var(--accent);background:var(--bg-4);
+  }
+
+  .rp-rank-row{display:flex;align-items:center;gap:12px;padding:7px 8px;border-radius:6px;cursor:pointer}
+  .rp-rank-row:hover{background:var(--bg-3)}
+  .rp-rank-num{width:22px;font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--fg-3)}
+  .rp-rank-num.rp-rank-top{color:var(--err)}
+  .rp-rank-num.rp-rank-bottom{color:var(--ok)}
+  .rp-rank-plant{font-family:var(--font-mono);font-weight:700;font-size:13px}
+  .rp-rank-spacer{flex:1}
+  .rp-rank-count{font-family:var(--font-mono);font-size:13px;color:var(--fg-2)}
+
+  /* toast */
+  .rp-toast{
+    position:fixed;bottom:24px;right:24px;z-index:200;min-width:280px;max-width:420px;
+    background:var(--bg-2);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-3);
+    padding:12px 16px;display:none;gap:10px;align-items:flex-start;
+  }
+  .rp-toast.rp-show{display:flex}
+  .rp-toast-msg{flex:1;font-size:12.5px;color:var(--fg-1);line-height:1.6}
+  .rp-toast-close{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:14px;padding:2px}
+  .rp-toast-close:hover{color:var(--fg-1)}
+</style>
+</head>
+<body>
+<div class="rp-page">
+
+  <header class="rp-header">
+    <button class="rp-back" type="button" onclick="location.href='/home'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+      返回儀表板
+    </button>
+    <span class="rp-sep"></span>
+    <div class="rp-title-block">
+      <h1>異常報表</h1>
+      <div class="rp-sub">ANOMALY REPORT</div>
+    </div>
+    <div class="rp-spacer"></div>
+    {# 第 2 波 WP-D 把「異常查詢／異常回覆」合併為深色 modal 後，這裡可以改開該 modal； #}
+    {# 目前先連回 /ui/history（既有頁面尚未改版，見下方 TODO 一併說明）。 #}
+    <a href="/ui/history" class="rp-drilldown-link">↗ 異常查詢／回覆</a>
+  </header>
+
+  <div class="rp-content">
+
+    <!-- 落差提示 -->
+    <div class="rp-gap-banner" id="rp-gap-banner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+      <div><b>現況說明：</b>統計母集合目前<b>含雨水溝／放流項目</b>，舊系統統計刻意排除，數字會較舊系統多（詳見 CLAUDE.md 待業務確認清單）。</div>
+      <button class="rp-gap-close" id="rp-gap-close" type="button" aria-label="關閉提示">&#10005;</button>
+    </div>
+
+    <!-- 篩選列 -->
+    <div class="rp-filter-bar">
+      <select class="rp-select" id="rp-plant-select"></select>
+      <select class="rp-select" id="rp-item-select"></select>
+      <span class="rp-sep"></span>
+      <input class="rp-date-input" id="rp-sdate" placeholder="開始日期 yyyy/MM/dd">
+      <span class="rp-date-sep">～</span>
+      <input class="rp-date-input" id="rp-edate" placeholder="結束日期 yyyy/MM/dd">
+      <label class="rp-mt-label">
+        <input type="checkbox" id="rp-mt">MT 廠全部（含保養中）
+      </label>
+      <span class="rp-date-error" id="rp-date-error" style="display:none">開始日期不可大於結束日期</span>
+      <span class="rp-spacer"></span>
+      <span class="rp-total-count" id="rp-total-count">共 0 件異常</span>
+    </div>
+
+    <!-- 長條圖 -->
+    <section class="rp-section" data-screen-label="廠區長條圖">
+      <div class="rp-section-title">各廠區異常件數 SUMMARY BY PLANT</div>
+      <div id="rp-bar-list" style="display:flex;flex-direction:column;gap:7px"></div>
+    </section>
+
+    <div class="rp-grid-2">
+      <!-- 交叉統計表 -->
+      <section class="rp-section" data-screen-label="交叉統計表" style="margin-bottom:0">
+        <div class="rp-section-title">項目 × 廠區交叉統計 CROSS TABLE</div>
+        <div class="rp-pivot-wrap">
+          <table class="rp-pivot-table" id="rp-pivot-table">
+            <thead><tr id="rp-pivot-head"></tr></thead>
+            <tbody id="rp-pivot-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 排行榜 -->
+      <section class="rp-section" data-screen-label="排行榜" style="margin-bottom:0">
+        <div class="rp-section-title">廠區排行榜 RANKING</div>
+        <div id="rp-rank-list" style="display:flex;flex-direction:column;gap:2px"></div>
+      </section>
+    </div>
+
+  </div>
+</div>
+
+<!-- toast -->
+<div class="rp-toast" id="rp-toast">
+  <div class="rp-toast-msg" id="rp-toast-msg"></div>
+  <button class="rp-toast-close" id="rp-toast-close" type="button" aria-label="關閉提示">&#10005;</button>
+</div>
+
+<script>
+// ── Tweaks（設計稿 data-props 預設值，先寫死成 JS 常數）──────────────────────
+// includeStormDrain：設計稿示意用的統計口徑切換；B 棧 /report/logs 目前沒有對應參數
+// （母集合固定含雨水溝，見上方落差提示條與 services_b/report_service.py 頂端註解），
+// 這裡先保留常數＋註解說明，不接任何後端參數，避免呼叫不存在的 API 欄位。
+const TWEAKS = { includeStormDrain: true, highlightTopBottom: true };
+
+// ── 日期預設：本月 1 日～今天（yyyy/MM/dd）────────────────────────────────
+function pad2(n) { return String(n).padStart(2, '0'); }
+function fmtYmd(d) { return d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()); }
+function defaultDateRange() {
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  return { sdate: fmtYmd(first), edate: fmtYmd(today) };
+}
+
+const state = {
+  plant: '', item: '',
+  sdate: '', edate: '', mt: false,
+};
+const DEFAULTS = defaultDateRange();
+state.sdate = DEFAULTS.sdate;
+state.edate = DEFAULTS.edate;
+
+// ── DOM refs ─────────────────────────────────────────────────────────────
+const $plantSelect = document.getElementById('rp-plant-select');
+const $itemSelect = document.getElementById('rp-item-select');
+const $sdate = document.getElementById('rp-sdate');
+const $edate = document.getElementById('rp-edate');
+const $mt = document.getElementById('rp-mt');
+const $dateError = document.getElementById('rp-date-error');
+const $totalCount = document.getElementById('rp-total-count');
+const $barList = document.getElementById('rp-bar-list');
+const $pivotHead = document.getElementById('rp-pivot-head');
+const $pivotBody = document.getElementById('rp-pivot-body');
+const $rankList = document.getElementById('rp-rank-list');
+const $gapBanner = document.getElementById('rp-gap-banner');
+const $gapClose = document.getElementById('rp-gap-close');
+const $toast = document.getElementById('rp-toast');
+const $toastMsg = document.getElementById('rp-toast-msg');
+const $toastClose = document.getElementById('rp-toast-close');
+
+$sdate.value = state.sdate;
+$edate.value = state.edate;
+
+// ── 落差提示條可關閉 ─────────────────────────────────────────────────────
+$gapClose.addEventListener('click', () => { $gapBanner.style.display = 'none'; });
+
+// ── toast（全域輕量自帶，各獨立頁各自一份，主控驗收時再統一抽共用）──────────
+let toastTimer = null;
+function showToast(msg) {
+  $toastMsg.textContent = msg;
+  $toast.classList.add('rp-show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $toast.classList.remove('rp-show'), 3500);
+}
+$toastClose.addEventListener('click', () => { $toast.classList.remove('rp-show'); clearTimeout(toastTimer); });
+
+// TODO(第 2 波 WP-D)：異常查詢／異常回覆合併版 modal 完成後，這裡的下鑽行為
+// 應改為開啟該 modal 並帶入 plant/item/sdate/edate/mt 查詢條件（設計稿原意：
+// 下鑽會切換整個彈窗內容成「異常查詢」頁）。目前先示意用 toast，不真的導頁。
+function drillDown(msg) {
+  showToast(msg + ' — 點擊將下鑽至異常查詢頁（示意，第 2 波接通）');
+}
+
+// ── 廠區/項目下拉 ─────────────────────────────────────────────────────────
+async function loadPlants() {
+  let plants = [];
+  try {
+    const res = await fetch('/history/plants');
+    plants = res.ok ? await res.json() : [];
+  } catch (e) { plants = []; }
+  $plantSelect.innerHTML = '';
+  const optAll = document.createElement('option');
+  optAll.value = ''; optAll.textContent = '全部廠區';
+  $plantSelect.appendChild(optAll);
+  plants.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    $plantSelect.appendChild(opt);
+  });
+  $plantSelect.value = state.plant;
+}
+
+async function loadItems() {
+  let items = [];
+  try {
+    const res = await fetch('/history/items?plant=' + encodeURIComponent(state.plant));
+    items = res.ok ? await res.json() : [];
+  } catch (e) { items = []; }
+  $itemSelect.innerHTML = '';
+  const optAll = document.createElement('option');
+  optAll.value = ''; optAll.textContent = '全部項目';
+  $itemSelect.appendChild(optAll);
+  items.forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = i;
+    $itemSelect.appendChild(opt);
+  });
+  // 廠區改變後，若原本選的項目不在新清單內，重設為全部
+  if (!items.includes(state.item)) state.item = '';
+  $itemSelect.value = state.item;
+}
+
+$plantSelect.addEventListener('change', async e => {
+  state.plant = e.target.value;
+  await loadItems();
+  fetchReport();
+});
+$itemSelect.addEventListener('change', e => {
+  state.item = e.target.value;
+  fetchReport();
+});
+$sdate.addEventListener('change', e => { state.sdate = e.target.value.trim(); fetchReport(); });
+$edate.addEventListener('change', e => { state.edate = e.target.value.trim(); fetchReport(); });
+$mt.addEventListener('change', e => { state.mt = e.target.checked; fetchReport(); });
+
+// ── 日期檢查（開始 > 結束時顯示錯誤不查詢，比對邏輯同設計稿：去掉斜線做字串比較）──
+function hasDateError() {
+  if (!state.sdate || !state.edate) return false;
+  return state.sdate.replace(/\//g, '') > state.edate.replace(/\//g, '');
+}
+
+// ── 長條圖 ───────────────────────────────────────────────────────────────
+function renderBars(summary) {
+  $barList.innerHTML = '';
+  if (!summary || summary.length === 0) {
+    $barList.innerHTML = '<div class="rp-empty-hint">此區間無異常紀錄</div>';
+    return;
+  }
+  summary.forEach(row => {
+    const div = document.createElement('div');
+    div.className = 'rp-bar-row';
+    div.innerHTML =
+      '<span class="rp-bar-plant">' + row.plantno + '</span>' +
+      '<div class="rp-bar-track"><div class="rp-bar-fill" style="width:' + row.pct + '%"></div></div>' +
+      '<span class="rp-bar-count">' + row.count + '</span>';
+    div.addEventListener('click', () => drillDown(row.plantno + ' 共 ' + row.count + ' 件（' + row.pct + '%）'));
+    $barList.appendChild(div);
+  });
+}
+
+// ── 交叉統計表 ───────────────────────────────────────────────────────────
+function renderPivot(pivot) {
+  $pivotHead.innerHTML = '';
+  $pivotBody.innerHTML = '';
+  if (!pivot || !pivot.columns || pivot.columns.length === 0) {
+    $pivotHead.innerHTML = '<th></th>';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'rp-empty-hint';
+    td.textContent = '此區間無異常紀錄';
+    tr.appendChild(td);
+    $pivotBody.appendChild(tr);
+    return;
+  }
+
+  const thBlank = document.createElement('th');
+  thBlank.className = 'rp-pivot-itemcol';
+  $pivotHead.appendChild(thBlank);
+  pivot.columns.forEach(col => {
+    const th = document.createElement('th');
+    th.textContent = col;
+    if (col === 'Total') th.classList.add('rp-pivot-total');
+    $pivotHead.appendChild(th);
+  });
+
+  pivot.rows.forEach(row => {
+    const isTotalRow = row.item === '總計';
+    const tr = document.createElement('tr');
+    if (isTotalRow) tr.classList.add('rp-pivot-totalrow');
+
+    const tdItem = document.createElement('td');
+    tdItem.className = 'rp-pivot-itemcol';
+    tdItem.textContent = row.item;
+    tr.appendChild(tdItem);
+
+    pivot.columns.forEach(col => {
+      const v = row[col] || 0;
+      const td = document.createElement('td');
+      if (isTotalRow) {
+        // 「總計」列（列/欄合計）維持粗體+底色標示，但不可點擊下鑽（照設計稿互動：
+        // 只有一般項目 × 廠區的交會格可下鑽，總計列/欄純顯示彙總數字）。
+        td.classList.add('rp-pivot-total');
+        td.textContent = String(v);
+      } else if (col === 'Total') {
+        td.classList.add('rp-pivot-total');
+        td.textContent = String(v);
+      } else if (v > 0) {
+        td.classList.add('rp-pivot-cell-has');
+        td.textContent = String(v);
+        td.addEventListener('click', () => drillDown(col + '・' + row.item + ' 共 ' + v + ' 件'));
+      } else {
+        td.classList.add('rp-pivot-cell-zero');
+        td.textContent = '0';
+      }
+      tr.appendChild(td);
+    });
+    $pivotBody.appendChild(tr);
+  });
+}
+
+// ── 排行榜（前 3 紅、後 3 綠；highlightTopBottom Tweak）──────────────────
+function renderRanking(ranking) {
+  $rankList.innerHTML = '';
+  if (!ranking || !ranking.rows || ranking.rows.length === 0) {
+    $rankList.innerHTML = '<div class="rp-empty-hint">此區間無異常紀錄</div>';
+    return;
+  }
+  const rows = ranking.rows;
+  const n = rows.length;
+  rows.forEach((r, idx) => {
+    const isTop = TWEAKS.highlightTopBottom && r.rank <= 3;
+    const isBottom = TWEAKS.highlightTopBottom && n > 3 && (idx >= n - 3);
+    const div = document.createElement('div');
+    div.className = 'rp-rank-row';
+    const rankCls = isTop ? 'rp-rank-top' : (isBottom ? 'rp-rank-bottom' : '');
+    div.innerHTML =
+      '<span class="rp-rank-num ' + rankCls + '">' + r.rank + '</span>' +
+      '<span class="rp-rank-plant">' + r.plantno + '</span>' +
+      '<span class="rp-rank-spacer"></span>' +
+      '<span class="rp-rank-count">' + r.count + '</span>';
+    div.addEventListener('click', () => drillDown('第 ' + r.rank + ' 名 ' + r.plantno + '，共 ' + r.count + ' 件'));
+    $rankList.appendChild(div);
+  });
+}
+
+// ── 主資料流：切換條件時重新 fetch /report/logs ────────────────────────
+async function fetchReport() {
+  if (hasDateError()) {
+    $dateError.style.display = 'inline';
+    $barList.innerHTML = '';
+    $pivotHead.innerHTML = '';
+    $pivotBody.innerHTML = '';
+    $rankList.innerHTML = '';
+    $totalCount.textContent = '共 0 件異常';
+    return;
+  }
+  $dateError.style.display = 'none';
+
+  const params = new URLSearchParams({
+    plant: state.plant, item: state.item,
+    sdate: state.sdate, edate: state.edate, mt: state.mt ? 'true' : 'false',
+  });
+
+  let data;
+  try {
+    const res = await fetch('/report/logs?' + params.toString());
+    if (!res.ok) throw new Error('查詢失敗');
+    data = await res.json();
+  } catch (e) {
+    $barList.innerHTML = '<div class="rp-empty-hint">查詢失敗，請稍後再試</div>';
+    $pivotHead.innerHTML = '';
+    $pivotBody.innerHTML = '';
+    $rankList.innerHTML = '';
+    return;
+  }
+
+  renderBars(data.summary);
+  renderPivot(data.pivot);
+  renderRanking(data.ranking);
+
+  const total = (data.summary || []).reduce((s, r) => s + r.count, 0);
+  $totalCount.textContent = '共 ' + total + ' 件異常';
+}
+
+// ── 初始化：載入篩選選項後，用預設條件查一次 ────────────────────────────
+(async function init() {
+  await loadPlants();
+  await loadItems();
+  await fetchReport();
+})();
+</script>
+</body>
+</html>
