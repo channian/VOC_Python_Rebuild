@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-1);color:var(--fg-1);font-family:var(--font-sans);font-size:14px;-webkit-font-smoothing:antialiased;
+background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);background-size:32px 32px;background-attachment:fixed}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-hover)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+input::placeholder{color:var(--fg-3)}
+</style>
+</helmet>
+
+<div data-screen-label="VOC 監測儀表板" style="display:flex;min-height:100vh;align-items:stretch">
+
+  <!-- ═══ 左側廠區導覽 rail (1b) ═══ -->
+  <aside data-screen-label="廠區導覽" style="width:236px;flex:none;background:var(--bg-2);border-right:1px solid var(--border-1);position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 14px 14px;border-bottom:1px solid var(--border-1)">
+      <div style="position:relative;flex:none">
+        <span style="font-weight:800;font-size:22px;letter-spacing:.01em;font-family:var(--font-sans);background:linear-gradient(90deg,#eab308,#22c55e,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1">VOC</span>
+        <span style="position:absolute;right:-2px;bottom:-3px;width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent-glow);animation:pulse 1.5s ease-in-out infinite"></span>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:var(--fg-1)">VOC 監測平台</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase">WASTE / VOC MONITOR</div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--fg-3);padding:14px 16px 6px">廠區 PLANTS — 異常置頂</div>
+    <div style="padding:0 8px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{ railPlants }}" as="rp" hint-placeholder-count="8">
+        <div onClick="{{ rp.onClick }}" style="{{ rp.style }}" style-hover="background:var(--bg-3)">
+          <span style="{{ rp.barStyle }}"></span>
+          <span style="font-weight:600;font-family:var(--font-mono);font-size:13px">{{ rp.no }}</span>
+          <span style="flex:1"></span>
+          <sc-for list="{{ rp.pills }}" as="pp" hint-placeholder-count="1">
+            <span style="{{ pp.style }}">{{ pp.txt }}</span>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="flex:1"></div>
+    <div style="padding:14px 16px;border-top:1px solid var(--border-1)">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--fg-3);margin-bottom:8px">燈號 LEGEND</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--fg-2)">
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:50%;background:var(--err);box-shadow:0 0 6px var(--err-glow);flex:none"></span>R 超過 OOS</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:9px;clip-path:polygon(50% 0,100% 100%,0 100%);background:var(--warn);flex:none"></span>O 數值超標（OOC~OOS）</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border:2px dashed var(--warn);transform:rotate(45deg);flex:none"></span>O≠ 管制值不同步</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;background:#eab308;transform:rotate(45deg);flex:none"></span>Y 預警／超允收</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;border:2px solid var(--ok);flex:none"></span>G 正常</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border:1px solid var(--muted);background:repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px);flex:none"></span>斷訊／保養中</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ 主內容 (1a) ═══ -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+    <!-- topbar -->
+    <header style="height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:10">
+      <div>
+        <h1 style="margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)">首頁儀表板</h1>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px">VOC PLATFORM / DASHBOARD</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);padding:6px 12px;border:1px solid var(--border-1);border-radius:999px;background:var(--bg-1)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);animation:pulse 1.5s ease-in-out infinite"></span>
+        資料更新 {{ updatedAt }} ・ 下次刷新 <b style="color:var(--accent)">{{ countdown }}</b>
+      </div>
+      <div style="display:flex;gap:8px;position:relative">
+        <sc-for list="{{ toolBtns }}" as="tb" hint-placeholder-count="3">
+          <a href="{{ tb.href }}" onClick="{{ tb.onClick }}" style="display:inline-flex;align-items:center;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;transition:all 180ms var(--ease);white-space:nowrap" style-hover="color:var(--fg-1);border-color:var(--border-3);transform:translateY(-1px)">{{ tb.label }}</a>
+        </sc-for>
+        <button onClick="{{ onToggleMore }}" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:{{ moreBg }};color:var(--fg-1);border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;transition:all 180ms var(--ease);white-space:nowrap" style-hover="border-color:var(--border-3)">
+          更多工具
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;transform:{{ moreChevRot }}"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+
+        <sc-if value="{{ moreOpen }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ onToggleMore }}" style="position:fixed;inset:0;z-index:40"></div>
+          <div onClick="{{ stop }}" style="position:absolute;top:44px;right:0;width:560px;background:var(--bg-2);border:1px solid var(--border-2);border-radius:12px;box-shadow:var(--shadow-3);padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:18px;z-index:50">
+            <sc-for list="{{ moreGroups }}" as="g" hint-placeholder-count="4">
+              <div>
+                <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-3);margin-bottom:8px">{{ g.label }}</div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <sc-for list="{{ g.items }}" as="gi" hint-placeholder-count="2">
+                    <a href="{{ gi.href }}" onClick="{{ gi.onClick }}" style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:12.5px;color:var(--fg-2);cursor:pointer" style-hover="background:var(--bg-3);color:var(--fg-1)">
+                      {{ gi.label }}
+                      <sc-if value="{{ gi.isNew }}" hint-placeholder-val="{{ false }}">
+                        <span style="margin-left:auto;font-family:var(--font-mono);font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent)">已改版</span>
+                      </sc-if>
+                    </a>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </header>
+
+    <div style="padding:20px 28px 48px;max-width:1440px;width:100%">
+
+      <!-- 摘要橫條 -->
+      <div data-screen-label="異常摘要" style="display:flex;gap:16px;margin-bottom:16px;align-items:stretch">
+        <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="4">
+          <div onClick="{{ m.onClick }}" style="{{ m.style }}" style-hover="border-color:var(--border-2)">
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);display:flex;align-items:center;gap:7px"><span style="{{ m.dotStyle }}"></span>{{ m.label }}</div>
+            <div style="{{ m.numStyle }}">{{ m.n }}</div>
+          </div>
+        </sc-for>
+        <div style="flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;padding:14px 18px;box-shadow:var(--shadow-1)">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:9px">異常速覽 ACTIVE ANOMALIES</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ chips }}" as="c" hint-placeholder-count="5">
+              <button onClick="{{ c.onClick }}" style="{{ c.style }}" style-hover="filter:brightness(1.25)">
+                <span style="{{ c.dotStyle }}"></span>{{ c.txt }}<span style="font-family:var(--font-mono);font-weight:600">{{ c.val }}</span>
+              </button>
+            </sc-for>
+            <sc-if value="{{ noAnomaly }}" hint-placeholder-val="{{ false }}">
+              <span style="color:var(--fg-3);font-size:13px">目前無 R／O 級異常</span>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+
+      <!-- 篩選列 -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <sc-for list="{{ statusChips }}" as="f" hint-placeholder-count="6">
+          <button onClick="{{ f.onClick }}" style="{{ f.style }}" style-hover="border-color:var(--border-3)">{{ f.txt }}</button>
+        </sc-for>
+        <span style="width:1px;height:20px;background:var(--border-2)"></span>
+        <sc-for list="{{ sourceChips }}" as="f" hint-placeholder-count="4">
+          <button onClick="{{ f.onClick }}" style="{{ f.style }}" style-hover="border-color:var(--border-3)">{{ f.txt }}</button>
+        </sc-for>
+        <span style="flex:1"></span>
+        <div style="position:relative;width:240px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--fg-3)"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <input value="{{ search }}" onChange="{{ onSearch }}" placeholder="搜尋廠區／項目…" style="width:100%;padding:8px 12px 8px 36px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px;font-family:inherit;outline:none" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+        </div>
+      </div>
+
+      <!-- 廠區手風琴 -->
+      <div data-screen-label="廠區列表" style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ plants }}" as="p" hint-placeholder-count="6">
+          <section style="{{ p.cardStyle }}">
+            <div onClick="{{ p.onToggle }}" style="{{ p.headStyle }}" style-hover="background:var(--bg-3)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="{{ p.chevStyle }}"><path d="m9 18 6-6-6-6"></path></svg>
+              <span style="font-family:var(--font-mono);font-weight:700;font-size:15px;color:var(--fg-1)">{{ p.no }}</span>
+              <span style="font-size:12px;color:var(--fg-3)">{{ p.desc }}</span>
+              <sc-for list="{{ p.pills }}" as="pl" hint-placeholder-count="1">
+                <span style="{{ pl.style }}"><span style="{{ pl.dotStyle }}"></span>{{ pl.txt }}</span>
+              </sc-for>
+              <span style="flex:1"></span>
+              <sc-if value="{{ p.collapsed }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;gap:5px;align-items:center;margin-right:12px">
+                  <sc-for list="{{ p.dots }}" as="d" hint-placeholder-count="10">
+                    <span style="{{ d.style }}"></span>
+                  </sc-for>
+                </span>
+              </sc-if>
+              <span style="font-size:12px;color:var(--fg-3);font-family:var(--font-mono)">{{ p.countTxt }}</span>
+            </div>
+
+            <sc-if value="{{ p.expanded }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top:1px solid var(--border-1)">
+                <div style="display:grid;grid-template-columns:96px 1fr 120px 76px 72px 1fr 84px 28px;gap:10px;align-items:center;padding:7px 18px;background:var(--bg-1);border-bottom:1px solid var(--border-1);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">
+                  <span>狀態</span><span>監測項目</span><span style="text-align:right">最新讀值</span><span>單位</span><span>來源</span><span>備註</span><span>歷史</span><span></span>
+                </div>
+                <sc-for list="{{ p.items }}" as="it" hint-placeholder-count="6">
+                  <div>
+                    <div onClick="{{ it.onToggle }}" style="{{ it.rowStyle }}" style-hover="background:var(--bg-3)">
+                      <span style="{{ it.pillStyle }}"><span style="{{ it.dotStyle }}"></span>{{ it.stLabel }}</span>
+                      <span style="font-weight:600;font-size:13.5px;color:var(--fg-1)">{{ it.item }}</span>
+                      <span style="{{ it.valStyle }}">{{ it.val }}</span>
+                      <span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-3)">{{ it.unit }}</span>
+                      <span style="{{ it.srcStyle }}">{{ it.srcTxt }}</span>
+                      <span style="font-size:12px;color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.remark }}</span>
+                      <span>
+                        <sc-if value="{{ it.hasUrl }}" hint-placeholder-val="{{ false }}">
+                          <a href="{{ it.url }}" onClick="{{ it.onCurve }}" style="font-size:12px;font-family:var(--font-mono);color:var(--accent)">曲線 ↗</a>
+                        </sc-if>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="{{ it.chevStyle }}"><path d="m6 9 6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ it.open }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:14px 18px 16px 124px;background:var(--bg-1);border-bottom:1px solid var(--border-1)">
+                        <div style="display:flex;gap:32px;flex-wrap:wrap">
+                          <div>
+                            <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:7px">SPEC 門檻 THRESHOLDS</div>
+                            <div style="display:flex;gap:14px;font-family:var(--font-mono);font-size:12.5px">
+                              <span><span style="color:var(--err)">OOS</span> <b style="color:var(--fg-1)">{{ it.oos }}</b></span>
+                              <span><span style="color:var(--warn)">OOC</span> <b style="color:var(--fg-1)">{{ it.ooc }}</b></span>
+                              <span><span style="color:#eab308">Alert</span> <b style="color:var(--fg-1)">{{ it.alert }}</b></span>
+                              <span><span style="color:var(--fg-2)">允收</span> <b style="color:var(--fg-1)">{{ it.recv }}</b></span>
+                              <span><span style="color:var(--fg-3)">法規</span> <b style="color:var(--fg-2)">{{ it.law }}</b></span>
+                            </div>
+                          </div>
+                          <div>
+                            <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:7px">系統管制值比對 SYNC</div>
+                            <div style="display:flex;gap:10px;align-items:center;font-family:var(--font-mono);font-size:12.5px">
+                              <span style="color:var(--fg-2)">SCADA <b style="color:var(--fg-1)">{{ it.scadaVal }}</b></span>
+                              <span style="{{ it.scadaCmpStyle }}">{{ it.scadaCmpTxt }}</span>
+                              <span style="color:var(--fg-2)">CWMS <b style="color:var(--fg-1)">{{ it.cwmsVal }}</b></span>
+                              <span style="{{ it.cwmsCmpStyle }}">{{ it.cwmsCmpTxt }}</span>
+                            </div>
+                          </div>
+                          <sc-if value="{{ it.hasRain }}" hint-placeholder-val="{{ false }}">
+                            <div>
+                              <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:7px">24H 累積雨量</div>
+                              <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-3)">{{ it.rainTxt }}</div>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ p.hiddenTxt }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:8px 18px;font-size:12px;color:var(--fg-3);background:var(--bg-2)">{{ p.hiddenTxt }}</div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </section>
+        </sc-for>
+
+        <sc-if value="{{ noResult }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:48px;text-align:center;color:var(--fg-2);background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px">
+            <div style="font-size:14px">沒有符合篩選條件的監測項目</div>
+            <div style="font-size:12px;color:var(--fg-3);margin-top:6px">調整燈號／來源篩選或清除搜尋關鍵字</div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══ 功能 Modal ═══ -->
+<sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px">
+    <div onClick="{{ stop }}" style="{{ modalBoxStyle }}">
+      <div style="display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1);flex:none">
+        <span style="font-size:16px;font-weight:700;color:var(--fg-1)">{{ modalTitle }}</span>
+        <span style="flex:1"></span>
+        <button onClick="{{ closeModal }}" style="background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px" style-hover="color:var(--fg-1)">✕</button>
+      </div>
+      <div style="padding:20px 22px;overflow-y:auto;flex:1;min-height:0">
+
+        <!-- 派送名單維護 -->
+        <sc-if value="{{ isModalML }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;justify-content:space-between;background:{{ ml.pauseBg }};border:1px solid {{ ml.pauseBorder }};border-radius:10px;padding:12px 16px;margin-bottom:16px">
+            <div style="font-size:12.5px;color:var(--fg-1);line-height:1.6"><b style="color:{{ ml.pauseColor }}">全域暫停寄信</b> — 啟用後全平台派報 Email 全部停發，不分個別設定，屬高風險操作</div>
+            <button onClick="{{ ml.onTogglePause }}" style="{{ ml.pauseBtnStyle }}">{{ ml.pauseBtnTxt }}</button>
+          </div>
+          <div style="display:grid;grid-template-columns:80px 100px 90px 100px 90px 64px 64px 56px 40px;gap:8px;align-items:center;padding:8px 10px;background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-2)">
+            <span>廠區</span><span>報表類型</span><span>工號</span><span>姓名</span><span>Notes ID</span><span>方式</span><span>Email</span><span>簽核</span><span></span>
+          </div>
+          <sc-for list="{{ ml.rows }}" as="r" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:80px 100px 90px 100px 90px 64px 64px 56px 40px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border-1)" style-hover="background:var(--bg-3)">
+              <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantno }}</span>
+              <span style="font-size:12px">{{ r.rpttype }}</span>
+              <span style="font-family:var(--font-mono);font-size:12px">{{ r.empno }}</span>
+              <span style="font-size:12px;color:var(--fg-2)">{{ r.empname }}</span>
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3)">{{ r.notesid }}</span>
+              <span style="{{ r.typeStyle }}">{{ r.mailtype }}</span>
+              <span style="{{ r.mailStyle }}">{{ r.mailTxt }}</span>
+              <span style="{{ r.signStyle }}">{{ r.signTxt }}</span>
+              <button onClick="{{ r.onDelete }}" style="background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:13px" style-hover="color:var(--err)">✕</button>
+            </div>
+          </sc-for>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-2)">
+            <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px">新增名單</div>
+            <div style="display:grid;grid-template-columns:80px 110px 100px 1fr 90px 90px 90px auto;gap:8px;align-items:center">
+              <select value="{{ ml.f_plant }}" onChange="{{ ml.onFPlant }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <sc-for list="{{ ml.plantOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+              </select>
+              <select value="{{ ml.f_rpttype }}" onChange="{{ ml.onFRpttype }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <sc-for list="{{ ml.rpttypeOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o }}">{{ o }}</option></sc-for>
+              </select>
+              <input value="{{ ml.f_empno }}" onChange="{{ ml.onFEmpno }}" placeholder="工號" style="padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px;width:100%">
+              <span style="font-size:11.5px;color:var(--fg-3)">{{ ml.f_autoTxt }}</span>
+              <select value="{{ ml.f_mailtype }}" onChange="{{ ml.onFMailtype }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <option value="TO">TO</option><option value="CC">CC</option>
+              </select>
+              <select value="{{ ml.f_mail }}" onChange="{{ ml.onFMail }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <option value="1">發信</option><option value="0">不發</option>
+              </select>
+              <select value="{{ ml.f_signgrp }}" onChange="{{ ml.onFSigngrp }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <option value="0">非簽核</option><option value="1">簽核人</option>
+              </select>
+              <button onClick="{{ ml.onAdd }}" style="padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap">新增</button>
+            </div>
+            <div style="font-size:11px;color:var(--fg-3);margin-top:8px">手機／簡訊欄位已停用（B 棧資料層無此欄位）</div>
+          </div>
+        </sc-if>
+
+        <!-- 隔離申請 -->
+        <sc-if value="{{ isModalCTL }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11.5px;color:var(--fg-2);background:var(--info-bg);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;line-height:1.6">隔離時間上限一律 1 小時；簽核為單關卡 OR 邏輯，任一人核准/否決即結案；簽核人排除申請人本人與離職員工。</div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:8px">目前有效隔離</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
+            <sc-for list="{{ ctl.rows }}" as="r" hint-placeholder-count="2">
+              <div style="background:var(--bg-1);border:1px solid var(--border-1);border-radius:8px;padding:10px 14px;font-size:12.5px">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                  <span style="font-family:var(--font-mono);color:var(--fg-3)">{{ r.ccno }}</span>
+                  <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantno }}</span>
+                  <span style="{{ r.statusStyle }}">{{ r.statusTxt }}</span>
+                  <span style="color:var(--fg-2)">{{ r.mdfdesc }}</span>
+                  <span style="flex:1"></span>
+                  <span style="font-family:var(--font-mono);color:var(--fg-3);font-size:11.5px">{{ r.stime }} ～ {{ r.etime }}</span>
+                </div>
+                <div style="color:var(--fg-3);font-size:11.5px;margin-top:4px">申請人 {{ r.empstr }}{{ r.remarkTxt }}</div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ ctl.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="color:var(--fg-3);font-size:12.5px;padding:12px 0">目前無有效隔離</div>
+            </sc-if>
+          </div>
+          <div style="padding-top:14px;border-top:1px dashed var(--border-2)">
+            <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px">新增隔離申請</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:10px">
+              <div>
+                <div style="font-size:11px;color:var(--fg-3);margin-bottom:5px">廠區 *</div>
+                <select value="{{ ctl.f_plant }}" onChange="{{ ctl.onFPlant }}" style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px">
+                  <sc-for list="{{ ctl.plantOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--fg-3);margin-bottom:5px">隔離原因 *</div>
+                <input value="{{ ctl.f_reason }}" onChange="{{ ctl.onFReason }}" placeholder="例：儀器校正" style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--fg-3);margin-bottom:5px">開始時間 *</div>
+                <input value="{{ ctl.f_stime }}" onChange="{{ ctl.onFStime }}" placeholder="2026-07-11 15:00" style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12.5px">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--fg-3);margin-bottom:5px">結束時間 * （≤1 小時）</div>
+                <input value="{{ ctl.f_etime }}" onChange="{{ ctl.onFEtime }}" placeholder="2026-07-11 16:00" style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12.5px">
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--fg-3);margin-bottom:4px">隔離項目 *（依廠區顯示可隔離項目）</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+              <sc-for list="{{ ctl.itemOpts }}" as="io" hint-placeholder-count="4">
+                <label style="{{ io.style }}"><input type="checkbox" checked="{{ io.checked }}" onChange="{{ io.onToggle }}" style="accent-color:var(--accent)">{{ io.label }}</label>
+              </sc-for>
+            </div>
+            <sc-if value="{{ ctl.hasErrors }}" hint-placeholder-val="{{ false }}">
+              <div style="background:var(--err-bg);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+                <sc-for list="{{ ctl.errors }}" as="e" hint-placeholder-count="1"><div style="font-size:12px;color:var(--err)">・{{ e }}</div></sc-for>
+              </div>
+            </sc-if>
+            <div style="display:flex;justify-content:flex-end">
+              <button onClick="{{ ctl.onSubmit }}" style="padding:8px 18px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">送出申請</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- 簽核管理 -->
+        <sc-if value="{{ isModalFLOW }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11.5px;color:var(--fg-2);background:var(--info-bg);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;line-height:1.6">僅處理隔離申請的簽核（規格維護送簽在「規格維護／待簽核」頁籤，資料表不同）。退回一律要求填寫原因（統一自規格維護的作法）。</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ flow.rows }}" as="r" hint-placeholder-count="2">
+              <div style="background:var(--bg-1);border:1px solid var(--border-1);border-radius:10px;padding:12px 14px">
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                  <span style="font-family:var(--font-mono);color:var(--fg-3);font-size:12px">{{ r.ccno }}</span>
+                  <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantno }}</span>
+                  <span style="font-size:12.5px;color:var(--fg-2)">{{ r.ttype }}・{{ r.mdfdesc }}</span>
+                  <span style="flex:1"></span>
+                  <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3)">{{ r.empstr }} ・ {{ r.ctime }}</span>
+                </div>
+                <sc-if value="{{ r.rejecting }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:10px">
+                    <textarea value="{{ r.rejectComment }}" onChange="{{ r.onRejectComment }}" rows="2" placeholder="退回原因（必填）" style="width:100%;padding:7px 9px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;resize:vertical"></textarea>
+                    <sc-if value="{{ r.rejectError }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--err);margin-top:3px">請填寫退回原因</div></sc-if>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+                      <button onClick="{{ r.onCancelReject }}" style="padding:6px 12px;border-radius:6px;font-size:12px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+                      <button onClick="{{ r.onConfirmReject }}" style="padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;background:var(--err);color:#fff;border:none;cursor:pointer">確認退回</button>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ r.showActions }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+                    <button onClick="{{ r.onReject }}" style="padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;background:transparent;color:var(--err);border:1.5px solid rgba(239,68,68,0.4);cursor:pointer">退回</button>
+                    <button onClick="{{ r.onApprove }}" style="padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--ok);color:#062012;border:none;cursor:pointer">核准</button>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ flow.empty }}" hint-placeholder-val="{{ false }}"><div style="color:var(--fg-3);font-size:12.5px;padding:12px 0;text-align:center">目前沒有待簽核的隔離申請</div></sc-if>
+          </div>
+        </sc-if>
+
+        <!-- QA 手測值 -->
+        <sc-if value="{{ isModalQA }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:10px">僅列出 QA 手測來源項目（source=3）</div>
+          <div style="display:grid;grid-template-columns:70px 90px 60px 130px 90px 100px 1fr;gap:8px;align-items:center;padding:7px 8px;background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--fg-2)">
+            <span>廠區</span><span>項目</span><span>單位</span><span>門檻 OOS/OOC/Alert</span><span>目前讀值</span><span>資料時間</span><span>新讀值</span>
+          </div>
+          <sc-for list="{{ qa.rows }}" as="r" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:70px 90px 60px 130px 90px 100px 1fr;gap:8px;align-items:center;padding:8px 8px;border-bottom:1px solid var(--border-1)">
+              <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantno }}</span>
+              <span style="font-weight:600">{{ r.item }}</span>
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3)">{{ r.unit }}</span>
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3)">{{ r.oos }}/{{ r.ooc }}/{{ r.alert }}</span>
+              <span style="font-family:var(--font-mono);font-size:13px">{{ r.rvalue }}</span>
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3)">{{ r.cdatetime }}</span>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input value="{{ r.newval }}" onChange="{{ r.onChange }}" placeholder="N.D 或數值" style="flex:1;padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12.5px">
+                <button onClick="{{ r.onSave }}" style="padding:6px 12px;border-radius:6px;font-size:11.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap">儲存</button>
+              </div>
+              <sc-if value="{{ r.hasError }}" hint-placeholder-val="{{ false }}"><div style="grid-column:1/-1;font-size:11.5px;color:var(--err)">{{ r.error }}</div></sc-if>
+            </div>
+          </sc-for>
+          <div style="font-size:11px;color:var(--fg-3);margin-top:10px">每次寫入除更新目前讀值，同時 append 一筆歷史紀錄並快照當下管制值。</div>
+        </sc-if>
+
+        <!-- 異常查詢／異常回覆（共用查詢邏輯） -->
+        <sc-if value="{{ isModalHist }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;background:var(--bg-1);border:1px solid var(--border-1);border-radius:8px;padding:10px 12px">
+            <select value="{{ hist.f_plant }}" onChange="{{ hist.onFPlant }}" style="padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+              <sc-for list="{{ hist.plantOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}">{{ o.t }}</option></sc-for>
+            </select>
+            <input value="{{ hist.f_sdate }}" onChange="{{ hist.onFSdate }}" style="width:112px;padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px">
+            <span style="color:var(--fg-3)">～</span>
+            <input value="{{ hist.f_edate }}" onChange="{{ hist.onFEdate }}" style="width:112px;padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--fg-2)"><input type="checkbox" checked="{{ hist.f_mt }}" onChange="{{ hist.onFMt }}" style="accent-color:var(--accent)">MT 全部</label>
+            <span style="flex:1"></span>
+            <span style="font-size:11px;color:var(--fg-3)">共 {{ hist.count }} 筆・大範圍查詢建議捲動瀏覽</span>
+          </div>
+          <div style="display:grid;grid-template-columns:32px 64px 118px 1fr 140px {{ hist.reasonCol }};gap:8px;padding:7px 8px;background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--fg-2)">
+            <span>No</span><span>廠區</span><span>異常時間</span><span>異常訊息</span><span>回覆人/時間</span><span>原因</span>
+          </div>
+          <div style="max-height:340px;overflow-y:auto">
+            <sc-for list="{{ hist.rows }}" as="r" hint-placeholder-count="4">
+              <div>
+                <div style="display:grid;grid-template-columns:32px 64px 118px 1fr 140px {{ hist.reasonCol }};gap:8px;align-items:center;padding:8px 8px;border-bottom:1px solid var(--border-1)">
+                  <span style="font-family:var(--font-mono);color:var(--fg-3);font-size:11.5px">{{ r.no }}</span>
+                  <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantno }}</span>
+                  <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3)">{{ r.cdatetime }}</span>
+                  <span style="font-size:12px;color:var(--fg-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.msg }}</span>
+                  <span style="font-size:11.5px;color:var(--fg-3)">{{ r.replyBy }}</span>
+                  <sc-if value="{{ hist.editable }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ r.onToggleReply }}" style="padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:600;background:transparent;color:var(--accent);border:1.5px solid var(--border-2);cursor:pointer;white-space:nowrap">{{ r.reasonPreview }}</button>
+                  </sc-if>
+                  <sc-if value="{{ hist.readonly }}" hint-placeholder-val="{{ true }}">
+                    <span style="font-size:12px;color:var(--fg-3)">{{ r.reasonPreview }}</span>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ r.replying }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:10px 8px 14px 40px;background:var(--bg-1);border-bottom:1px solid var(--border-1)">
+                    <textarea value="{{ r.reasonDraft }}" onChange="{{ r.onReasonChange }}" rows="2" placeholder="填寫原因說明" style="width:100%;padding:7px 9px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;resize:vertical"></textarea>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+                      <button onClick="{{ r.onCancelReply }}" style="padding:5px 12px;border-radius:6px;font-size:11.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+                      <button onClick="{{ r.onSaveReply }}" style="padding:5px 12px;border-radius:6px;font-size:11.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">儲存</button>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ hist.empty }}" hint-placeholder-val="{{ false }}"><div style="padding:24px;text-align:center;color:var(--fg-3);font-size:12.5px">沒有符合篩選條件的紀錄</div></sc-if>
+          </div>
+        </sc-if>
+
+        <!-- 中水緊急通知 -->
+        <sc-if value="{{ isModalWATER }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div style="background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:700;color:var(--err);margin-bottom:6px">水質異常通知</div>
+              <div style="font-size:12px;color:var(--fg-2);line-height:1.6;margin-bottom:10px">查 K14B 目前異常讀值，對有登記收件人的廠區各發一封（讀值來源固定為 K14B，非可設定項目）。</div>
+              <sc-if value="{{ water.confirmingUrgent }}" hint-placeholder-val="{{ false }}">
+                <div style="background:var(--bg-1);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg-2);margin-bottom:10px">確認發送「水質異常通知」？此操作會實際寄送 Email 給外部收件人。</div>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                  <button onClick="{{ water.onCancelUrgent }}" style="padding:7px 14px;border-radius:6px;font-size:12.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+                  <button onClick="{{ water.onConfirmUrgent }}" style="padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--err);color:#fff;border:none;cursor:pointer">確認發送</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ water.showUrgentBtn }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;justify-content:flex-end">
+                  <button onClick="{{ water.onStartUrgent }}" style="padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--err);color:#fff;border:none;cursor:pointer">發送</button>
+                </div>
+              </sc-if>
+            </div>
+
+            <div style="background:var(--bg-1);border:1px solid var(--border-1);border-radius:10px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:700;color:var(--fg-1);margin-bottom:6px">改排水通知</div>
+              <div style="font-size:11.5px;color:var(--fg-3);margin-bottom:10px">通知廠區僅列出「已登記水質異常收件人」的廠區；CC 會自動併入 K14B 水質異常 TO 名單</div>
+              <div style="font-size:11px;color:var(--fg-3);margin-bottom:6px">通知廠區 *</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                <sc-for list="{{ water.plantOpts }}" as="po" hint-placeholder-count="4">
+                  <label style="{{ po.style }}"><input type="checkbox" checked="{{ po.checked }}" onChange="{{ po.onToggle }}" style="accent-color:var(--accent)">{{ po.label }}</label>
+                </sc-for>
+              </div>
+              <div style="font-size:11px;color:var(--fg-3);margin-bottom:5px">改排水原因 *</div>
+              <select value="{{ water.f_reason }}" onChange="{{ water.onFReason }}" style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;margin-bottom:10px">
+                <sc-for list="{{ water.reasonOpts }}" as="ro" hint-placeholder-count="3"><option value="{{ ro }}">{{ ro }}</option></sc-for>
+              </select>
+              <sc-if value="{{ water.showOtherReason }}" hint-placeholder-val="{{ false }}">
+                <input value="{{ water.f_otherReason }}" onChange="{{ water.onFOtherReason }}" placeholder="請說明其他異常原因" style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;margin-bottom:10px">
+              </sc-if>
+              <sc-if value="{{ water.hasErrors }}" hint-placeholder-val="{{ false }}">
+                <div style="background:var(--err-bg);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+                  <sc-for list="{{ water.errors }}" as="e" hint-placeholder-count="1"><div style="font-size:11.5px;color:var(--err)">・{{ e }}</div></sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ water.confirmingChange }}" hint-placeholder-val="{{ false }}">
+                <div style="background:var(--bg-2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg-2);margin-bottom:10px">將對 {{ water.confirmSummary }} 發送改排水通知，確認送出？</div>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                  <button onClick="{{ water.onCancelChange }}" style="padding:7px 14px;border-radius:6px;font-size:12.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+                  <button onClick="{{ water.onConfirmChange }}" style="padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">確認送出</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ water.showChangeBtn }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;justify-content:flex-end">
+                  <button onClick="{{ water.onStartChange }}" style="padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">發送改排水通知</button>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- 部門權限 -->
+        <sc-if value="{{ isModalDEPT }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:90px 110px 1fr 1fr 40px;gap:8px;padding:7px 8px;background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--fg-2)">
+            <span>廠區</span><span>部門代碼</span><span>部門名稱</span><span>備註</span><span></span>
+          </div>
+          <sc-for list="{{ dept.rows }}" as="r" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:90px 110px 1fr 1fr 40px;gap:8px;align-items:center;padding:8px 8px;border-bottom:1px solid var(--border-1)" style-hover="background:var(--bg-3)">
+              <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantLabel }}</span>
+              <span style="font-family:var(--font-mono)">{{ r.deptno }}</span>
+              <span style="font-size:12px;color:var(--fg-2)">{{ r.deptname }}</span>
+              <span style="font-size:12px;color:var(--fg-3)">{{ r.remark }}</span>
+              <button onClick="{{ r.onDelete }}" style="background:transparent;border:none;color:var(--fg-3);cursor:pointer" style-hover="color:var(--err)">✕</button>
+            </div>
+          </sc-for>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-2)">
+            <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px">新增部門</div>
+            <div style="display:grid;grid-template-columns:100px 130px 1fr auto;gap:8px;align-items:center">
+              <select value="{{ dept.f_plant }}" onChange="{{ dept.onFPlant }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <sc-for list="{{ dept.plantOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+              </select>
+              <input value="{{ dept.f_deptno }}" onChange="{{ dept.onFDeptno }}" placeholder="部門代碼" style="padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px">
+              <input value="{{ dept.f_remark }}" onChange="{{ dept.onFRemark }}" placeholder="備註" style="padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+              <button onClick="{{ dept.onAdd }}" style="padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap">新增</button>
+            </div>
+            <sc-if value="{{ dept.hasError }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--err);margin-top:6px">{{ dept.error }}</div></sc-if>
+            <div style="font-size:11px;color:var(--fg-3);margin-top:8px">部門名稱目前無正式中文全名來源，有效代碼即直接顯示代碼本身；plantid=29 為固定值「全廠」</div>
+          </div>
+        </sc-if>
+
+        <!-- ACL 使用者權限 -->
+        <sc-if value="{{ isModalACL }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11.5px;color:var(--fg-2);background:var(--info-bg);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;line-height:1.6">僅開放「隔離維護」「隔離查詢」兩種角色管理；此名單目前尚未真正掛到各功能頁做守門（僅示意權限維護介面）。</div>
+          <div style="display:grid;grid-template-columns:80px 90px 90px 100px 90px 1fr 40px;gap:8px;padding:7px 8px;background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--fg-2)">
+            <span>廠區</span><span>角色</span><span>工號</span><span>姓名</span><span>水/空</span><span>Notes ID</span><span></span>
+          </div>
+          <sc-for list="{{ acl.rows }}" as="r" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:80px 90px 90px 100px 90px 1fr 40px;gap:8px;align-items:center;padding:8px 8px;border-bottom:1px solid var(--border-1)" style-hover="background:var(--bg-3)">
+              <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantno }}</span>
+              <span style="font-size:12px;color:var(--fg-2)">{{ r.roletype }}</span>
+              <span style="font-family:var(--font-mono)">{{ r.empno }}</span>
+              <span style="font-size:12px">{{ r.empname }}</span>
+              <span style="font-size:12px;color:var(--fg-3)">{{ r.stype }}</span>
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3)">{{ r.notesid }}</span>
+              <button onClick="{{ r.onDelete }}" style="background:transparent;border:none;color:var(--fg-3);cursor:pointer" style-hover="color:var(--err)">✕</button>
+            </div>
+          </sc-for>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-2)">
+            <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px">新增權限</div>
+            <div style="display:grid;grid-template-columns:80px 110px 90px 100px auto;gap:8px;align-items:center">
+              <select value="{{ acl.f_plant }}" onChange="{{ acl.onFPlant }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <sc-for list="{{ acl.plantOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+              </select>
+              <select value="{{ acl.f_role }}" onChange="{{ acl.onFRole }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <option value="隔離維護">隔離維護</option><option value="隔離查詢">隔離查詢</option>
+              </select>
+              <input value="{{ acl.f_empno }}" onChange="{{ acl.onFEmpno }}" placeholder="工號" style="padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px">
+              <select value="{{ acl.f_stype }}" onChange="{{ acl.onFStype }}" style="padding:7px 6px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                <option value="全區">全區</option><option value="水">水</option><option value="空">空</option>
+              </select>
+              <button onClick="{{ acl.onAdd }}" style="padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap">新增</button>
+            </div>
+            <sc-if value="{{ acl.hasError }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--err);margin-top:6px">{{ acl.error }}</div></sc-if>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- global toast -->
+<sc-if value="{{ toastShow }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;bottom:24px;right:24px;z-index:200;min-width:300px;max-width:420px;background:var(--bg-2);border:1px solid {{ toastBorder }};border-radius:10px;box-shadow:var(--shadow-3);padding:13px 16px;display:flex;gap:10px;align-items:flex-start">
+    <span style="{{ toastDotStyle }}"></span>
+    <div style="flex:1;font-size:12.5px;color:var(--fg-1);line-height:1.6">{{ toastMsg }}</div>
+    <button onClick="{{ toastClose }}" style="background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:14px;padding:2px" style-hover="color:var(--fg-1)">✕</button>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;refreshMinutes&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 15, &quot;tsType&quot;: &quot;number&quot;, &quot;min&quot;: 1, &quot;max&quot;: 60, &quot;unit&quot;: &quot;分鐘&quot;, &quot;section&quot;: &quot;資料刷新&quot; },
+  &quot;distinguishSyncOrange&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;燈號&quot; },
+  &quot;compactRows&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;密度&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      fStatus: 'all', fSource: 0, search: '', expanded: {}, openRow: null, modal: null, moreOpen: false, secs: 0, updatedAt: '',
+      toast: null,
+      mlPaused: false,
+      mlRows: [
+        { plantno: 'K7', rpttype: '水質異常', empno: '10234', empname: '王小明', notesid: 'wang.xm', mailtype: 'TO', mail: true, signgrp: true },
+        { plantno: 'K7', rpttype: '水質異常', empno: '20981', empname: '林佳蓁', notesid: 'lin.jz', mailtype: 'CC', mail: true, signgrp: false },
+        { plantno: 'K9', rpttype: '空保養中', empno: '10234', empname: '王小明', notesid: 'wang.xm', mailtype: 'TO', mail: true, signgrp: true },
+        { plantno: 'K11', rpttype: '水Alert', empno: '30112', empname: '陳志遠', notesid: 'chen.zy', mailtype: 'TO', mail: false, signgrp: false },
+      ],
+      mlForm: { plant: 'K7', rpttype: '水質異常', empno: '', mailtype: 'TO', mail: '1', signgrp: '0' },
+      ctlRows: [
+        { ccno: '20260711001', plantno: 'K7', empstr: '10234-王小明', mdfdesc: '儀器校正', stime: '15:00', etime: '15:40', status: 1, remark: '' },
+      ],
+      ctlForm: { plant: 'K7', reason: '', stime: '', etime: '', items: {} },
+      ctlErrors: [],
+      flowRows: [
+        { ccno: '20260711002', plantno: 'K9', empstr: '20981-林佳蓁', ttype: '新增隔離', mdfdesc: '感測器維護', ctime: '2026-07-11 09:12' },
+      ],
+      flowRejectingId: null, flowRejectComment: {}, flowRejectError: {},
+      qaRows: [
+        { plantno: 'K9', item: 'Cu', unit: 'mg/L', oos: '3', ooc: '2.5', alert: '2', rvalue: '0.42', cdatetime: '2026-07-10 08:30', newval: '' },
+        { plantno: 'K9', item: 'Ni', unit: 'mg/L', oos: '1', ooc: '0.8', alert: '0.6', rvalue: '0.11', cdatetime: '2026-07-10 08:30', newval: '' },
+      ],
+      qaErrors: {},
+      histSdate: '2026/07/01', histEdate: '2026/07/11', histPlant: '', histMt: false,
+      histRows: [
+        { no: 1, plantno: 'K7', cdatetime: '2026/07/09 14:02', msg: 'pH 超過 OOS 門檻（9.42）', reason: '', replyBy: '—' },
+        { no: 2, plantno: 'K14B', cdatetime: '2026/07/08 21:15', msg: 'COD 數值超標（128 mg/L）', reason: '設備校正異常，已排除', replyBy: '王小明 / wang.xm' },
+        { no: 3, plantno: 'K9', cdatetime: '2026/07/06 03:44', msg: 'SS 通訊中斷', reason: '', replyBy: '—' },
+      ],
+      histReplyingId: null, histDraft: {},
+      waterSelected: {}, waterReason: '排放系統維護', waterOther: '', waterErrors: [],
+      waterUrgentConfirm: false, waterChangeConfirm: false,
+      deptRows: [
+        { plantno: 'K7', deptno: 'ENV01', remark: '環安部' },
+        { plantno: '全廠', deptno: 'GMO', remark: '總管理處' },
+      ],
+      deptForm: { plant: 'K7', deptno: '', remark: '' }, deptError: '',
+      aclRows: [
+        { plantno: 'K7', roletype: '隔離維護', empno: '10234', empname: '王小明', notesid: 'wang.xm', stype: '全區' },
+        { plantno: 'K9', roletype: '隔離查詢', empno: '20981', empname: '林佳蓁', notesid: 'lin.jz', stype: '空' },
+      ],
+      aclForm: { plant: 'K7', role: '隔離維護', empno: '', stype: '全區' }, aclError: '',
+    };
+    this.PLANTS = this.makeData();
+  }
+
+  showToast(msg, isErr) {
+    this.setState({ toast: { msg, isErr: !!isErr } });
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => this.setState(s => (s.toast && s.toast.msg === msg ? { toast: null } : {})), 4000);
+  }
+
+  makeData() {
+    const CAT = [
+      { item: 'pH', unit: '', oos: '6-9', ooc: '6.2-8.8', alert: '6.5-8.5', recv: '6.5-8.5', law: '5-10', base: 7.2, dec: 2 },
+      { item: 'COD', unit: 'mg/L', oos: '100', ooc: '80', alert: '70', recv: '60', law: '120', base: 52, dec: 0 },
+      { item: 'SS', unit: 'mg/L', oos: '30', ooc: '25', alert: '20', recv: '18', law: '50', base: 11, dec: 1 },
+      { item: 'VOC', unit: 'ppm', oos: '50', ooc: '40', alert: '30', recv: '25', law: '60', base: 17, dec: 1 },
+      { item: 'Cu', unit: 'mg/L', oos: '3', ooc: '2.5', alert: '2', recv: '1.8', law: '3', base: 0.42, dec: 2, src: 3 },
+      { item: 'Ni', unit: 'mg/L', oos: '1', ooc: '0.8', alert: '0.6', recv: '0.5', law: '1', base: 0.12, dec: 2, src: 3 },
+      { item: '氨氮', unit: 'mg/L', oos: '20', ooc: '16', alert: '12', recv: '10', law: '30', base: 6.4, dec: 1 },
+      { item: '流量', unit: 'CMD', oos: '4000', ooc: '3600', alert: '3200', recv: '3000', law: '—', base: 2150, dec: 0 },
+      { item: '溫度', unit: '°C', oos: '15-40', ooc: '18-38', alert: '20-36', recv: '20-36', law: '—', base: 28.4, dec: 1 },
+      { item: '導電度', unit: 'µS/cm', oos: '4500', ooc: '4000', alert: '3500', recv: '3200', law: '—', base: 1820, dec: 0, src: 2 },
+      { item: '濁度', unit: 'NTU', oos: '50', ooc: '40', alert: '30', recv: '25', law: '—', base: 8.2, dec: 1, src: 2 },
+      { item: '硝酸鹽', unit: 'mg/L', oos: '50', ooc: '45', alert: '40', recv: '35', law: '50', base: 21.5, dec: 1 },
+    ];
+    const defs = [
+      ['K7', '廢水處理場', 12], ['K14B', '廢水處理場', 10], ['K9', '空污防制', 11], ['K11', '廢水處理場', 12],
+      ['K3', '廢水處理場', 10], ['K5', '空污防制', 9], ['K6', '廢水處理場', 10], ['K8', '空污防制', 8],
+      ['K10', '廢水處理場', 9], ['K12', '雨水溝／放流', 10], ['K14A', '廢水處理場', 11], ['K15', '空污防制', 8],
+    ];
+    const OV = {
+      'K7|pH':   { status: 'R', val: '9.42', url: 'VOC 歷史曲線.dc.html', remark: '' },
+      'K7|VOC':  { status: 'O', val: '42.1', url: 'VOC 歷史曲線.dc.html' },
+      'K7|Cu':   { status: 'X', val: '保養中', broken: 2, remark: '例行保養至 7/9' },
+      'K14B|COD':{ status: 'R', val: '128', src: 2, url: 'VOC 歷史曲線.dc.html' },
+      'K9|SS':   { status: 'X', val: '斷訊', broken: 1, remark: '通訊模組斷線，已通報' },
+      'K9|流量': { status: 'X', val: '斷訊', broken: 1, remark: '' },
+      'K9|氨氮': { status: 'Y', val: '13.8', url: 'VOC 歷史曲線.dc.html' },
+      'K11|pH':  { status: 'O2', val: '7.41', scadaOos: '6-9.5', remark: 'SCADA 管制值與 SPEC 不同步' },
+      'K3|氨氮': { status: 'Y', val: '14.5' },
+      'K3|硝酸鹽':{ status: 'Y', val: '41.2', url: 'VOC 歷史曲線.dc.html' },
+    };
+    return defs.map(([no, desc, n], pi) => {
+      const items = [];
+      for (let i = 0; i < n; i++) {
+        const c = CAT[i % CAT.length];
+        const jitter = 0.82 + (((pi * 13 + i * 7) % 37) / 100);
+        const raw = c.base * jitter;
+        const ov = OV[no + '|' + c.item] || {};
+        const isRain = no === 'K12' && c.item === 'pH';
+        items.push({
+          plant: no, item: c.item, unit: c.unit,
+          oos: c.oos, ooc: c.ooc, alert: c.alert, recv: c.recv, law: c.law,
+          scadaVal: ov.scadaOos || c.oos, cwmsVal: c.oos,
+          status: ov.status || 'G',
+          val: ov.val !== undefined ? ov.val : raw.toFixed(c.dec),
+          src: ov.src || c.src || 1,
+          url: ov.url || '',
+          remark: ov.remark || '',
+          broken: ov.broken || 0,
+          hasRain: isRain, rain: '',
+          id: no + '|' + c.item,
+        });
+      }
+      return { no, desc, items };
+    });
+  }
+
+  buildML() {
+    const S = this.state;
+    const plantOpts = ['K7', 'K9', 'K11'];
+    const rpttypeOpts = ['水質異常', '水Alert', '水保養中', '空保養中'];
+    const rows = S.mlRows.map((r, i) => ({
+      ...r,
+      typeStyle: { display: 'inline-flex', padding: '2px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 700, fontFamily: 'var(--font-mono)', background: r.mailtype === 'TO' ? 'var(--accent-soft)' : 'var(--muted-bg)', color: r.mailtype === 'TO' ? 'var(--accent)' : 'var(--fg-2)' },
+      mailTxt: r.mail ? '✓' : '—', mailStyle: { textAlign: 'center', color: r.mail ? 'var(--ok)' : 'var(--fg-3)', fontWeight: 700 },
+      signTxt: r.signgrp ? '✓' : '—', signStyle: { textAlign: 'center', color: r.signgrp ? 'var(--accent)' : 'var(--fg-3)', fontWeight: 700 },
+      onDelete: () => { this.setState(s => ({ mlRows: s.mlRows.filter((_, j) => j !== i) })); this.showToast('已刪除 ' + r.plantno + '・' + r.empno + ' 名單'); },
+    }));
+    const f = S.mlForm;
+    return {
+      ml: {
+        pauseBg: S.mlPaused ? 'var(--err-bg)' : 'var(--bg-1)',
+        pauseBorder: S.mlPaused ? 'rgba(239,68,68,0.4)' : 'var(--border-1)',
+        pauseColor: S.mlPaused ? 'var(--err)' : 'var(--fg-2)',
+        pauseBtnTxt: S.mlPaused ? '已暫停・點擊恢復' : '啟用暫停',
+        pauseBtnStyle: { padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: S.mlPaused ? 'var(--err)' : 'transparent', color: S.mlPaused ? '#fff' : 'var(--err)', border: '1.5px solid var(--err)', cursor: 'pointer' },
+        onTogglePause: () => { const next = !S.mlPaused; this.setState({ mlPaused: next }); this.showToast(next ? '已啟用全域暫停寄信，全平台派報 Email 停發' : '已恢復派報 Email 寄送', next); },
+        rows,
+        plantOpts, rpttypeOpts,
+        f_plant: f.plant, f_rpttype: f.rpttype, f_empno: f.empno, f_mailtype: f.mailtype, f_mail: f.mail, f_signgrp: f.signgrp,
+        f_autoTxt: f.empno ? '姓名／NotesID 將自動帶出' : '',
+        onFPlant: (e) => this.setState(s => ({ mlForm: { ...s.mlForm, plant: e.target.value } })),
+        onFRpttype: (e) => this.setState(s => ({ mlForm: { ...s.mlForm, rpttype: e.target.value } })),
+        onFEmpno: (e) => this.setState(s => ({ mlForm: { ...s.mlForm, empno: e.target.value } })),
+        onFMailtype: (e) => this.setState(s => ({ mlForm: { ...s.mlForm, mailtype: e.target.value } })),
+        onFMail: (e) => this.setState(s => ({ mlForm: { ...s.mlForm, mail: e.target.value } })),
+        onFSigngrp: (e) => this.setState(s => ({ mlForm: { ...s.mlForm, signgrp: e.target.value } })),
+        onAdd: () => {
+          if (!f.empno.trim()) { this.showToast('工號為必填', true); return; }
+          const dup = S.mlRows.some(r => r.plantno === f.plant && r.rpttype === f.rpttype && r.empno === f.empno);
+          if (dup) { this.showToast('主鍵重複（廠區/報表類型/工號），已被拒絕', true); return; }
+          this.setState(s => ({
+            mlRows: [...s.mlRows, { plantno: f.plant, rpttype: f.rpttype, empno: f.empno, empname: '（自動帶出）', notesid: f.empno.toLowerCase(), mailtype: f.mailtype, mail: f.mail === '1', signgrp: f.signgrp === '1' }],
+            mlForm: { plant: f.plant, rpttype: f.rpttype, empno: '', mailtype: 'TO', mail: '1', signgrp: '0' },
+          }));
+          this.showToast('已新增名單');
+        },
+      },
+    };
+  }
+
+  buildCTL() {
+    const S = this.state;
+    const plantOpts = ['K7', 'K9', 'K11'];
+    const ITEMS_BY_PLANT = { K7: ['pH', 'COD', 'VOC'], K9: ['Cu', 'Ni', 'SS'], K11: ['pH', '氨氮'] };
+    const f = S.ctlForm;
+    const rows = S.ctlRows.map(r => ({
+      ...r,
+      statusTxt: r.status === 1 ? '簽核中' : r.status === 7 ? '核准' : '否決',
+      statusStyle: { padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', background: r.status === 1 ? 'var(--warn-bg)' : r.status === 7 ? 'var(--ok-bg)' : 'var(--err-bg)', color: r.status === 1 ? 'var(--warn)' : r.status === 7 ? 'var(--ok)' : 'var(--err)' },
+      remarkTxt: r.remark ? ' ・ ' + r.remark : '',
+    }));
+    const itemOpts = (ITEMS_BY_PLANT[f.plant] || []).map(it => ({
+      label: it, checked: !!f.items[it],
+      style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12, background: f.items[it] ? 'var(--accent-soft)' : 'var(--bg-1)', color: f.items[it] ? 'var(--accent)' : 'var(--fg-2)', border: '1px solid ' + (f.items[it] ? 'var(--accent)' : 'var(--border-2)'), cursor: 'pointer' },
+      onToggle: () => this.setState(s => ({ ctlForm: { ...s.ctlForm, items: { ...s.ctlForm.items, [it]: !s.ctlForm.items[it] } } })),
+    }));
+    return {
+      ctl: {
+        rows, empty: rows.length === 0,
+        plantOpts, itemOpts,
+        f_plant: f.plant, f_reason: f.reason, f_stime: f.stime, f_etime: f.etime,
+        onFPlant: (e) => this.setState(s => ({ ctlForm: { ...s.ctlForm, plant: e.target.value, items: {} } })),
+        onFReason: (e) => this.setState(s => ({ ctlForm: { ...s.ctlForm, reason: e.target.value } })),
+        onFStime: (e) => this.setState(s => ({ ctlForm: { ...s.ctlForm, stime: e.target.value } })),
+        onFEtime: (e) => this.setState(s => ({ ctlForm: { ...s.ctlForm, etime: e.target.value } })),
+        hasErrors: S.ctlErrors.length > 0, errors: S.ctlErrors,
+        onSubmit: () => {
+          const errors = [];
+          const selectedItems = Object.keys(f.items).filter(k => f.items[k]);
+          if (!f.reason.trim()) errors.push('隔離原因為必填');
+          if (selectedItems.length === 0) errors.push('請至少勾選一個隔離項目');
+          if (!f.stime || !f.etime) errors.push('開始／結束時間為必填');
+          if (f.stime && f.etime) {
+            const mins = (Date.parse('2026-01-01T' + f.etime.slice(-5) + ':00') - Date.parse('2026-01-01T' + f.stime.slice(-5) + ':00')) / 60000;
+            if (isNaN(mins) || mins <= 0) errors.push('結束時間須大於開始時間');
+            else if (mins > 60) errors.push('隔離時間不得超過 1 小時');
+          }
+          if (errors.length) { this.setState({ ctlErrors: errors }); this.showToast('送出失敗，請修正 ' + errors.length + ' 項問題', true); return; }
+          const ccno = '2026071' + String(100 + S.ctlRows.length).slice(-3);
+          this.setState(s => ({
+            ctlErrors: [],
+            ctlRows: [...s.ctlRows, { ccno, plantno: f.plant, empstr: '10234-王小明（本人）', mdfdesc: f.reason, stime: f.stime, etime: f.etime, status: 1, remark: selectedItems.join('、') }],
+            ctlForm: { plant: f.plant, reason: '', stime: '', etime: '', items: {} },
+          }));
+          this.showToast('已送出隔離申請（單號 ' + ccno + '），已通知簽核人');
+        },
+      },
+    };
+  }
+
+  buildFLOW() {
+    const S = this.state;
+    const rows = S.flowRows.map(r => ({
+      ...r,
+      rejecting: S.flowRejectingId === r.ccno,
+      showActions: S.flowRejectingId !== r.ccno,
+      rejectComment: S.flowRejectComment[r.ccno] || '',
+      rejectError: !!S.flowRejectError[r.ccno],
+      onRejectComment: (e) => this.setState(s => ({ flowRejectComment: { ...s.flowRejectComment, [r.ccno]: e.target.value }, flowRejectError: { ...s.flowRejectError, [r.ccno]: false } })),
+      onReject: () => this.setState({ flowRejectingId: r.ccno }),
+      onCancelReject: () => this.setState({ flowRejectingId: null }),
+      onConfirmReject: () => {
+        const c = (S.flowRejectComment[r.ccno] || '').trim();
+        if (!c) { this.setState(s => ({ flowRejectError: { ...s.flowRejectError, [r.ccno]: true } })); return; }
+        this.setState(s => ({ flowRows: s.flowRows.filter(x => x.ccno !== r.ccno), flowRejectingId: null }));
+        this.showToast('已退回 ' + r.plantno + ' 隔離申請，已通知申請人', true);
+      },
+      onApprove: () => {
+        this.setState(s => ({ flowRows: s.flowRows.filter(x => x.ccno !== r.ccno) }));
+        this.showToast('已核准 ' + r.plantno + ' 隔離申請，已通知申請人');
+      },
+    }));
+    return { flow: { rows, empty: rows.length === 0 } };
+  }
+
+  buildQA() {
+    const S = this.state;
+    const rows = S.qaRows.map((r, i) => ({
+      ...r,
+      hasError: !!S.qaErrors[i], error: S.qaErrors[i] || '',
+      onChange: (e) => this.setState(s => { const rows = [...s.qaRows]; rows[i] = { ...rows[i], newval: e.target.value }; return { qaRows: rows }; }),
+      onSave: () => {
+        const v = r.newval.trim();
+        const norm = v.toUpperCase();
+        const valid = v !== '' && (norm === 'N.D' || /^\d+(\.\d{1,2})?$/.test(v));
+        if (!valid) { this.setState(s => ({ qaErrors: { ...s.qaErrors, [i]: '格式錯誤：不可空白，允許 N.D 或整數/最多兩位小數' } })); return; }
+        this.setState(s => {
+          const rows = [...s.qaRows];
+          rows[i] = { ...rows[i], rvalue: norm === 'N.D' ? 'N.D' : v, newval: '', cdatetime: new Date().toLocaleString('zh-TW', { hour12: false }) };
+          const qaErrors = { ...s.qaErrors }; delete qaErrors[i];
+          return { qaRows: rows, qaErrors };
+        });
+        this.showToast('已更新 ' + r.plantno + '・' + r.item + ' 讀值並存證歷史紀錄');
+      },
+    }));
+    return { qa: { rows } };
+  }
+
+  buildHIST(mode) {
+    const S = this.state;
+    const editable = mode === '異常回覆';
+    const plantOpts = [{ v: '', t: '全部廠區' }, { v: 'K7', t: 'K7' }, { v: 'K14B', t: 'K14B' }, { v: 'K9', t: 'K9' }];
+    let rows = S.histRows;
+    if (S.histPlant) rows = rows.filter(r => r.plantno === S.histPlant);
+    const rowsOut = rows.map(r => {
+      const replying = S.histReplyingId === r.no;
+      return {
+        ...r,
+        replying,
+        reasonPreview: r.reason ? r.reason : (editable ? '＋填寫原因' : '（未填）'),
+        reasonDraft: S.histDraft[r.no] !== undefined ? S.histDraft[r.no] : r.reason,
+        onToggleReply: () => this.setState(s => ({ histReplyingId: s.histReplyingId === r.no ? null : r.no, histDraft: { ...s.histDraft, [r.no]: r.reason } })),
+        onReasonChange: (e) => this.setState(s => ({ histDraft: { ...s.histDraft, [r.no]: e.target.value } })),
+        onCancelReply: () => this.setState({ histReplyingId: null }),
+        onSaveReply: () => {
+          const val = S.histDraft[r.no] || '';
+          this.setState(s => ({
+            histRows: s.histRows.map(x => x.no === r.no ? { ...x, reason: val, replyBy: '10234-王小明 / wang.xm・' + new Date().toLocaleDateString('zh-TW') } : x),
+            histReplyingId: null,
+          }));
+          this.showToast('已儲存原因說明（一封信僅一組回覆，非逐項目）');
+        },
+      };
+    });
+    return {
+      hist: {
+        f_plant: S.histPlant, f_sdate: S.histSdate, f_edate: S.histEdate, f_mt: S.histMt,
+        plantOpts,
+        onFPlant: (e) => this.setState({ histPlant: e.target.value }),
+        onFSdate: (e) => this.setState({ histSdate: e.target.value }),
+        onFEdate: (e) => this.setState({ histEdate: e.target.value }),
+        onFMt: (e) => this.setState({ histMt: e.target.checked }),
+        count: rowsOut.length,
+        rows: rowsOut, empty: rowsOut.length === 0,
+        editable, readonly: !editable,
+        reasonCol: editable ? '150px' : '1fr',
+      },
+    };
+  }
+
+  buildWATER() {
+    const S = this.state;
+    const plantOpts = ['K7', 'K9', 'K11', 'K14A'].map(p => ({
+      label: p, checked: !!S.waterSelected[p],
+      style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12, background: S.waterSelected[p] ? 'var(--accent-soft)' : 'var(--bg-2)', color: S.waterSelected[p] ? 'var(--accent)' : 'var(--fg-2)', border: '1px solid ' + (S.waterSelected[p] ? 'var(--accent)' : 'var(--border-2)'), cursor: 'pointer' },
+      onToggle: () => this.setState(s => ({ waterSelected: { ...s.waterSelected, [p]: !s.waterSelected[p] } })),
+    }));
+    const reasonOpts = ['排放系統維護', '設備歲修', '其他異常'];
+    const selectedList = Object.keys(S.waterSelected).filter(k => S.waterSelected[k]);
+    return {
+      water: {
+        showUrgentBtn: !S.waterUrgentConfirm, confirmingUrgent: S.waterUrgentConfirm,
+        onStartUrgent: () => this.setState({ waterUrgentConfirm: true }),
+        onCancelUrgent: () => this.setState({ waterUrgentConfirm: false }),
+        onConfirmUrgent: () => { this.setState({ waterUrgentConfirm: false }); this.showToast('已排入背景寄送「水質異常通知」（不等同保證所有廠皆收到）'); },
+        plantOpts,
+        f_reason: S.waterReason, f_otherReason: S.waterOther,
+        reasonOpts,
+        onFReason: (e) => this.setState({ waterReason: e.target.value }),
+        onFOtherReason: (e) => this.setState({ waterOther: e.target.value }),
+        showOtherReason: S.waterReason === '其他異常',
+        hasErrors: S.waterErrors.length > 0, errors: S.waterErrors,
+        showChangeBtn: !S.waterChangeConfirm, confirmingChange: S.waterChangeConfirm,
+        confirmSummary: selectedList.join('、'),
+        onStartChange: () => {
+          const errors = [];
+          if (selectedList.length === 0) errors.push('請至少勾選一個通知廠區');
+          if (S.waterReason === '其他異常' && !S.waterOther.trim()) errors.push('選擇「其他異常」時，其他異常原因為必填');
+          if (errors.length) { this.setState({ waterErrors: errors }); return; }
+          this.setState({ waterErrors: [], waterChangeConfirm: true });
+        },
+        onCancelChange: () => this.setState({ waterChangeConfirm: false }),
+        onConfirmChange: () => { this.setState({ waterChangeConfirm: false, waterSelected: {} }); this.showToast('已排入背景寄送「改排水通知」給 ' + selectedList.join('、')); },
+      },
+    };
+  }
+
+  buildDEPT() {
+    const S = this.state;
+    const plantOpts = ['K7', 'K9', 'K11', '全廠'];
+    const rows = S.deptRows.map((r, i) => ({
+      plantno: r.plantno, deptno: r.deptno, remark: r.remark,
+      plantLabel: r.plantno === '全廠' ? '全廠（29）' : r.plantno,
+      deptname: r.deptno,
+      onDelete: () => { this.setState(s => ({ deptRows: s.deptRows.filter((_, j) => j !== i) })); this.showToast('已刪除部門 ' + r.deptno); },
+    }));
+    const f = S.deptForm;
+    return {
+      dept: {
+        rows, plantOpts,
+        f_plant: f.plant, f_deptno: f.deptno, f_remark: f.remark,
+        onFPlant: (e) => this.setState(s => ({ deptForm: { ...s.deptForm, plant: e.target.value } })),
+        onFDeptno: (e) => this.setState(s => ({ deptForm: { ...s.deptForm, deptno: e.target.value } })),
+        onFRemark: (e) => this.setState(s => ({ deptForm: { ...s.deptForm, remark: e.target.value } })),
+        hasError: !!S.deptError, error: S.deptError,
+        onAdd: () => {
+          if (!f.deptno.trim()) { this.setState({ deptError: '部門代碼為必填' }); return; }
+          const dup = S.deptRows.some(r => r.plantno === f.plant && r.deptno === f.deptno);
+          if (dup) { this.setState({ deptError: '主鍵重複（廠區/部門代碼），已被拒絕' }); return; }
+          this.setState(s => ({ deptRows: [...s.deptRows, { plantno: f.plant, deptno: f.deptno, remark: f.remark }], deptForm: { plant: f.plant, deptno: '', remark: '' }, deptError: '' }));
+          this.showToast('已新增部門 ' + f.deptno);
+        },
+      },
+    };
+  }
+
+  buildACL() {
+    const S = this.state;
+    const plantOpts = ['K7', 'K9', 'K11'];
+    const rows = S.aclRows.map((r, i) => ({
+      ...r,
+      onDelete: () => { this.setState(s => ({ aclRows: s.aclRows.filter((_, j) => j !== i) })); this.showToast('已刪除 ' + r.plantno + '・' + r.roletype + '・' + r.empno); },
+    }));
+    const f = S.aclForm;
+    return {
+      acl: {
+        rows, plantOpts,
+        f_plant: f.plant, f_role: f.role, f_empno: f.empno, f_stype: f.stype,
+        onFPlant: (e) => this.setState(s => ({ aclForm: { ...s.aclForm, plant: e.target.value } })),
+        onFRole: (e) => this.setState(s => ({ aclForm: { ...s.aclForm, role: e.target.value } })),
+        onFEmpno: (e) => this.setState(s => ({ aclForm: { ...s.aclForm, empno: e.target.value } })),
+        onFStype: (e) => this.setState(s => ({ aclForm: { ...s.aclForm, stype: e.target.value } })),
+        hasError: !!S.aclError, error: S.aclError,
+        onAdd: () => {
+          if (!f.empno.trim()) { this.setState({ aclError: '工號為必填' }); return; }
+          const dup = S.aclRows.some(r => r.plantno === f.plant && r.roletype === f.role && r.empno === f.empno);
+          if (dup) { this.setState({ aclError: '主鍵重複（角色/廠區/工號），已被拒絕' }); return; }
+          this.setState(s => ({ aclRows: [...s.aclRows, { plantno: f.plant, roletype: f.role, empno: f.empno, empname: '（自動帶出）', notesid: f.empno.toLowerCase(), stype: f.stype }], aclForm: { plant: f.plant, role: f.role, empno: '', stype: '全區' }, aclError: '' }));
+          this.showToast('已新增 ACL 權限');
+        },
+      },
+    };
+  }
+
+  componentDidMount() {
+    const total = (this.props.refreshMinutes ?? 15) * 60;
+    const fmt = d => String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    this.setState({ secs: total - 173, updatedAt: fmt(new Date()) });
+    this.timer = setInterval(() => {
+      this.setState(s => s.secs <= 1 ? { secs: total, updatedAt: fmt(new Date()) } : { secs: s.secs - 1 });
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  renderVals() {
+    const S = this.state;
+    const distinguish = this.props.distinguishSyncOrange ?? true;
+    const compact = this.props.compactRows ?? false;
+    const YC = '#eab308', YBG = 'rgba(234,179,8,0.12)';
+
+    const ST = {
+      R:  { c: 'var(--err)',  bg: 'var(--err-bg)',  label: 'R',  sev: 0 },
+      O:  { c: 'var(--warn)', bg: 'var(--warn-bg)', label: 'O',  sev: 1 },
+      O2: { c: 'var(--warn)', bg: 'var(--warn-bg)', label: distinguish ? 'O≠' : 'O', sev: 2 },
+      Y:  { c: YC,            bg: YBG,              label: 'Y',  sev: 3 },
+      X:  { c: 'var(--fg-2)', bg: 'var(--muted-bg)',label: '—',  sev: 4 },
+      G:  { c: 'var(--ok)',   bg: 'var(--ok-bg)',   label: 'G',  sev: 5 },
+    };
+    const dotOf = (st) => {
+      if (st === 'R') return { width: 9, height: 9, borderRadius: '50%', background: 'var(--err)', boxShadow: '0 0 8px var(--err-glow)', animation: 'pulse 1.4s ease-in-out infinite', flex: 'none' };
+      if (st === 'O') return { width: 10, height: 9, clipPath: 'polygon(50% 0,100% 100%,0 100%)', background: 'var(--warn)', flex: 'none' };
+      if (st === 'O2') return distinguish
+        ? { width: 7, height: 7, border: '2px dashed var(--warn)', transform: 'rotate(45deg)', flex: 'none' }
+        : { width: 10, height: 9, clipPath: 'polygon(50% 0,100% 100%,0 100%)', background: 'var(--warn)', flex: 'none' };
+      if (st === 'Y') return { width: 8, height: 8, background: YC, transform: 'rotate(45deg)', flex: 'none' };
+      if (st === 'X') return { width: 9, height: 9, border: '1px solid var(--muted)', background: 'repeating-linear-gradient(45deg,var(--muted) 0 2px,transparent 2px 4px)', flex: 'none' };
+      return { width: 7, height: 7, borderRadius: '50%', border: '2px solid var(--ok)', background: 'transparent', flex: 'none' };
+    };
+    const SRC = { 1: ['SCADA', 'var(--info)', 'var(--info-bg)'], 2: ['CWMS', 'var(--accent)', 'var(--accent-soft)'], 3: ['QA手測', 'var(--fg-2)', 'var(--muted-bg)'] };
+
+    // ---- filter helpers ----
+    const q = S.search.trim().toLowerCase();
+    const anyFilter = S.fStatus !== 'all' || S.fSource !== 0 || q !== '';
+    const matches = (it) => {
+      if (S.fStatus === 'abn' && !['R', 'O', 'O2', 'Y'].includes(it.status)) return false;
+      if (S.fStatus === 'R' && it.status !== 'R') return false;
+      if (S.fStatus === 'O' && it.status !== 'O' && it.status !== 'O2') return false;
+      if (S.fStatus === 'Y' && it.status !== 'Y') return false;
+      if (S.fStatus === 'X' && it.status !== 'X') return false;
+      if (S.fSource !== 0 && it.src !== S.fSource) return false;
+      if (q && !(it.plant.toLowerCase().includes(q) || it.item.toLowerCase().includes(q))) return false;
+      return true;
+    };
+
+    // ---- counts + severity ----
+    const counts = { R: 0, O: 0, O2: 0, Y: 0, X: 0, G: 0 };
+    this.PLANTS.forEach(p => p.items.forEach(it => counts[it.status]++));
+
+    const enriched = this.PLANTS.map(p => {
+      const cs = { R: 0, O: 0, O2: 0, Y: 0, X: 0, G: 0 };
+      p.items.forEach(it => cs[it.status]++);
+      const sev = cs.R ? 0 : cs.O ? 1 : cs.O2 ? 2 : cs.Y ? 3 : cs.X ? 4 : 5;
+      return { ...p, cs, sev };
+    }).sort((a, b) => a.sev - b.sev || a.no.localeCompare(b.no));
+
+    const sevBar = ['var(--err)', 'var(--warn)', 'var(--warn)', YC, 'var(--muted)', 'var(--border-2)'];
+
+    const pillOf = (st, txt) => ({
+      style: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-mono)', background: ST[st].bg, color: ST[st].c, whiteSpace: 'nowrap', border: st === 'O2' && distinguish ? '1px dashed var(--warn)' : '1px solid transparent' },
+      dotStyle: dotOf(st), txt,
+    });
+
+    // ---- rail ----
+    const railPlants = enriched.map(p => {
+      const pills = [];
+      if (p.cs.R) pills.push({ txt: 'R' + p.cs.R, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--err-bg)', color: 'var(--err)' } });
+      if (p.cs.O) pills.push({ txt: 'O' + p.cs.O, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--warn-bg)', color: 'var(--warn)' } });
+      if (p.cs.O2) pills.push({ txt: 'O≠' + p.cs.O2, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--warn-bg)', color: 'var(--warn)', border: '1px dashed var(--warn)' } });
+      if (p.cs.Y) pills.push({ txt: 'Y' + p.cs.Y, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: YBG, color: YC } });
+      if (p.cs.X) pills.push({ txt: '斷' + p.cs.X, style: { fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--muted-bg)', color: 'var(--fg-2)' } });
+      if (!pills.length) pills.push({ txt: '正常', style: { fontSize: 10.5, padding: '1px 7px', borderRadius: 999, color: 'var(--fg-3)' } });
+      return {
+        no: p.no, pills,
+        style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: 'var(--fg-2)', transition: 'background 120ms var(--ease)', background: p.sev <= 1 ? 'var(--err-bg)' : 'transparent' },
+        barStyle: { width: 3, height: 18, borderRadius: 2, background: sevBar[p.sev], boxShadow: p.sev === 0 ? '0 0 8px var(--err-glow)' : 'none', flex: 'none' },
+        onClick: () => this.setState(s => ({ expanded: { ...s.expanded, [p.no]: true } })),
+      };
+    });
+
+    // ---- metrics ----
+    const mkMetric = (label, n, st, filterKey) => ({
+      label, n,
+      style: { width: 128, flex: 'none', background: 'var(--bg-2)', border: '1px solid ' + (n > 0 && (st === 'R') ? 'rgba(239,68,68,0.45)' : 'var(--border-1)'), borderRadius: 12, padding: '14px 16px', boxShadow: n > 0 && st === 'R' ? 'var(--shadow-1), 0 0 16px rgba(239,68,68,0.12)' : 'var(--shadow-1)', cursor: 'pointer', transition: 'border-color 160ms var(--ease)' },
+      dotStyle: dotOf(st),
+      numStyle: { fontFamily: 'var(--font-mono)', fontSize: 30, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginTop: 6, color: n > 0 ? ST[st].c : 'var(--fg-3)' },
+      onClick: () => this.setState(s => ({ fStatus: s.fStatus === filterKey ? 'all' : filterKey })),
+    });
+    const metrics = [
+      mkMetric('紅燈 R', counts.R, 'R', 'R'),
+      mkMetric('橙燈 O', counts.O + counts.O2, 'O', 'O'),
+      mkMetric('黃燈 Y', counts.Y, 'Y', 'Y'),
+      mkMetric('斷訊／保養', counts.X, 'X', 'X'),
+    ];
+
+    // ---- anomaly chips (R + O + O2) ----
+    const anomalies = [];
+    enriched.forEach(p => p.items.forEach(it => { if (['R', 'O', 'O2'].includes(it.status)) anomalies.push(it); }));
+    anomalies.sort((a, b) => ST[a.status].sev - ST[b.status].sev);
+    const chips = anomalies.map(it => ({
+      txt: it.plant + '・' + it.item + (it.status === 'O2' && distinguish ? '（設定不同步）' : ''),
+      val: it.status === 'O2' ? '' : it.val,
+      dotStyle: dotOf(it.status),
+      style: { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 12px', borderRadius: 999, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', background: ST[it.status].bg, color: ST[it.status].c, border: it.status === 'O2' && distinguish ? '1px dashed var(--warn)' : '1px solid transparent', transition: 'filter 120ms var(--ease)' },
+      onClick: () => this.setState(s => ({ expanded: { ...s.expanded, [it.plant]: true }, openRow: it.id })),
+    }));
+
+    // ---- filter chips ----
+    const chip = (txt, active, onClick) => ({
+      txt, onClick,
+      style: { padding: '5px 13px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms var(--ease)', background: active ? 'var(--accent-soft)' : 'transparent', color: active ? 'var(--accent)' : 'var(--fg-2)', border: '1.5px solid ' + (active ? 'var(--accent)' : 'var(--border-2)') },
+    });
+    const setF = k => () => this.setState(s => ({ fStatus: s.fStatus === k ? 'all' : k }));
+    const statusChips = [
+      chip('全部', S.fStatus === 'all', () => this.setState({ fStatus: 'all' })),
+      chip('只看異常', S.fStatus === 'abn', setF('abn')),
+      chip('R', S.fStatus === 'R', setF('R')),
+      chip('O', S.fStatus === 'O', setF('O')),
+      chip('Y', S.fStatus === 'Y', setF('Y')),
+      chip('斷訊／保養', S.fStatus === 'X', setF('X')),
+    ];
+    const setSrc = k => () => this.setState(s => ({ fSource: s.fSource === k ? 0 : k }));
+    const sourceChips = [
+      chip('SCADA', S.fSource === 1, setSrc(1)),
+      chip('CWMS', S.fSource === 2, setSrc(2)),
+      chip('QA手測', S.fSource === 3, setSrc(3)),
+    ];
+
+    // ---- plants ----
+    const rowPad = compact ? '6px 18px' : '9px 18px';
+    let visibleItems = 0;
+    const plants = enriched.map(p => {
+      const filtered = p.items.filter(matches);
+      if (anyFilter && filtered.length === 0) return null;
+      visibleItems += filtered.length;
+      const expanded = anyFilter ? true : (S.expanded[p.no] ?? p.sev <= 2);
+      const hiddenN = p.items.length - filtered.length;
+      const pills = [];
+      if (p.cs.R) pills.push(pillOf('R', p.cs.R));
+      if (p.cs.O) pills.push(pillOf('O', p.cs.O));
+      if (p.cs.O2) pills.push(pillOf('O2', p.cs.O2));
+      if (p.cs.Y) pills.push(pillOf('Y', p.cs.Y));
+      if (p.cs.X) pills.push(pillOf('X', p.cs.X));
+
+      const items = filtered.map(it => {
+        const st = ST[it.status];
+        const open = S.openRow === it.id;
+        const stLabel = it.status === 'X' ? (it.broken === 2 ? '保養' : '斷訊') : st.label;
+        const rowBg = it.status === 'R' ? 'var(--err-bg)'
+          : it.status === 'X' ? 'repeating-linear-gradient(45deg, rgba(71,85,105,0.10) 0 6px, transparent 6px 12px)'
+          : 'transparent';
+        return {
+          ...it, open, stLabel,
+          hasUrl: !!it.url,
+          rainTxt: it.rain || '—（資料暫缺，Schema B 後補上）',
+          rowStyle: { display: 'grid', gridTemplateColumns: '96px 1fr 120px 76px 72px 1fr 84px 28px', gap: 10, alignItems: 'center', padding: rowPad, borderBottom: '1px solid var(--border-1)', cursor: 'pointer', background: rowBg, transition: 'background 120ms var(--ease)' },
+          pillStyle: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', background: st.bg, color: st.c, whiteSpace: 'nowrap', justifySelf: 'start', border: it.status === 'O2' && distinguish ? '1px dashed var(--warn)' : '1px solid transparent' },
+          dotStyle: dotOf(it.status),
+          valStyle: { textAlign: 'right', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: it.status === 'R' || it.status === 'O' ? 700 : 500, color: it.status === 'G' ? 'var(--fg-1)' : it.status === 'X' ? 'var(--fg-3)' : st.c },
+          srcStyle: { fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: SRC[it.src][2], color: SRC[it.src][1], justifySelf: 'start', letterSpacing: '0.04em' },
+          srcTxt: SRC[it.src][0],
+          chevStyle: { width: 14, height: 14, color: 'var(--fg-3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms var(--ease)' },
+          scadaCmpTxt: it.scadaVal === it.oos ? '一致' : '不同步',
+          scadaCmpStyle: { padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: it.scadaVal === it.oos ? 'var(--ok-bg)' : 'var(--warn-bg)', color: it.scadaVal === it.oos ? 'var(--ok)' : 'var(--warn)', border: it.scadaVal === it.oos ? 'none' : '1px dashed var(--warn)' },
+          cwmsCmpTxt: it.cwmsVal === it.oos ? '一致' : '不同步',
+          cwmsCmpStyle: { padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: it.cwmsVal === it.oos ? 'var(--ok-bg)' : 'var(--warn-bg)', color: it.cwmsVal === it.oos ? 'var(--ok)' : 'var(--warn)' },
+          onToggle: () => this.setState(s => ({ openRow: s.openRow === it.id ? null : it.id })),
+          onCurve: (e) => e.stopPropagation(),
+        };
+      });
+
+      const dots = p.items.slice(0, 20).map(it => ({ style: { ...dotOf(it.status), opacity: it.status === 'G' ? 0.45 : 1 } }));
+
+      return {
+        no: p.no, desc: p.desc, pills, items, dots, expanded, collapsed: !expanded,
+        countTxt: anyFilter ? filtered.length + '/' + p.items.length + ' 項' : '共 ' + p.items.length + ' 項',
+        hiddenTxt: anyFilter && hiddenN > 0 ? '已依篩選條件隱藏 ' + hiddenN + ' 項' : false,
+        cardStyle: { background: 'var(--bg-2)', border: '1px solid ' + (p.sev === 0 ? 'rgba(239,68,68,0.5)' : p.sev <= 2 ? 'rgba(245,158,11,0.4)' : 'var(--border-1)'), borderRadius: 12, boxShadow: p.sev === 0 ? 'var(--shadow-1), 0 0 20px rgba(239,68,68,0.10)' : 'var(--shadow-1)', overflow: 'hidden' },
+        headStyle: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', cursor: 'pointer', background: p.sev === 0 ? 'rgba(239,68,68,0.06)' : 'transparent', transition: 'background 120ms var(--ease)' },
+        chevStyle: { width: 16, height: 16, color: 'var(--fg-3)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 160ms var(--ease)', flex: 'none' },
+        onToggle: () => this.setState(s => ({ expanded: { ...s.expanded, [p.no]: !expanded } })),
+      };
+    }).filter(Boolean);
+
+    // ---- misc ----
+    const mm = Math.floor(S.secs / 60), ss = S.secs % 60;
+    const openModal = (label) => (e) => { e.preventDefault(); this.setState({ modal: label, moreOpen: false }); };
+    const toolBtns = [
+      { label: '派送名單', href: '#', onClick: openModal('派送名單維護') },
+      { label: '規格維護', href: 'VOC 規格維護.dc.html' },
+      { label: '隔離申請', href: '#', onClick: openModal('隔離申請') },
+    ];
+    const closeMore = () => this.setState({ moreOpen: false });
+    const moreItem = (label, href, isNew) => href
+      ? { label, href, isNew: !!isNew, onClick: closeMore }
+      : { label, href: '#', isNew: false, onClick: openModal(label) };
+    const moreGroups = [
+      { label: '派送與簽核', items: [
+        moreItem('派送名單維護'),
+        moreItem('隔離申請'),
+        moreItem('簽核管理'),
+      ]},
+      { label: '資料與量測', items: [
+        moreItem('規格維護', 'VOC 規格維護.dc.html', true),
+        moreItem('QA 手測值'),
+      ]},
+      { label: '異常紀錄', items: [
+        moreItem('異常查詢'),
+        moreItem('異常回覆'),
+        moreItem('異常報表', 'VOC 異常報表.dc.html', true),
+      ]},
+      { label: '系統管理', items: [
+        moreItem('中水緊急通知'),
+        moreItem('部門權限'),
+        moreItem('ACL 使用者權限'),
+      ]},
+    ];
+
+    // ---- modal dispatch ----
+    const modal = S.modal;
+    const isModalML = modal === '派送名單維護';
+    const isModalCTL = modal === '隔離申請';
+    const isModalFLOW = modal === '簽核管理';
+    const isModalQA = modal === 'QA 手測值';
+    const isModalHist = modal === '異常查詢' || modal === '異常回覆';
+    const isModalWATER = modal === '中水緊急通知';
+    const isModalDEPT = modal === '部門權限';
+    const isModalACL = modal === 'ACL 使用者權限';
+    const wideModal = { width: '900px', maxWidth: '92vw', maxHeight: '86vh', background: 'var(--bg-2)', border: '1px solid var(--border-2)', borderRadius: 14, boxShadow: 'var(--shadow-3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
+    const narrowModal = { width: '560px', maxWidth: '92vw', maxHeight: '86vh', background: 'var(--bg-2)', border: '1px solid var(--border-2)', borderRadius: 14, boxShadow: 'var(--shadow-3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
+    const modalBoxStyle = isModalWATER ? narrowModal : wideModal;
+
+    return {
+      railPlants, metrics, chips, statusChips, sourceChips, plants, toolBtns,
+      noAnomaly: chips.length === 0,
+      noResult: anyFilter && visibleItems === 0,
+      countdown: String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0'),
+      updatedAt: S.updatedAt || '--:--',
+      search: S.search,
+      onSearch: (e) => this.setState({ search: e.target.value }),
+      modalOpen: !!S.modal,
+      modalTitle: S.modal || '',
+      modalBoxStyle,
+      closeModal: () => this.setState({ modal: null }),
+      stop: (e) => e.stopPropagation(),
+      moreOpen: S.moreOpen,
+      onToggleMore: () => this.setState(s => ({ moreOpen: !s.moreOpen })),
+      moreBg: S.moreOpen ? 'var(--bg-3)' : 'transparent',
+      moreChevRot: S.moreOpen ? 'rotate(180deg)' : 'none',
+      moreGroups,
+      isModalML, isModalCTL, isModalFLOW, isModalQA, isModalHist, isModalWATER, isModalDEPT, isModalACL,
+      ...this.buildML(), ...this.buildCTL(), ...this.buildFLOW(), ...this.buildQA(), ...this.buildHIST(modal), ...this.buildWATER(), ...this.buildDEPT(), ...this.buildACL(),
+      toastShow: !!S.toast,
+      toastMsg: S.toast ? S.toast.msg : '',
+      toastBorder: S.toast && S.toast.isErr ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.35)',
+      toastDotStyle: { width: 8, height: 8, borderRadius: '50%', marginTop: 4, flex: 'none', background: S.toast && S.toast.isErr ? 'var(--err)' : 'var(--ok)', boxShadow: S.toast && S.toast.isErr ? '0 0 6px var(--err-glow)' : '0 0 6px var(--ok-glow)' },
+      toastClose: () => this.setState({ toast: null }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

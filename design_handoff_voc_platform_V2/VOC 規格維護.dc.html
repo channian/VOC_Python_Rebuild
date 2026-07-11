@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-1);color:var(--fg-1);font-family:var(--font-sans);font-size:14px;-webkit-font-smoothing:antialiased;
+background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);background-size:32px 32px;background-attachment:fixed}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-hover)}
+input::placeholder,textarea::placeholder{color:var(--fg-3)}
+select,input,textarea{font-family:inherit}
+</style>
+</helmet>
+
+<div data-screen-label="規格維護" style="min-height:100vh">
+
+  <header style="height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:20">
+    <a href="VOC Dashboard.dc.html" style="display:flex;align-items:center;gap:6px;color:var(--fg-2);font-size:13px" style-hover="color:var(--fg-1)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="m15 18-6-6 6-6"></path></svg>
+      返回儀表板
+    </a>
+    <span style="width:1px;height:20px;background:var(--border-2)"></span>
+    <div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)">規格維護</h1>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px">SPEC MAINTENANCE</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select value="{{ filterPlant }}" onChange="{{ onFilterPlant }}" style="padding:7px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;outline:none">
+        <sc-for list="{{ plantOptions }}" as="o" hint-placeholder-count="4">
+          <option value="{{ o.v }}">{{ o.t }}</option>
+        </sc-for>
+      </select>
+      <select value="{{ filterItem }}" onChange="{{ onFilterItem }}" style="padding:7px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;outline:none">
+        <sc-for list="{{ itemOptions }}" as="o" hint-placeholder-count="4">
+          <option value="{{ o.v }}">{{ o.t }}</option>
+        </sc-for>
+      </select>
+    </div>
+  </header>
+
+  <div style="padding:20px 28px 64px;max-width:1440px;width:100%;margin:0 auto">
+
+    <!-- 現況落差提示 -->
+    <sc-if value="{{ showGapNotice }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;gap:10px;align-items:flex-start;background:var(--warn-bg);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--fg-2);line-height:1.6">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;color:var(--warn);flex:none;margin-top:1px"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+        <div>
+          <b style="color:var(--warn)">現況說明：</b>就地編輯（立即生效）與送簽申請（需簽核）目前後端未做角色區分；「待簽核」頁籤對任何開啟此頁的人皆可見/可操作；雙邊 OOC/Alert 寬窄方向判斷待業務確認正確性。以上為既有系統落差，非本次改版範圍。
+          <a onClick="{{ dismissGapNotice }}" style="margin-left:8px;cursor:pointer">知道了，隱藏提示</a>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--border-1);margin-bottom:18px">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+        <button onClick="{{ t.onClick }}" style="{{ t.style }}" style-hover="color:var(--fg-1)">
+          {{ t.label }}
+          <sc-if value="{{ t.hasBadge }}" hint-placeholder-val="{{ false }}">
+            <span style="{{ t.badgeStyle }}">{{ t.badge }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+    </div>
+
+    <!-- 頁籤：清單 -->
+    <sc-if value="{{ isListTab }}" hint-placeholder-val="{{ true }}">
+      <section data-screen-label="規格清單">
+        <div style="background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);overflow:hidden">
+          <div style="display:grid;grid-template-columns:84px 120px 100px 110px 96px 96px 96px 1fr 84px;gap:10px;align-items:center;padding:10px 18px;background:var(--bg-1);border-bottom:1px solid var(--border-1);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">
+            <span>廠區</span><span>項目</span><span>來源</span><span>法規許可值</span><span style="color:var(--err)">OOS</span><span style="color:var(--warn)">OOC</span><span style="color:#eab308">Alert</span><span>備註</span><span></span>
+          </div>
+          <sc-for list="{{ listRows }}" as="r" hint-placeholder-count="6">
+            <div>
+              <sc-if value="{{ r.editing }}" hint-placeholder-val="{{ false }}">
+                <div style="display:grid;grid-template-columns:84px 120px 100px 110px 96px 96px 96px 1fr 84px;gap:10px;align-items:center;padding:8px 18px;border-bottom:1px solid var(--border-1);background:var(--bg-3)">
+                  <span style="font-family:var(--font-mono);font-weight:600">{{ r.plantno }}</span>
+                  <span style="font-weight:600">{{ r.item }}</span>
+                  <select value="{{ r.editSource }}" onChange="{{ r.onSourceChange }}" style="padding:5px 6px;background:var(--bg-1);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+                    <option value="1">SCADA</option><option value="2">CWMS</option><option value="3">QA手測</option>
+                  </select>
+                  <input value="{{ r.editLaw }}" onChange="{{ r.onLawChange }}" style="padding:5px 7px;background:var(--bg-1);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px;width:100%">
+                  <input value="{{ r.editOos }}" onChange="{{ r.onOosChange }}" style="padding:5px 7px;background:var(--bg-1);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px;width:100%">
+                  <input value="{{ r.editOoc }}" onChange="{{ r.onOocChange }}" style="padding:5px 7px;background:var(--bg-1);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px;width:100%">
+                  <input value="{{ r.editAlert }}" onChange="{{ r.onAlertChange }}" style="padding:5px 7px;background:var(--bg-1);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px;width:100%">
+                  <span></span>
+                  <div style="display:flex;gap:6px">
+                    <button onClick="{{ r.onSave }}" style="padding:5px 9px;border-radius:6px;font-size:11.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">存</button>
+                    <button onClick="{{ r.onCancel }}" style="padding:5px 9px;border-radius:6px;font-size:11.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">消</button>
+                  </div>
+                </div>
+                <sc-if value="{{ r.hasEditErrors }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:10px 18px 12px 18px;background:var(--err-bg);border-bottom:1px solid var(--border-1);font-size:12px;color:var(--err)">
+                    <sc-for list="{{ r.editErrors }}" as="er" hint-placeholder-count="1">
+                      <div style="padding:2px 0">・{{ er }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </sc-if>
+              <sc-if value="{{ r.viewing }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:84px 120px 100px 110px 96px 96px 96px 1fr 84px;gap:10px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--border-1)" style-hover="background:var(--bg-3)">
+                  <span style="font-family:var(--font-mono);font-weight:700;color:var(--fg-1)">{{ r.plantno }}</span>
+                  <span style="font-weight:600">{{ r.item }}</span>
+                  <span style="{{ r.srcStyle }}">{{ r.srcLabel }}</span>
+                  <span style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-2)">{{ r.law }}</span>
+                  <span style="font-family:var(--font-mono);font-size:12.5px;color:var(--err);font-weight:600">{{ r.oos }}</span>
+                  <span style="font-family:var(--font-mono);font-size:12.5px;color:var(--warn);font-weight:600">{{ r.ooc }}</span>
+                  <span style="font-family:var(--font-mono);font-size:12.5px;color:#eab308;font-weight:600">{{ r.alert }}</span>
+                  <span style="font-size:12px;color:var(--fg-3)">{{ r.remark }}</span>
+                  <button onClick="{{ r.onEdit }}" style="padding:5px 10px;border-radius:6px;font-size:11.5px;font-weight:600;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer;justify-self:start" style-hover="color:var(--fg-1);border-color:var(--border-3)">編輯</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:40px;text-align:center;color:var(--fg-3);font-size:13px">沒有符合篩選條件的規格</div>
+          </sc-if>
+        </div>
+        <div style="margin-top:10px;font-size:11.5px;color:var(--fg-3)">共 {{ listCount }} 筆・就地編輯儲存後立即生效，無需簽核</div>
+      </section>
+    </sc-if>
+
+    <!-- 頁籤：送簽申請 -->
+    <sc-if value="{{ isApplyTab }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="送簽申請" style="max-width:760px">
+        <sc-if value="{{ hasFormErrors }}" hint-placeholder-val="{{ false }}">
+          <div style="background:var(--err-bg);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+            <div style="font-size:13px;font-weight:700;color:var(--err);margin-bottom:6px">送出失敗，請修正以下 {{ formErrorCount }} 項：</div>
+            <sc-for list="{{ formErrors }}" as="fe" hint-placeholder-count="1">
+              <div style="font-size:12.5px;color:var(--err);padding:2px 0">・{{ fe }}</div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);padding:22px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 18px">
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">類別 *</div>
+              <select value="{{ f_ftype }}" onChange="{{ onFtype }}" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px">
+                <option value="I">新增</option><option value="M">修改</option><option value="D">刪除</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">來源 *</div>
+              <select value="{{ f_source }}" onChange="{{ onSource }}" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px">
+                <option value="1">SCADA</option><option value="2">CWMS</option><option value="3">QA手測</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">廠區 plantno *</div>
+              <input value="{{ f_plantno }}" onChange="{{ onPlantno }}" placeholder="例：K7" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:13px" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">項目 item *</div>
+              <input value="{{ f_item }}" onChange="{{ onItem }}" placeholder="例：pH、COD" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">法規許可值 LAW</div>
+              <input value="{{ f_law }}" onChange="{{ onLaw }}" placeholder="單邊 80，或雙邊 6-9" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">OOS</div>
+              <input value="{{ f_oos }}" onChange="{{ onOos }}" placeholder="單邊 80，或雙邊 6-9" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">OOC</div>
+              <input value="{{ f_ooc }}" onChange="{{ onOoc }}" placeholder="需比 Alert 寬" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">Alert</div>
+              <input value="{{ f_alert }}" onChange="{{ onAlert }}" placeholder="單邊 80，或雙邊 6-9" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:13px">
+            </div>
+          </div>
+          <div style="margin-top:16px">
+            <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">備註</div>
+            <textarea value="{{ f_remark }}" onChange="{{ onRemark }}" rows="2" style="width:100%;padding:9px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px;resize:vertical"></textarea>
+          </div>
+          <div style="margin-top:10px;font-size:11.5px;color:var(--fg-3);line-height:1.6">pH 項目門檻須雙邊（如 6-9）；非 pH 項目須單邊。每段最多小數 2 位，雙邊下限不可大於等於上限。OOC 範圍須比 Alert 寬（雙邊方向待業務確認）。</div>
+          <div style="display:flex;justify-content:flex-end;margin-top:18px">
+            <button onClick="{{ onSubmitApply }}" style="padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;box-shadow:var(--glow-blue)" style-hover="background:var(--blue-hover);transform:translateY(-1px)">送出簽核申請</button>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- 頁籤：我的申請 -->
+    <sc-if value="{{ isMineTab }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="我的申請">
+        <div style="background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);overflow:hidden">
+          <div style="display:grid;grid-template-columns:150px 84px 90px 120px 150px 110px 1fr;gap:10px;align-items:center;padding:10px 18px;background:var(--bg-1);border-bottom:1px solid var(--border-1);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">
+            <span>申請單號</span><span>廠區</span><span>類別</span><span>項目</span><span>申請時間</span><span>狀態</span><span>備註</span>
+          </div>
+          <sc-for list="{{ mineRows }}" as="m" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:150px 84px 90px 120px 150px 110px 1fr;gap:10px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--border-1)" style-hover="background:var(--bg-3)">
+              <span style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-1)">{{ m.formno }}</span>
+              <span style="font-family:var(--font-mono);font-weight:700">{{ m.plantno }}</span>
+              <span style="font-size:12.5px;color:var(--fg-2)">{{ m.ftypeLabel }}</span>
+              <span style="font-weight:600">{{ m.item }}</span>
+              <span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-3)">{{ m.cdatetime }}</span>
+              <span style="{{ m.statusStyle }}">{{ m.statusLabel }}</span>
+              <span style="font-size:12px;color:var(--fg-3)">{{ m.remark }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ mineEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:40px;text-align:center;color:var(--fg-3);font-size:13px">目前沒有申請紀錄</div>
+          </sc-if>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- 頁籤：待簽核 -->
+    <sc-if value="{{ isTodoTab }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="待簽核">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ todoRows }}" as="td" hint-placeholder-count="2">
+            <div style="background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);padding:16px 18px">
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <span style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-3)">{{ td.formno }}</span>
+                <span style="font-family:var(--font-mono);font-weight:700;font-size:15px">{{ td.plantno }}</span>
+                <span style="font-weight:600">{{ td.item }}</span>
+                <span style="padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--accent-soft);color:var(--accent)">{{ td.ftypeLabel }}</span>
+                <span style="font-size:12.5px;color:var(--fg-2)">{{ td.detail }}</span>
+                <span style="flex:1"></span>
+                <span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-3)">申請人 {{ td.empstr }} ・ {{ td.cdatetime }}</span>
+              </div>
+              <sc-if value="{{ td.rejecting }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-1)">
+                  <div style="font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:6px">否決原因（必填）</div>
+                  <textarea value="{{ td.rejectComment }}" onChange="{{ td.onRejectComment }}" rows="2" style="width:100%;padding:8px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;resize:vertical" placeholder="請說明否決原因，將寄送通知信給申請人"></textarea>
+                  <sc-if value="{{ td.rejectError }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:12px;color:var(--err);margin-top:4px">請填寫否決原因</div>
+                  </sc-if>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+                    <button onClick="{{ td.onCancelReject }}" style="padding:7px 14px;border-radius:6px;font-size:12.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+                    <button onClick="{{ td.onConfirmReject }}" style="padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--err);color:#fff;border:none;cursor:pointer">確認否決</button>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ td.showActions }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-1)">
+                  <button onClick="{{ td.onReject }}" style="padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:transparent;color:var(--err);border:1.5px solid rgba(239,68,68,0.4);cursor:pointer" style-hover="background:var(--err-bg)">否決</button>
+                  <button onClick="{{ td.onApprove }}" style="padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--ok);color:#062012;border:none;cursor:pointer">核准</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ todoEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:48px;text-align:center;color:var(--fg-2);background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px">
+              <div style="font-size:14px">目前沒有待簽核的規格申請</div>
+            </div>
+          </sc-if>
+        </div>
+      </section>
+    </sc-if>
+
+  </div>
+</div>
+
+<!-- toast -->
+<sc-if value="{{ toastShow }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;bottom:24px;right:24px;z-index:200;min-width:320px;max-width:420px;background:var(--bg-2);border:1px solid {{ toastBorder }};border-radius:10px;box-shadow:var(--shadow-3);padding:14px 16px;display:flex;gap:10px;align-items:flex-start">
+    <span style="{{ toastDotStyle }}"></span>
+    <div style="flex:1;font-size:13px;color:var(--fg-1);line-height:1.6">{{ toastMsg }}</div>
+    <button onClick="{{ toastClose }}" style="background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:14px;padding:2px" style-hover="color:var(--fg-1)">✕</button>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;showLegacyGapNotice&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;現況說明&quot; },
+  &quot;defaultTab&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;list&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;list&quot;, &quot;apply&quot;, &quot;mine&quot;, &quot;todo&quot;], &quot;section&quot;: &quot;預設頁籤&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      tab: props.defaultTab || 'list',
+      filterPlant: '', filterItem: '',
+      showGapNotice: props.showLegacyGapNotice ?? true,
+      editingId: null, editDraft: {}, editErrors: {},
+      f_ftype: 'M', f_source: '1', f_plantno: '', f_item: '', f_law: '', f_oos: '', f_ooc: '', f_alert: '', f_remark: '',
+      formErrors: [],
+      rejectingId: null, rejectComment: {}, rejectError: {},
+      toast: null,
+      specs: this.initialSpecs(),
+      applies: this.initialApplies(),
+      todos: this.initialTodos(),
+    };
+  }
+
+  initialSpecs() {
+    return [
+      { plantno: 'K7', item: 'pH', source: 1, law: '5-10', oos: '6-9', ooc: '6.2-8.8', alert: '6.5-8.5', remark: '' },
+      { plantno: 'K7', item: 'COD', source: 1, law: '120', oos: '100', ooc: '80', alert: '70', remark: '' },
+      { plantno: 'K14B', item: 'COD', source: 2, law: '120', oos: '100', ooc: '85', alert: '75', remark: '' },
+      { plantno: 'K9', item: 'Cu', source: 3, law: '3', oos: '3', ooc: '2.5', alert: '2', remark: 'QA 手測來源' },
+      { plantno: 'K11', item: 'pH', source: 1, law: '5-10', oos: '6-9.5', ooc: '6.3-8.9', alert: '6.5-8.5', remark: 'SCADA 管制值與此不同步' },
+      { plantno: 'K3', item: '氨氮', source: 1, law: '30', oos: '20', ooc: '16', alert: '12', remark: '' },
+    ];
+  }
+  initialApplies() {
+    return [
+      { formno: 'F20260709001', ftype: 'M', plantno: 'K7', item: 'VOC', cdatetime: '2026-07-09 14:02', fstatus: 1, remark: 'Alert 30→28' },
+      { formno: 'F20260705003', ftype: 'I', plantno: 'K12', item: '導電度', cdatetime: '2026-07-05 09:15', fstatus: 7, remark: '' },
+      { formno: 'F20260701002', ftype: 'D', plantno: 'K9', item: 'Ni', cdatetime: '2026-07-01 11:40', fstatus: 8, remark: '簽核人否決：資料來源尚未確認' },
+    ];
+  }
+  initialTodos() {
+    return [
+      { formno: 'F20260709001', ftype: 'M', plantno: 'K7', item: 'VOC', empstr: '10234-王小明', cdatetime: '2026-07-09 14:02', detail: 'Alert 30→28、OOC 40→38' },
+      { formno: 'F20260710005', ftype: 'I', plantno: 'K14A', item: '總氮', empstr: '20981-林佳蓁', cdatetime: '2026-07-10 16:20', detail: '新增規格 OOS 40、OOC 32、Alert 28' },
+    ];
+  }
+
+  validateRange(label, val, isPH, errors) {
+    if (val === undefined) val = '';
+    const t = val.trim();
+    if (t === '' || t.toUpperCase() === 'N/A') return null;
+    const parts = t.split('-').map(s => s.trim());
+    if (isPH && parts.length !== 2) { errors.push(label + ' 為 pH 項目，須輸入雙邊範圍（例如 6-9）'); return null; }
+    if (!isPH && parts.length !== 1) { errors.push(label + ' 為非 pH 項目，須輸入單邊數值'); return null; }
+    for (const p of parts) {
+      if (!/^\d+(\.\d{1,2})?$/.test(p)) { errors.push(label + ' 格式錯誤，每段最多小數點後 2 位（收到「' + p + '」）'); return null; }
+    }
+    const nums = parts.map(Number);
+    if (nums.length === 2 && nums[0] >= nums[1]) errors.push(label + ' 雙邊下限不可大於等於上限');
+    return nums;
+  }
+
+  validateSpecFields(fields, errors) {
+    const isPH = (fields.item || '').trim() === 'pH';
+    const lawN = this.validateRange('法規許可值 LAW', fields.law, isPH, errors);
+    const oosN = this.validateRange('OOS', fields.oos, isPH, errors);
+    const oocN = this.validateRange('OOC', fields.ooc, isPH, errors);
+    const alertN = this.validateRange('Alert', fields.alert, isPH, errors);
+    if (oocN && alertN) {
+      if (!isPH) {
+        if (!(oocN[0] > alertN[0])) errors.push('OOC 上限須大於 Alert（單邊比較）');
+      } else {
+        if (!(oocN[0] <= alertN[0] && oocN[1] >= alertN[1])) errors.push('OOC 範圍須比 Alert 範圍寬（雙邊方向判斷待業務確認）');
+      }
+    }
+    return errors;
+  }
+
+  showToast(type, msg) {
+    this.setState({ toast: { type, msg } });
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => this.setState(s => (s.toast && s.toast.msg === msg ? { toast: null } : {})), 4500);
+  }
+
+  renderVals() {
+    const S = this.state;
+    const includeGap = this.props.showLegacyGapNotice ?? true;
+
+    // ---- filter options ----
+    const plants = [...new Set(S.specs.map(s => s.plantno))].sort();
+    const items = [...new Set(S.specs.map(s => s.item))].sort();
+    const plantOptions = [{ v: '', t: '全部廠區' }, ...plants.map(p => ({ v: p, t: p }))];
+    const itemOptions = [{ v: '', t: '全部項目' }, ...items.map(i => ({ v: i, t: i }))];
+
+    // ---- tabs ----
+    const TAB_DEF = [
+      { key: 'list', label: '規格清單' },
+      { key: 'apply', label: '送簽申請' },
+      { key: 'mine', label: '我的申請' },
+      { key: 'todo', label: '待簽核', badge: S.todos.length },
+    ];
+    const tabs = TAB_DEF.map(t => {
+      const active = S.tab === t.key;
+      return {
+        label: t.label,
+        hasBadge: !!t.badge,
+        badge: t.badge,
+        badgeStyle: { marginLeft: 6, fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: active ? 'var(--accent)' : 'var(--warn-bg)', color: active ? 'var(--bg-0)' : 'var(--warn)' },
+        style: { padding: '10px 16px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', border: 'none', borderBottom: '2px solid ' + (active ? 'var(--accent)' : 'transparent'), color: active ? 'var(--fg-1)' : 'var(--fg-3)', cursor: 'pointer', transition: 'all 160ms var(--ease)' },
+        onClick: () => this.setState({ tab: t.key }),
+      };
+    });
+
+    // ---- list tab ----
+    const matches = (r) => (!S.filterPlant || r.plantno === S.filterPlant) && (!S.filterItem || r.item === S.filterItem);
+    const SRC = { 1: ['SCADA', 'var(--info)', 'var(--info-bg)'], 2: ['CWMS', 'var(--accent)', 'var(--accent-soft)'], 3: ['QA手測', 'var(--fg-2)', 'var(--muted-bg)'] };
+    const filteredSpecs = S.specs.filter(matches);
+    const listRows = filteredSpecs.map((r, idx) => {
+      const id = r.plantno + '|' + r.item;
+      const editing = S.editingId === id;
+      const draft = S.editDraft[id] || { source: String(r.source), law: r.law, oos: r.oos, ooc: r.ooc, alert: r.alert };
+      const errs = S.editErrors[id] || [];
+      return {
+        plantno: r.plantno, item: r.item, remark: r.remark,
+        srcLabel: SRC[r.source][0],
+        srcStyle: { fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: SRC[r.source][2], color: SRC[r.source][1], justifySelf: 'start' },
+        law: r.law || '—', oos: r.oos || '—', ooc: r.ooc || '—', alert: r.alert || '—',
+        editing, viewing: !editing,
+        editSource: draft.source, editLaw: draft.law, editOos: draft.oos, editOoc: draft.ooc, editAlert: draft.alert,
+        hasEditErrors: errs.length > 0, editErrors: errs,
+        onSourceChange: (e) => this.setState(s => ({ editDraft: { ...s.editDraft, [id]: { ...draft, source: e.target.value } } })),
+        onLawChange: (e) => this.setState(s => ({ editDraft: { ...s.editDraft, [id]: { ...draft, law: e.target.value } } })),
+        onOosChange: (e) => this.setState(s => ({ editDraft: { ...s.editDraft, [id]: { ...draft, oos: e.target.value } } })),
+        onOocChange: (e) => this.setState(s => ({ editDraft: { ...s.editDraft, [id]: { ...draft, ooc: e.target.value } } })),
+        onAlertChange: (e) => this.setState(s => ({ editDraft: { ...s.editDraft, [id]: { ...draft, alert: e.target.value } } })),
+        onEdit: () => this.setState(s => ({ editingId: id, editDraft: { ...s.editDraft, [id]: { source: String(r.source), law: r.law, oos: r.oos, ooc: r.ooc, alert: r.alert } } })),
+        onCancel: () => this.setState(s => { const ee = { ...s.editErrors }; delete ee[id]; return { editingId: null, editErrors: ee }; }),
+        onSave: () => {
+          const errors = [];
+          this.validateSpecFields({ item: r.item, law: draft.law, oos: draft.oos, ooc: draft.ooc, alert: draft.alert }, errors);
+          if (errors.length) {
+            this.setState(s => ({ editErrors: { ...s.editErrors, [id]: errors } }));
+            this.showToast('err', '儲存失敗：規格格式驗證未通過，請查看列下方錯誤訊息');
+            return;
+          }
+          this.setState(s => {
+            const specs = s.specs.map(sp => (sp.plantno === r.plantno && sp.item === r.item) ? { ...sp, source: Number(draft.source), law: draft.law, oos: draft.oos, ooc: draft.ooc, alert: draft.alert } : sp);
+            const ee = { ...s.editErrors }; delete ee[id];
+            return { specs, editingId: null, editErrors: ee };
+          });
+          this.showToast('ok', '已更新 ' + r.plantno + '・' + r.item + ' 規格，立即生效');
+        },
+      };
+    });
+
+    // ---- apply tab ----
+    const onSubmitApply = () => {
+      const errors = [];
+      if (!S.f_plantno.trim()) errors.push('廠區為必填');
+      if (!S.f_item.trim()) errors.push('項目為必填');
+      this.validateSpecFields({ item: S.f_item, law: S.f_law, oos: S.f_oos, ooc: S.f_ooc, alert: S.f_alert }, errors);
+      const dup = S.applies.some(a => a.plantno === S.f_plantno.trim() && a.item === S.f_item.trim() && (a.fstatus === 0 || a.fstatus === 1));
+      if (dup) errors.push('同廠區/項目已有待簽核或簽核中的申請，禁止重複送出');
+      if (errors.length) {
+        this.setState({ formErrors: errors });
+        this.showToast('err', '送出失敗，請修正表單中 ' + errors.length + ' 項問題');
+        return;
+      }
+      const formno = 'F' + Date.now();
+      const label = { I: '新增', M: '修改', D: '刪除' }[S.f_ftype];
+      this.setState(s => ({
+        formErrors: [],
+        applies: [{ formno, ftype: S.f_ftype, plantno: S.f_plantno, item: S.f_item, cdatetime: new Date().toLocaleString('zh-TW', { hour12: false }), fstatus: 1, remark: '' }, ...s.applies],
+        todos: [{ formno, ftype: S.f_ftype, plantno: S.f_plantno, item: S.f_item, empstr: '10234-王小明（本人）', cdatetime: new Date().toLocaleString('zh-TW', { hour12: false }), detail: label + '：LAW ' + (S.f_law || '—') + ' OOS ' + (S.f_oos || '—') + ' OOC ' + (S.f_ooc || '—') + ' Alert ' + (S.f_alert || '—') }, ...s.todos],
+        f_plantno: '', f_item: '', f_law: '', f_oos: '', f_ooc: '', f_alert: '', f_remark: '',
+      }));
+      this.showToast('ok', '已送出簽核申請（單號 ' + formno + '），已進入簽核流程');
+    };
+
+    // ---- mine tab ----
+    const STATUS_LABEL = { 0: '待簽核', 1: '簽核中', 7: '核准', 8: '否決', 12: '取消' };
+    const STATUS_STYLE = (st) => {
+      const map = { 0: ['var(--fg-2)', 'var(--muted-bg)'], 1: ['var(--warn)', 'var(--warn-bg)'], 7: ['var(--ok)', 'var(--ok-bg)'], 8: ['var(--err)', 'var(--err-bg)'], 12: ['var(--fg-3)', 'var(--muted-bg)'] };
+      const [c, bg] = map[st] || map[0];
+      return { display: 'inline-flex', padding: '2px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: bg, color: c, fontFamily: 'var(--font-mono)' };
+    };
+    const FTYPE_LABEL = { I: '新增', M: '修改', D: '刪除' };
+    const mineRows = S.applies.map(a => ({
+      formno: a.formno, plantno: a.plantno, item: a.item, cdatetime: a.cdatetime, remark: a.remark || '—',
+      ftypeLabel: FTYPE_LABEL[a.ftype],
+      statusLabel: STATUS_LABEL[a.fstatus], statusStyle: STATUS_STYLE(a.fstatus),
+    }));
+
+    // ---- todo tab ----
+    const doApprove = (formno) => {
+      const t = S.todos.find(x => x.formno === formno);
+      this.setState(s => ({
+        todos: s.todos.filter(x => x.formno !== formno),
+        applies: s.applies.map(a => a.formno === formno ? { ...a, fstatus: 7 } : a),
+      }));
+      this.showToast('ok', '已核准 ' + (t ? t.plantno + '・' + t.item : formno) + '，規格已套用並通知申請人');
+    };
+    const doReject = (formno) => {
+      const comment = (S.rejectComment[formno] || '').trim();
+      if (!comment) { this.setState(s => ({ rejectError: { ...s.rejectError, [formno]: true } })); return; }
+      const t = S.todos.find(x => x.formno === formno);
+      this.setState(s => ({
+        todos: s.todos.filter(x => x.formno !== formno),
+        applies: s.applies.map(a => a.formno === formno ? { ...a, fstatus: 8, remark: '簽核人否決：' + comment } : a),
+        rejectingId: null,
+      }));
+      this.showToast('err', '已否決 ' + (t ? t.plantno + '・' + t.item : formno) + '，已通知申請人');
+    };
+    const todoRows = S.todos.map(t => ({
+      formno: t.formno, plantno: t.plantno, item: t.item, empstr: t.empstr, cdatetime: t.cdatetime, detail: t.detail,
+      ftypeLabel: FTYPE_LABEL[t.ftype],
+      rejecting: S.rejectingId === t.formno,
+      showActions: S.rejectingId !== t.formno,
+      rejectComment: S.rejectComment[t.formno] || '',
+      rejectError: !!S.rejectError[t.formno],
+      onRejectComment: (e) => this.setState(s => ({ rejectComment: { ...s.rejectComment, [t.formno]: e.target.value }, rejectError: { ...s.rejectError, [t.formno]: false } })),
+      onReject: () => this.setState({ rejectingId: t.formno }),
+      onCancelReject: () => this.setState({ rejectingId: null }),
+      onConfirmReject: () => doReject(t.formno),
+      onApprove: () => doApprove(t.formno),
+    }));
+
+    return {
+      plantOptions, itemOptions,
+      filterPlant: S.filterPlant, filterItem: S.filterItem,
+      onFilterPlant: (e) => this.setState({ filterPlant: e.target.value }),
+      onFilterItem: (e) => this.setState({ filterItem: e.target.value }),
+      showGapNotice: S.showGapNotice,
+      dismissGapNotice: () => this.setState({ showGapNotice: false }),
+      tabs,
+      isListTab: S.tab === 'list', isApplyTab: S.tab === 'apply', isMineTab: S.tab === 'mine', isTodoTab: S.tab === 'todo',
+      listRows, listEmpty: listRows.length === 0, listCount: filteredSpecs.length,
+      hasFormErrors: S.formErrors.length > 0, formErrors: S.formErrors, formErrorCount: S.formErrors.length,
+      f_ftype: S.f_ftype, f_source: S.f_source, f_plantno: S.f_plantno, f_item: S.f_item, f_law: S.f_law, f_oos: S.f_oos, f_ooc: S.f_ooc, f_alert: S.f_alert, f_remark: S.f_remark,
+      onFtype: (e) => this.setState({ f_ftype: e.target.value }),
+      onSource: (e) => this.setState({ f_source: e.target.value }),
+      onPlantno: (e) => this.setState({ f_plantno: e.target.value }),
+      onItem: (e) => this.setState({ f_item: e.target.value }),
+      onLaw: (e) => this.setState({ f_law: e.target.value }),
+      onOos: (e) => this.setState({ f_oos: e.target.value }),
+      onOoc: (e) => this.setState({ f_ooc: e.target.value }),
+      onAlert: (e) => this.setState({ f_alert: e.target.value }),
+      onRemark: (e) => this.setState({ f_remark: e.target.value }),
+      onSubmitApply,
+      mineRows, mineEmpty: mineRows.length === 0,
+      todoRows, todoEmpty: todoRows.length === 0,
+      toastShow: !!S.toast,
+      toastMsg: S.toast ? S.toast.msg : '',
+      toastBorder: S.toast && S.toast.type === 'err' ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.35)',
+      toastDotStyle: { width: 8, height: 8, borderRadius: '50%', marginTop: 4, flex: 'none', background: S.toast && S.toast.type === 'err' ? 'var(--err)' : 'var(--ok)', boxShadow: S.toast && S.toast.type === 'err' ? '0 0 6px var(--err-glow)' : '0 0 6px var(--ok-glow)' },
+      toastClose: () => this.setState({ toast: null }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-1);color:var(--fg-1);font-family:var(--font-sans);font-size:14px;-webkit-font-smoothing:antialiased;
+background-image:linear-gradient(var(--bg-grid) 1px,transparent 1px),linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);background-size:32px 32px;background-attachment:fixed}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-hover)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+input::placeholder{color:var(--fg-3)}
+input[type="date"]{color-scheme:dark}
+</style>
+</helmet>
+
+<div data-screen-label="歷史曲線" style="min-height:100vh;display:flex;flex-direction:column">
+
+  <!-- topbar -->
+  <header style="height:64px;background:var(--bg-2);border-bottom:1px solid var(--border-1);display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:10">
+    <a href="VOC Dashboard.dc.html" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--fg-2);padding:7px 12px;border:1.5px solid var(--border-2);border-radius:6px;transition:all 180ms var(--ease)" style-hover="color:var(--fg-1);border-color:var(--border-3)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m15 18-6-6 6-6"></path></svg>
+      儀表板
+    </a>
+    <div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--fg-1)">歷史曲線</h1>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-top:2px">VOC PLATFORM / HISTORY TRENDS</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);padding:6px 12px;border:1px solid var(--border-1);border-radius:999px;background:var(--bg-1)">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);animation:pulse 1.5s ease-in-out infinite"></span>
+      {{ rangeSummary }}
+    </div>
+    <button onClick="{{ onExport }}" style="display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;box-shadow:var(--glow-blue);font-family:inherit;transition:all 180ms var(--ease)" style-hover="background:var(--blue-hover);transform:translateY(-1px)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+      匯出 CSV
+    </button>
+  </header>
+
+  <div style="padding:20px 28px 48px;max-width:1440px;width:100%">
+
+    <!-- 查詢條件 -->
+    <section data-screen-label="查詢條件" style="background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);padding:16px 18px;display:flex;flex-direction:column;gap:14px;margin-bottom:20px">
+
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="width:88px;flex:none;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">廠棟 PLANT</span>
+        <div style="position:relative;min-width:220px">
+          <select value="{{ plant }}" onChange="{{ onPlant }}" style="width:100%;appearance:none;padding:8px 34px 8px 14px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;outline:none" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+            <sc-for list="{{ plantOpts }}" as="po" hint-placeholder-count="12">
+              <option value="{{ po.v }}">{{ po.v }}</option>
+            </sc-for>
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--fg-3);pointer-events:none"><path d="m6 9 6 6 6-6"></path></svg>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:flex-start;gap:14px;position:relative">
+        <span style="width:88px;flex:none;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);padding-top:9px">指標 METRIC</span>
+        <div style="position:relative">
+          <button onClick="{{ onToggleInd }}" style="display:inline-flex;align-items:center;gap:8px;min-width:260px;padding:8px 14px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer" style-hover="border-color:var(--accent)">
+            <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ indSummary }}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--fg-3);flex:none"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <sc-if value="{{ indOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;top:calc(100% + 6px);left:0;z-index:20;min-width:260px;max-height:320px;overflow-y:auto;background:var(--bg-3);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-2);padding:6px">
+              <sc-for list="{{ indOpts }}" as="io" hint-placeholder-count="12">
+                <div onClick="{{ io.onClick }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px" style-hover="background:var(--bg-4)">
+                  <span style="{{ io.boxStyle }}">
+                    <sc-if value="{{ io.checked }}" hint-placeholder-val="{{ false }}">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;color:#fff"><path d="M20 6 9 17l-5-5"></path></svg>
+                    </sc-if>
+                  </span>
+                  <span style="color:var(--fg-1)">{{ io.txt }}</span>
+                  <span style="flex:1"></span>
+                  <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3)">{{ io.unit }}</span>
+                </div>
+              </sc-for>
+              <div style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:6px;display:flex;gap:8px">
+                <button onClick="{{ onClearInd }}" style="flex:1;padding:6px;border-radius:6px;background:transparent;border:1px solid var(--border-2);color:var(--fg-2);font-size:11.5px;font-family:inherit;cursor:pointer" style-hover="border-color:var(--border-3);color:var(--fg-1)">清除</button>
+                <button onClick="{{ onToggleInd }}" style="flex:1;padding:6px;border-radius:6px;background:var(--blue);border:none;color:#fff;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer" style-hover="background:var(--blue-hover)">完成</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        <span style="font-size:11.5px;color:var(--fg-3);padding-top:9px">可複選，每個指標各自一張趨勢圖</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="width:88px;flex:none;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2)">時間 RANGE</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <sc-for list="{{ rangeChips }}" as="rc" hint-placeholder-count="5">
+            <button onClick="{{ rc.onClick }}" style="{{ rc.style }}" style-hover="border-color:var(--border-3)">{{ rc.txt }}</button>
+          </sc-for>
+          <sc-if value="{{ isCustom }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:8px;margin-left:4px">
+              <input type="date" value="{{ customFrom }}" onChange="{{ onFrom }}" style="padding:6px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;font-family:var(--font-mono);outline:none" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+              <span style="color:var(--fg-3);font-size:12px">至</span>
+              <input type="date" value="{{ customTo }}" onChange="{{ onTo }}" style="padding:6px 10px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;font-family:var(--font-mono);outline:none" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)">
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </section>
+
+    <!-- 趨勢圖 -->
+    <div data-screen-label="趨勢圖" style="display:flex;flex-direction:column;gap:16px">
+      <sc-for list="{{ panels }}" as="pn" hint-placeholder-count="3">
+        <section style="background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px;box-shadow:var(--shadow-1);padding:18px 20px 14px">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <span style="font-size:15px;font-weight:700;color:var(--fg-1)">{{ pn.name }}</span>
+            <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3)">{{ pn.plantUnit }}</span>
+            <sc-if value="{{ pn.hasExceed }}" hint-placeholder-val="{{ false }}">
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;font-family:var(--font-mono);background:var(--err-bg);color:var(--err)">
+                <span style="width:7px;height:7px;border-radius:50%;background:var(--err);box-shadow:0 0 6px var(--err-glow)"></span>超標 {{ pn.exceedN }} 次
+              </span>
+            </sc-if>
+            <span style="flex:1"></span>
+            <span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-2);display:flex;gap:16px">
+              <span>最新 <b style="{{ pn.latestStyle }}">{{ pn.latest }}</b></span>
+              <span>平均 <b style="color:var(--fg-1)">{{ pn.avg }}</b></span>
+              <span>最大 <b style="color:var(--fg-1)">{{ pn.max }}</b></span>
+              <span>最小 <b style="color:var(--fg-1)">{{ pn.min }}</b></span>
+            </span>
+          </div>
+
+          <div style="position:relative;height:240px;margin-top:16px;margin-left:52px;margin-right:64px">
+            <svg viewBox="0 0 1000 240" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible">
+              <sc-for list="{{ pn.grid }}" as="g" hint-placeholder-count="5">
+                <line x1="0" x2="1000" y1="{{ g.y }}" y2="{{ g.y }}" stroke="var(--border-1)" stroke-width="1"></line>
+              </sc-for>
+              <sc-for list="{{ pn.thres }}" as="t" hint-placeholder-count="2">
+                <line x1="0" x2="1000" y1="{{ t.y }}" y2="{{ t.y }}" stroke="{{ t.color }}" stroke-width="1.5" stroke-dasharray="7 6" opacity="0.75"></line>
+              </sc-for>
+              <path d="{{ pn.areaPath }}" fill="rgba(34,211,238,0.07)" stroke="none"></path>
+              <path d="{{ pn.linePath }}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
+              <sc-for list="{{ pn.pts }}" as="e" hint-placeholder-count="0">
+                <circle cx="{{ e.x }}" cy="{{ e.y }}" r="3.5" fill="{{ e.c }}"></circle>
+              </sc-for>
+            </svg>
+            <sc-for list="{{ pn.grid }}" as="g" hint-placeholder-count="5">
+              <span style="position:absolute;right:calc(100% + 10px);top:{{ g.pct }}%;transform:translateY(-50%);font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);white-space:nowrap">{{ g.txt }}</span>
+            </sc-for>
+            <sc-for list="{{ pn.thres }}" as="t" hint-placeholder-count="2">
+              <span style="position:absolute;left:calc(100% + 8px);top:{{ t.pct }}%;transform:translateY(-50%);font-family:var(--font-mono);font-size:10.5px;font-weight:600;color:{{ t.color }};white-space:nowrap">{{ t.txt }}</span>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;margin:8px 64px 0 52px;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3)">
+            <sc-for list="{{ pn.xlabs }}" as="x" hint-placeholder-count="7">
+              <span>{{ x.txt }}</span>
+            </sc-for>
+          </div>
+        </section>
+      </sc-for>
+
+      <sc-if value="{{ noSelection }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:56px;text-align:center;color:var(--fg-2);background:var(--bg-2);border:1px solid var(--border-1);border-radius:12px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;color:var(--fg-3);margin-bottom:10px"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+          <div style="font-size:14px">請至少選擇一個指標</div>
+          <div style="font-size:12px;color:var(--fg-3);margin-top:6px">點選上方指標項目即可繪製趨勢圖</div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;defaultRange&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;7D&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;24H&quot;, &quot;7D&quot;, &quot;30D&quot;, &quot;90D&quot;], &quot;section&quot;: &quot;查詢&quot; },
+  &quot;showOoc&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;管制線&quot; },
+  &quot;markExceed&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;管制線&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { plant: 'K7', inds: ['pH', 'COD', 'VOC'], range: null, customFrom: '', customTo: '', indOpen: false };
+    this.PLANTS = ['K7', 'K14B', 'K9', 'K11', 'K3', 'K5', 'K6', 'K8', 'K10', 'K12', 'K14A', 'K15'];
+    this.IND = [
+      { key: 'pH', unit: '', base: 7.2, dec: 2, oosLo: 6, oosHi: 9, oocLo: 6.2, oocHi: 8.8 },
+      { key: 'COD', unit: 'mg/L', base: 52, dec: 0, oosHi: 100, oocHi: 80 },
+      { key: 'SS', unit: 'mg/L', base: 11, dec: 1, oosHi: 30, oocHi: 25 },
+      { key: 'VOC', unit: 'ppm', base: 17, dec: 1, oosHi: 50, oocHi: 40 },
+      { key: 'Cu', unit: 'mg/L', base: 0.42, dec: 2, oosHi: 3, oocHi: 2.5 },
+      { key: 'Ni', unit: 'mg/L', base: 0.12, dec: 2, oosHi: 1, oocHi: 0.8 },
+      { key: '氨氮', unit: 'mg/L', base: 6.4, dec: 1, oosHi: 20, oocHi: 16 },
+      { key: '流量', unit: 'CMD', base: 2150, dec: 0, oosHi: 4000, oocHi: 3600 },
+      { key: '溫度', unit: '°C', base: 28.4, dec: 1, oosLo: 15, oosHi: 40, oocLo: 18, oocHi: 38 },
+      { key: '導電度', unit: 'µS/cm', base: 1820, dec: 0, oosHi: 4500, oocHi: 4000 },
+      { key: '濁度', unit: 'NTU', base: 8.2, dec: 1, oosHi: 50, oocHi: 40 },
+      { key: '硝酸鹽', unit: 'mg/L', base: 21.5, dec: 1, oosHi: 50, oocHi: 45 },
+    ];
+  }
+
+  hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return Math.abs(h); }
+  rnd(n) { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); }
+
+  rangeCfg(range, S) {
+    const H = 3600e3, D = 24 * H;
+    if (range === '自訂') {
+      const f = Date.parse(S.customFrom), t = Date.parse(S.customTo);
+      if (isFinite(f) && isFinite(t) && t > f) {
+        const days = Math.min(180, Math.round((t - f) / D) + 1);
+        return { N: Math.max(days, 2), step: D, fmt: 'date', start: f };
+      }
+      return { N: 42, step: 4 * H, fmt: 'dt', cycles: 5 };
+    }
+    if (range === '24H') return { N: 24, step: H, fmt: 'time', cycles: 2 };
+    if (range === '30D') return { N: 30, step: D, fmt: 'date', cycles: 6 };
+    if (range === '90D') return { N: 90, step: D, fmt: 'date', cycles: 9 };
+    return { N: 42, step: 4 * H, fmt: 'dt', cycles: 5 };
+  }
+
+  gen(plant, ind, N, cycles) {
+    const seed = this.hash(plant + '|' + ind.key);
+    const ph = (seed % 628) / 100;
+    const out = [];
+    for (let i = 0; i < N; i++) {
+      let f = 1 + 0.10 * Math.sin((i / N) * Math.PI * 2 * (cycles || 5) + ph) + 0.05 * Math.sin(i * 0.9 + ph * 2) + 0.06 * (this.rnd(seed + i * 3.7) - 0.5);
+      let v = ind.base * f;
+      if (this.rnd(seed * 1.3 + i * 7.7) > 0.982) v *= (ind.oosLo !== undefined ? 1.3 : 1.5);
+      out.push(v);
+    }
+    return out;
+  }
+
+  fmtT(ms, fmt) {
+    const d = new Date(ms);
+    const hh = String(d.getHours()).padStart(2, '0');
+    if (fmt === 'time') return hh + ':00';
+    if (fmt === 'date') return (d.getMonth() + 1) + '/' + d.getDate();
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hh + ':00';
+  }
+
+  buildPanels() {
+    const S = this.state;
+    const range = S.range ?? (this.props.defaultRange ?? '7D');
+    const cfg = this.rangeCfg(range, S);
+    const showOoc = this.props.showOoc ?? true;
+    const markExceed = this.props.markExceed ?? true;
+    const now = Date.now();
+    const start = cfg.start ?? (now - (cfg.N - 1) * cfg.step);
+    const times = Array.from({ length: cfg.N }, (_, i) => start + i * cfg.step);
+
+    const panels = this.IND.filter(ind => S.inds.includes(ind.key)).map(ind => {
+      const data = this.gen(S.plant, ind, cfg.N, cfg.cycles);
+      const dMin = Math.min(...data), dMax = Math.max(...data);
+      let lo = Math.min(dMin, ind.oocLo ?? ind.oosLo ?? dMin);
+      let hi = Math.max(dMax, ind.oosHi ?? dMax);
+      const pad = (hi - lo) * 0.10 || 1;
+      lo -= pad; hi += pad;
+      const Y = v => 234 - ((v - lo) / (hi - lo)) * 228;
+      const X = i => (i / (cfg.N - 1)) * 1000;
+      const fx = v => v.toFixed(ind.dec);
+
+      const linePath = data.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+      const areaPath = linePath + ' L 1000 240 L 0 240 Z';
+
+      const grid = [0, 0.25, 0.5, 0.75, 1].map(f => {
+        const v = hi - f * (hi - lo);
+        const y = Y(v);
+        return { y: y.toFixed(1), pct: ((y / 240) * 100).toFixed(2), txt: fx(v) };
+      });
+
+      const thres = [];
+      const addT = (v, color, label) => { if (v === undefined) return; const y = Y(v); thres.push({ y: y.toFixed(1), pct: ((y / 240) * 100).toFixed(2), color, txt: label + ' ' + v }); };
+      addT(ind.oosHi, 'var(--err)', 'OOS');
+      addT(ind.oosLo, 'var(--err)', 'OOS');
+      if (showOoc) { addT(ind.oocHi, 'var(--warn)', 'OOC'); addT(ind.oocLo, 'var(--warn)', 'OOC'); }
+
+      const isOos = v => (ind.oosHi !== undefined && v > ind.oosHi) || (ind.oosLo !== undefined && v < ind.oosLo);
+      const isOoc = v => (ind.oocHi !== undefined && v > ind.oocHi) || (ind.oocLo !== undefined && v < ind.oocLo);
+      const pts = [];
+      let exceedN = 0;
+      data.forEach((v, i) => {
+        if (isOos(v)) { exceedN++; if (markExceed) pts.push({ x: X(i).toFixed(1), y: Y(v).toFixed(1), c: 'var(--err)' }); }
+        else if (isOoc(v) && markExceed) pts.push({ x: X(i).toFixed(1), y: Y(v).toFixed(1), c: 'var(--warn)' });
+      });
+
+      const nLab = Math.min(7, cfg.N);
+      const xlabs = Array.from({ length: nLab }, (_, k) => {
+        const i = Math.round(k * (cfg.N - 1) / (nLab - 1));
+        return { txt: this.fmtT(times[i], cfg.fmt) };
+      });
+
+      const latest = data[cfg.N - 1];
+      const sum = data.reduce((a, b) => a + b, 0);
+      return {
+        key: ind.key, name: ind.key, dec: ind.dec, data, times,
+        plantUnit: S.plant + (ind.unit ? ' ・ ' + ind.unit : ''),
+        latest: fx(latest), avg: fx(sum / cfg.N), max: fx(dMax), min: fx(dMin),
+        latestStyle: { color: isOos(latest) ? 'var(--err)' : isOoc(latest) ? 'var(--warn)' : 'var(--accent)' },
+        hasExceed: exceedN > 0, exceedN,
+        grid, thres, linePath, areaPath, pts, xlabs,
+      };
+    });
+    return { panels, range, cfg, times };
+  }
+
+  renderVals() {
+    const S = this.state;
+    const { panels, range, cfg, times } = this.buildPanels();
+
+    const chip = (txt, active, onClick) => ({
+      txt, onClick,
+      style: { padding: '5px 13px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 120ms var(--ease)', background: active ? 'var(--accent-soft)' : 'transparent', color: active ? 'var(--accent)' : 'var(--fg-2)', border: '1.5px solid ' + (active ? 'var(--accent)' : 'var(--border-2)') },
+    });
+
+    const plantOpts = this.PLANTS.map(p => ({ v: p }));
+    const onPlant = e => this.setState({ plant: e.target.value });
+
+    const toggleInd = key => this.setState(s => ({ inds: s.inds.includes(key) ? s.inds.filter(k => k !== key) : [...s.inds, key] }));
+    const indOpts = this.IND.map(ind => {
+      const checked = S.inds.includes(ind.key);
+      return {
+        txt: ind.key, unit: ind.unit, checked,
+        onClick: () => toggleInd(ind.key),
+        boxStyle: { width: 16, height: 16, borderRadius: 4, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid ' + (checked ? 'var(--accent)' : 'var(--border-3)'), background: checked ? 'var(--accent)' : 'transparent' },
+      };
+    });
+    const indSummary = S.inds.length === 0 ? '請選擇指標' : S.inds.length <= 3 ? S.inds.join('、') : S.inds.slice(0, 3).join('、') + ' 等 ' + S.inds.length + ' 項';
+    const onToggleInd = () => this.setState(s => ({ indOpen: !s.indOpen }));
+    const onClearInd = () => this.setState({ inds: [] });
+
+    const rangeChips = ['24H', '7D', '30D', '90D', '自訂'].map(r => chip(r === '自訂' ? '自訂區間' : r, range === r, () => this.setState({ range: r })));
+
+    const fmtD = ms => { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate(); };
+    const rangeSummary = S.plant + ' ・ ' + fmtD(times[0]) + ' – ' + fmtD(times[times.length - 1]) + ' ・ ' + cfg.N + ' 點';
+
+    const onExport = () => {
+      let csv = '\uFEFFtime,plant,metric,value\n';
+      panels.forEach(pn => pn.data.forEach((v, i) => {
+        csv += new Date(pn.times[i]).toISOString() + ',' + S.plant + ',' + pn.name + ',' + v.toFixed(pn.dec) + '\n';
+      }));
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+      a.download = 'voc_history_' + S.plant + '_' + range + '.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+
+    return {
+      plant: S.plant, plantOpts, onPlant,
+      indOpen: S.indOpen, indOpts, indSummary, onToggleInd, onClearInd,
+      rangeChips, panels, rangeSummary, onExport,
+      isCustom: range === '自訂',
+      customFrom: S.customFrom, customTo: S.customTo,
+      onFrom: e => this.setState({ customFrom: e.target.value }),
+      onTo: e => this.setState({ customTo: e.target.value }),
+      noSelection: panels.length === 0,
+    };
+  }
+}
+</script>
+</body>
+</html>
