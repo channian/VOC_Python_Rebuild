@@ -75,11 +75,24 @@ def _spec_row_for_template(r: dict) -> dict:
     }
 
 
+_FTYPE_LABEL = {"I": "新增", "M": "修改", "D": "刪除"}
+
+
 def _apply_row(sa: SpecApply) -> dict:
+    """spec_apply → 前端列形狀。2026-07-11 V2 收線補齊 ftype_label/empstr/cdatetime 與
+    LAW/OOS/OOC/alert（payload 的 B numeric 欄位轉回 A 字串形狀）——b/spec.html 待簽核卡
+    的異動明細靠這些欄位，先前缺漏只會顯示佔位符。"""
+    p = sa.payload or {}
+
+    def _b(prefix: str) -> str:
+        return _bounds_to_str(p.get(f"{prefix}_low"), p.get(f"{prefix}_high"), p.get(f"{prefix}_status"))
+
     return {
         "formid": sa.id, "formno": sa.formno, "ftype": sa.ftype,
+        "ftype_label": _FTYPE_LABEL.get(sa.ftype, sa.ftype),
         "plantno": sa.plant_no, "item": sa.item, "fstatus": sa.fstatus,
-        "empno": sa.emp_no, "ctime": sa.created_at,
+        "empno": sa.emp_no, "empstr": sa.emp_no, "ctime": sa.created_at, "cdatetime": sa.created_at,
+        "LAW": p.get("law_text") or "", "OOS": _b("oos"), "OOC": _b("ooc"), "alert": _b("alert"),
     }
 
 
@@ -87,9 +100,10 @@ def _apply_row(sa: SpecApply) -> dict:
 
 @router.get("/ui/spec")
 def render_spec_modal_b(request: Request, db: Session = Depends(get_b_db)):
+    """規格維護（V2 起為獨立頁 b/spec.html，取代舊 partial 彈窗；context 契約不變）。"""
     specs = [_spec_row_for_template(r) for r in spec_service.list_specs(db)]
     return templates.TemplateResponse(
-        request=request, name="partials/spec_modal.html",
+        request=request, name="b/spec.html",
         context={"specs": specs, "sources": spec_service.get_sources(db)},
     )
 

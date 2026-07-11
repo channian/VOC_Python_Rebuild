@@ -250,31 +250,11 @@ def api_report_logs_b(plant: str = "", item: str = "", sdate: str = "", edate: s
 
 
 @router.get("/report/ui")
-def render_report_modal_b(request: Request, plant: str = "", item: str = "", sdate: str = "",
-                           edate: str = "", mt: bool = False, db: Session = Depends(get_b_db)):
-    if not sdate or not edate:
-        sdate, edate = report_service.default_date_range()
-    rows, summary, pivot = [], [], {"columns": [], "rows": []}
-    ranking, error = {"rows": [], "max_rank": 0}, ""
-    try:
-        report_service.validate_date_range(sdate, edate)
-        rows = report_service.query_report_data(db, plant, item, sdate, edate, mt)
-        summary = report_service.build_summary(rows)
-        pivot = report_service.build_pivot(rows)
-        ranking = report_service.build_ranking(rows)
-    except ValueError as e:
-        error = str(e)
-    except Exception as e:
-        error = f"查詢失敗：{e}"
-    return templates.TemplateResponse(
-        request=request, name="partials/report_modal.html",
-        context={
-            "plants": history_service.list_plants(db), "items": history_service.list_items(db, plant),
-            "plant": plant, "item": item, "sdate": sdate, "edate": edate, "mt": mt,
-            "summary": summary, "pivot": pivot, "ranking": ranking,
-            "total_count": sum(s["count"] for s in summary), "error": error,
-        },
-    )
+def render_report_page_b(request: Request):
+    """異常報表（V2 起為獨立頁 b/report.html；資料全由前端 fetch /history/plants、
+    /history/items、/report/logs，本 handler 不再預跑統計——舊 partial 版的伺服端統計
+    邏輯保留在 /report/logs API，無流失）。"""
+    return templates.TemplateResponse(request=request, name="b/report.html", context={})
 
 
 # ══════════════════════════════════════════════════════════════════════════

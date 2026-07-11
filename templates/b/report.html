@@ -162,9 +162,9 @@
       <div class="rp-sub">ANOMALY REPORT</div>
     </div>
     <div class="rp-spacer"></div>
-    {# 第 2 波 WP-D 把「異常查詢／異常回覆」合併為深色 modal 後，這裡可以改開該 modal； #}
-    {# 目前先連回 /ui/history（既有頁面尚未改版，見下方 TODO 一併說明）。 #}
-    <a href="/ui/history" class="rp-drilldown-link">↗ 異常查詢／回覆</a>
+    {# ⚠️ /ui/history 是 modal 片段（非整頁），一般連結直開會看到裸片段——先指回儀表板
+       （使用者從那裡的工具選單開異常查詢 modal）；第 2 波 WP-D 合併版完成後再接真 modal。 #}
+    <a href="/home" class="rp-drilldown-link">↗ 異常查詢／回覆（儀表板工具選單）</a>
   </header>
 
   <div class="rp-content">

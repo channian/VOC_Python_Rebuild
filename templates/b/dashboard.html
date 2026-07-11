@@ -79,8 +79,33 @@ body{
 
 /* ── 資料更新徽章 / 工具按鈕列 ────────────────────────────────── */
 .vb-update-badge{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);padding:6px 12px;border:1px solid var(--border-1);border-radius:999px;background:var(--bg-1)}
-.vb-toolbtn{display:inline-flex;align-items:center;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;transition:all 180ms var(--ease);white-space:nowrap}
+.vb-toolbtn{display:inline-flex;align-items:center;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer;font-family:inherit;transition:all 180ms var(--ease);white-space:nowrap;text-decoration:none}
 .vb-toolbtn:hover{color:var(--fg-1);border-color:var(--border-3);transform:translateY(-1px)}
+
+/* ── topbar「更多工具」下拉（V2 WP-A：3 常駐鈕＋更多工具 4 群組 11 項） ── */
+.vb-tools-wrap{display:flex;gap:8px;position:relative}
+.vb-more-btn{display:inline-flex;align-items:center;gap:6px;color:var(--fg-1)}
+.vb-more-btn.is-open{background:var(--bg-3)}
+.vb-more-chevron{width:13px;height:13px;transition:transform 160ms var(--ease)}
+.vb-more-btn.is-open .vb-more-chevron{transform:rotate(180deg)}
+.vb-more-backdrop{position:fixed;inset:0;z-index:40}
+.vb-more-panel{position:absolute;top:44px;right:0;width:560px;max-width:90vw;background:var(--bg-2);border:1px solid var(--border-2);border-radius:12px;box-shadow:var(--shadow-3);padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:18px;z-index:50}
+.vb-more-backdrop[data-vb-hidden="true"],.vb-more-panel[data-vb-hidden="true"]{display:none}
+.vb-more-group-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-3);margin-bottom:8px}
+.vb-more-group-items{display:flex;flex-direction:column;gap:2px}
+.vb-more-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:12.5px;color:var(--fg-2);cursor:pointer;font-family:inherit;background:transparent;border:none;width:100%;text-align:left;text-decoration:none}
+.vb-more-item:hover{background:var(--bg-3);color:var(--fg-1)}
+.vb-pill-new{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent);flex:none}
+
+/* ── global toast（右下角，供未來 modal 共用：window.vbToast()） ── */
+.vb-toast{position:fixed;bottom:24px;right:24px;z-index:200;min-width:300px;max-width:420px;background:var(--bg-2);border:1px solid rgba(34,197,94,.35);border-radius:10px;box-shadow:var(--shadow-3);padding:13px 16px;display:flex;gap:10px;align-items:flex-start}
+.vb-toast[data-vb-hidden="true"]{display:none}
+.vb-toast.is-err{border-color:rgba(239,68,68,.4)}
+.vb-toast-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex:none;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);display:inline-block}
+.vb-toast.is-err .vb-toast-dot{background:var(--err);box-shadow:0 0 6px var(--err-glow)}
+.vb-toast-msg{flex:1;font-size:12.5px;color:var(--fg-1);line-height:1.6}
+.vb-toast-close{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:14px;padding:2px;line-height:1}
+.vb-toast-close:hover{color:var(--fg-1)}
 
 /* ── 摘要卡 ───────────────────────────────────────────────── */
 .vb-stats{display:flex;gap:16px;margin-bottom:16px;align-items:stretch}
@@ -161,8 +186,12 @@ body{
 [data-vb-hidden="true"]{display:none !important}
 
 /* dialog#voc-modal 本體的深色（背景/邊框/圓角/陰影）由 static/css/voc_b_modal_dark.css
-   統一蓋版（見該檔頭註解），這裡只補尺寸/版面相關屬性（該檔不管這塊，兩邊不衝突）。 */
-#voc-modal{border:none;padding:0;max-width:min(90vw,960px);width:100%;max-height:90vh;overflow:auto}
+   統一蓋版（見該檔頭註解），這裡只補尺寸/版面相關屬性（該檔不管這塊，兩邊不衝突）。
+   尺寸對齊 V2 Dashboard.dc.html 249–260 行的 wideModal（900px／92vw／86vh）；
+   中水緊急通知（narrowModal，560px）維護一個簡單表單，較窄即可，
+   由 data-modal-size="narrow" 的工具項在開啟時切一個 modifier class。 */
+#voc-modal{border:none;padding:0;max-width:min(92vw,900px);width:100%;max-height:86vh;overflow:auto;border-radius:14px}
+#voc-modal.vb-modal-narrow{max-width:min(92vw,560px)}
 </style>
 </head>
 <body>
@@ -203,24 +232,53 @@ body{
 
     <div style="flex:1"></div>
 
-    {# ═══ 工具 TOOLS 分區（設計稿沒有的其他分頁功能）═══ #}
+    {# ═══ 工具 TOOLS 分區：與 topbar「更多工具」同一組 11 項、同 4 群組（V2 WP-A）═══
+       (label, href, is_page, is_new)：is_page=真 → 一般 <a href> 連獨立頁；
+       is_new=真 → 標「已改版」pill（目前只有規格維護／異常報表兩個獨立頁已改版）。 #}
+    {% set tool_groups = [
+      ('派送與簽核', [
+        ('派送名單維護', '/ui/maillist', false, false),
+        ('隔離申請', '/ui/control', false, false),
+        ('簽核管理', '/ui/flow', false, false),
+      ]),
+      ('資料與量測', [
+        ('規格維護', '/ui/spec', true, true),
+        ('QA 手測值', '/ui/qa', false, false),
+      ]),
+      ('異常紀錄', [
+        ('異常查詢', '/ui/history', false, false),
+        ('異常回覆', '/ui/reason', false, false),
+        ('異常報表', '/report/ui', true, true),
+      ]),
+      ('系統管理', [
+        ('中水緊急通知', '/warning/water_urgent/ui', false, false),
+        ('部門權限', '/dept/ui', false, false),
+        ('ACL 使用者權限', '/ui/acl', false, false),
+      ]),
+    ] %}
     <div style="padding:14px 16px 6px;border-top:1px solid var(--border-1)">
       <div class="vb-rail-label" style="padding:0 0 8px">工具 TOOLS</div>
+      {% for group_label, items in tool_groups %}
+      <div style="font-size:10px;font-weight:600;color:var(--fg-3);padding:{{ '10px 2px 4px' if not loop.first else '0 2px 4px' }};font-family:var(--font-mono)">{{ group_label }}</div>
       <div class="vb-rail-list" style="padding:0">
-        {% for tool in [
-          ('派送名單', '/ui/maillist'), ('規格維護', '/ui/spec'), ('隔離申請', '/ui/control'),
-          ('簽核管理', '/ui/flow'), ('QA 手測', '/ui/qa'), ('異常查詢', '/ui/history'),
-          ('異常回覆', '/ui/reason'), ('異常報表', '/report/ui'), ('中水緊急通知', '/warning/water_urgent/ui'),
-          ('部門權限', '/dept/ui'),
-        ] %}
-        <button type="button" class="vb-tool-item"
-                hx-get="{{ tool[1] }}" hx-target="#modal-container" hx-swap="innerHTML"
-                onclick="document.getElementById('voc-modal').showModal()">
+        {% for label, href, is_page, is_new in items %}
+        {% if is_page %}
+        <a href="{{ href }}" class="vb-tool-item" style="text-decoration:none">
           <svg class="vb-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          {{ tool[0] }}
+          {{ label }}
+          {% if is_new %}<span class="vb-pill-new">已改版</span>{% endif %}
+        </a>
+        {% else %}
+        <button type="button" class="vb-tool-item"
+                hx-get="{{ href }}" hx-target="#modal-container" hx-swap="innerHTML"
+                onclick="vbOpenModalTool({{ 'true' if href == '/warning/water_urgent/ui' else 'false' }})">
+          <svg class="vb-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          {{ label }}
         </button>
+        {% endif %}
         {% endfor %}
       </div>
+      {% endfor %}
     </div>
 
     <div style="padding:14px 16px;border-top:1px solid var(--border-1)">
@@ -249,11 +307,56 @@ body{
         <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);animation:pulse 1.5s ease-in-out infinite;display:inline-block"></span>
         資料更新 <span id="vb-updated-at">--:--</span> ・ 下次刷新 <b style="color:var(--accent)" id="vb-countdown">--:--</b>
       </div>
-      <div style="display:flex;gap:8px">
-        <button type="button" class="vb-toolbtn" hx-get="/ui/maillist" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">派送名單</button>
-        <button type="button" class="vb-toolbtn" hx-get="/ui/spec" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">規格維護</button>
-        <button type="button" class="vb-toolbtn" hx-get="/ui/control" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">隔離申請</button>
-        <button type="button" class="vb-toolbtn" hx-get="/ui/flow" hx-target="#modal-container" hx-swap="innerHTML" onclick="document.getElementById('voc-modal').showModal()">簽核</button>
+      <div class="vb-tools-wrap">
+        {# 3 顆常駐鈕（V2 topbar toolBtns）：派送名單／隔離申請走既有 modal partial；
+           規格維護已改版為獨立頁，一般 <a href> 導頁，不是 hx-get #}
+        <button type="button" class="vb-toolbtn" hx-get="/ui/maillist" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">派送名單</button>
+        <a href="/ui/spec" class="vb-toolbtn">規格維護</a>
+        <button type="button" class="vb-toolbtn" hx-get="/ui/control" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">隔離申請</button>
+
+        <button type="button" class="vb-toolbtn vb-more-btn" id="vb-more-btn" onclick="vbToggleMore(event)" aria-haspopup="true" aria-expanded="false">
+          更多工具
+          <svg class="vb-more-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+
+        {# 點外面關閉：全螢幕透明遮罩，位於面板下方 #}
+        <div class="vb-more-backdrop" id="vb-more-backdrop" data-vb-hidden="true" onclick="vbCloseMore()"></div>
+
+        {# 更多工具下拉：4 群組共 11 項（照 VOC Dashboard.dc.html 67–114 行分組），
+           規格維護／異常報表為已改版獨立頁（「已改版」pill＋一般連結），其餘維持既有 modal partial #}
+        <div class="vb-more-panel" id="vb-more-panel" data-vb-hidden="true">
+          <div>
+            <div class="vb-more-group-label">派送與簽核</div>
+            <div class="vb-more-group-items">
+              <button type="button" class="vb-more-item" hx-get="/ui/maillist" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">派送名單維護</button>
+              <button type="button" class="vb-more-item" hx-get="/ui/control" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">隔離申請</button>
+              <button type="button" class="vb-more-item" hx-get="/ui/flow" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">簽核管理</button>
+            </div>
+          </div>
+          <div>
+            <div class="vb-more-group-label">資料與量測</div>
+            <div class="vb-more-group-items">
+              <a href="/ui/spec" class="vb-more-item" onclick="vbCloseMore()">規格維護<span class="vb-pill-new">已改版</span></a>
+              <button type="button" class="vb-more-item" hx-get="/ui/qa" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">QA 手測值</button>
+            </div>
+          </div>
+          <div>
+            <div class="vb-more-group-label">異常紀錄</div>
+            <div class="vb-more-group-items">
+              <button type="button" class="vb-more-item" hx-get="/ui/history" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">異常查詢</button>
+              <button type="button" class="vb-more-item" hx-get="/ui/reason" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">異常回覆</button>
+              <a href="/report/ui" class="vb-more-item" onclick="vbCloseMore()">異常報表<span class="vb-pill-new">已改版</span></a>
+            </div>
+          </div>
+          <div>
+            <div class="vb-more-group-label">系統管理</div>
+            <div class="vb-more-group-items">
+              <button type="button" class="vb-more-item" hx-get="/warning/water_urgent/ui" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool(true)">中水緊急通知</button>
+              <button type="button" class="vb-more-item" hx-get="/dept/ui" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">部門權限</button>
+              <button type="button" class="vb-more-item" hx-get="/ui/acl" hx-target="#modal-container" hx-swap="innerHTML" onclick="vbOpenModalTool()">ACL 使用者權限</button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -401,6 +504,16 @@ body{
   </div>
 </dialog>
 
+{# ══════════════════════════════════════════════════════════
+   Global toast — 頁面層級，供未來各 modal 共用（window.vbToast）
+   對齊 V2 Dashboard.dc.html 602–610 行：右下角浮出、自動消失
+  ══════════════════════════════════════════════════════════ #}
+<div id="vb-toast" class="vb-toast" data-vb-hidden="true" role="status" aria-live="polite">
+  <span id="vb-toast-dot" class="vb-toast-dot"></span>
+  <div id="vb-toast-msg" class="vb-toast-msg"></div>
+  <button type="button" class="vb-toast-close" onclick="vbToastClose()">✕</button>
+</div>
+
 <script id="vb-dashboard-data" type="application/json">{{ ctx|tojson }}</script>
 <script>
 (function () {
@@ -434,7 +547,55 @@ body{
   modal.addEventListener("close", function () {
     document.getElementById("modal-container").innerHTML =
       '<div style="display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--fg-3);">載入中…</div>';
+    modal.classList.remove("vb-modal-narrow");
   });
+
+  // ── topbar「更多工具」下拉：開合、點外面關閉、Esc 關閉 ──────
+  var moreBtn = document.getElementById("vb-more-btn");
+  var morePanel = document.getElementById("vb-more-panel");
+  var moreBackdrop = document.getElementById("vb-more-backdrop");
+
+  function vbSetMoreOpen(open) {
+    morePanel.setAttribute("data-vb-hidden", open ? "false" : "true");
+    moreBackdrop.setAttribute("data-vb-hidden", open ? "false" : "true");
+    moreBtn.classList.toggle("is-open", open);
+    moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  window.vbToggleMore = function (e) {
+    if (e) e.stopPropagation();
+    vbSetMoreOpen(morePanel.getAttribute("data-vb-hidden") === "true");
+  };
+  window.vbCloseMore = function () { vbSetMoreOpen(false); };
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") vbCloseMore();
+  });
+  // 面板本體點擊不冒泡到 backdrop（避免點面板內部誤觸關閉）
+  morePanel.addEventListener("click", function (e) { e.stopPropagation(); });
+
+  // ── modal 類工具項共用開啟：收合下拉選單 + 開 <dialog>；
+  //    narrow=true 給中水緊急通知這種單一表單用（V2 narrowModal，560px）──
+  window.vbOpenModalTool = function (narrow) {
+    vbCloseMore();
+    modal.classList.toggle("vb-modal-narrow", !!narrow);
+    modal.showModal();
+  };
+
+  // ── global toast：window.vbToast(msg, opts)，opts.type === 'error' 顯示紅框 ──
+  var vbToastTimer = null;
+  window.vbToast = function (msg, opts) {
+    opts = opts || {};
+    var isErr = opts.type === "error" || opts.isErr === true;
+    document.getElementById("vb-toast-msg").textContent = msg;
+    var toastEl = document.getElementById("vb-toast");
+    toastEl.classList.toggle("is-err", isErr);
+    toastEl.setAttribute("data-vb-hidden", "false");
+    if (vbToastTimer) clearTimeout(vbToastTimer);
+    vbToastTimer = setTimeout(window.vbToastClose, opts.duration || 4000);
+  };
+  window.vbToastClose = function () {
+    document.getElementById("vb-toast").setAttribute("data-vb-hidden", "true");
+    if (vbToastTimer) { clearTimeout(vbToastTimer); vbToastTimer = null; }
+  };
 
   // ── 篩選狀態 ──────────────────────────────────────────────
   window.__vbState = { fStatus: "all", fSource: 0 };
