@@ -125,7 +125,7 @@ def _todo_dict(db: Session, iso: Isolation) -> dict:
 def render_control_modal_b(request: Request, db: Session = Depends(get_b_db)):
     """廠區隔離 Modal：有效隔離清單＋申請表單（模板同 A 棧）。"""
     return templates.TemplateResponse(
-        request=request, name="partials/control_modal.html",
+        request=request, name="b/partials/control.html",
         context={
             "active_isolations": [_iso_dict_for_template(r) for r in control_service.get_active_isolations(db)],
             "plant_list": acl_service.get_plant_list(db),
@@ -243,7 +243,7 @@ def control_tags_b(ccid: int, db: Session = Depends(get_b_db)):
 def render_flow_modal_b(request: Request, db: Session = Depends(get_b_db)):
     todos = [_todo_dict(db, iso) for iso in flow_service.get_todo_list(db, _user()[0])]
     return templates.TemplateResponse(
-        request=request, name="partials/flow_modal.html", context={"todos": todos},
+        request=request, name="b/partials/flow.html", context={"todos": todos},
     )
 
 

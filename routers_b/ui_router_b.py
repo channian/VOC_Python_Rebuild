@@ -105,7 +105,7 @@ class MailListDeleteReq(BaseModel):
 @router.get("/ui/maillist")
 def render_maillist_modal_b(request: Request, db: Session = Depends(get_b_db)):
     return templates.TemplateResponse(
-        request=request, name="partials/maillist_modal.html",
+        request=request, name="b/partials/maillist.html",
         context={
             "maillist": maillist_service.list_maillist(db),
             "plants": maillist_service.get_plant_list(db),
@@ -221,8 +221,9 @@ def render_history_modal_b(request: Request, plant: str = "", item: str = "", sd
     except Exception as e:
         error = f"查詢失敗：{e}"
     return templates.TemplateResponse(
-        request=request, name="partials/history_modal.html",
+        request=request, name="b/partials/history.html",
         context={
+            "mode": "history",  # 合併版模板：history=唯讀查詢、reason=可行內回覆
             "plants": history_service.list_plants(db), "items": history_service.list_items(db, plant),
             "plant": plant, "item": item, "sdate": sdate, "edate": edate, "mt": mt,
             "logs": logs, "error": error,
@@ -289,7 +290,7 @@ def render_dept_modal_b(request: Request, plantid: str = "", deptno: str = "", d
     except Exception:
         rows, plants, error = [], [], "查詢失敗，資料庫連線異常"
     return templates.TemplateResponse(
-        request=request, name="partials/dept_modal.html",
+        request=request, name="b/partials/dept.html",
         context={"depts": rows, "plants": plants, "plantid": plantid, "deptno": deptno,
                  "error": error, "is_all_plant": dept_service.is_all_plant},
     )
@@ -357,7 +358,7 @@ class AclDeleteReq(BaseModel):
 
 @router.get("/ui/acl")
 def render_acl_modal_b(request: Request):
-    return templates.TemplateResponse(request=request, name="partials/acl_modal.html", context={})
+    return templates.TemplateResponse(request=request, name="b/partials/acl.html", context={})
 
 
 @router.get("/acl/list")

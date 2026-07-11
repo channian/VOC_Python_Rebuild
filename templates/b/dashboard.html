@@ -12,7 +12,6 @@
 {# 設計系統 token + 共用元件（D1 工作包，含 .vb-* 基礎 class）#}
 <link rel="stylesheet" href="/static/css/voc_b.css">
 {# modal 暗色蓋版，讓既有 partials/*.html（A 棧亮色系）套進 <dialog> 後不違和（D4 工作包）#}
-<link rel="stylesheet" href="/static/css/voc_b_modal_dark.css">
 
 {# HTMX：CLAUDE.md 教訓——hx-vals 對 JSON body 端點無效，本頁工具選單一律走既有 modal
    partials（maillist_modal.html 等已用 fetch()+Content-Type:application/json），
@@ -185,12 +184,14 @@ body{
 .vb-empty-state .sub{font-size:12px;color:var(--fg-3);margin-top:6px}
 [data-vb-hidden="true"]{display:none !important}
 
-/* dialog#voc-modal 本體的深色（背景/邊框/圓角/陰影）由 static/css/voc_b_modal_dark.css
-   統一蓋版（見該檔頭註解），這裡只補尺寸/版面相關屬性（該檔不管這塊，兩邊不衝突）。
-   尺寸對齊 V2 Dashboard.dc.html 249–260 行的 wideModal（900px／92vw／86vh）；
-   中水緊急通知（narrowModal，560px）維護一個簡單表單，較窄即可，
-   由 data-modal-size="narrow" 的工具項在開啟時切一個 modifier class。 */
-#voc-modal{border:none;padding:0;max-width:min(92vw,900px);width:100%;max-height:86vh;overflow:auto;border-radius:14px}
+/* dialog#voc-modal 本體深色＋尺寸（V2 第 2 波起 modal 內容全為原生深色 partial，
+   過渡期蓋版 voc_b_modal_dark.css 已拆除，本體樣式改由這裡自持）。
+   尺寸對齊 V2 Dashboard.dc.html 249–260 行 wideModal（900px／92vw／86vh）；
+   中水緊急通知走 narrowModal（560px），由 data-modal-size="narrow" 切 modifier。 */
+#voc-modal{border:1px solid var(--border-1);padding:0;max-width:min(92vw,900px);width:100%;
+  max-height:86vh;overflow:auto;border-radius:14px;background:var(--bg-2);color:var(--fg-1);
+  box-shadow:var(--shadow-2)}
+#voc-modal::backdrop{background:rgba(5,7,13,.7);backdrop-filter:blur(4px)}
 #voc-modal.vb-modal-narrow{max-width:min(92vw,560px)}
 </style>
 </head>

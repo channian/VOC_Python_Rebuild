@@ -222,7 +222,7 @@ def render_qa_modal_b(request: Request, db: Session = Depends(get_b_db)):
     units = {i.item: (i.unit or "") for i in db.execute(select(Item)).scalars().all()}
     qa_items = [_qa_row_for_template(db, r, units) for r in qa_service.list_qa_items(db)]
     return templates.TemplateResponse(
-        request=request, name="partials/qa_modal.html", context={"qa_items": qa_items},
+        request=request, name="b/partials/qa.html", context={"qa_items": qa_items},
     )
 
 
@@ -254,8 +254,9 @@ def render_reason_modal_b(request: Request, plant: str = "", item: str = "", sda
     except Exception as e:
         error = f"查詢失敗：{e}"
     return templates.TemplateResponse(
-        request=request, name="partials/reason_modal.html",
+        request=request, name="b/partials/history.html",
         context={
+            "mode": "reason",  # 合併版模板：reason=可行內回覆
             "plants": history_service.list_plants(db), "items": history_service.list_items(db, plant),
             "plant": plant, "item": item, "sdate": sdate, "edate": edate, "mt": mt,
             "logs": logs, "error": error,
@@ -275,6 +276,6 @@ def render_water_urgent_modal_b(request: Request, db: Session = Depends(get_b_db
         logger.exception("B 棧中水通知頁查詢失敗")
         plants, reasons, error = [], [], "查詢失敗，資料庫連線異常"
     return templates.TemplateResponse(
-        request=request, name="partials/water_urgent_modal.html",
+        request=request, name="b/partials/water_urgent.html",
         context={"plants": plants, "reasons": reasons, "error": error},
     )
