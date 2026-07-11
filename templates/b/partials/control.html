@@ -1,0 +1,406 @@
+{# templates/b/partials/control.html — WP-C「隔離申請」modal（V2 原生深色版）
+   context（來自 routers_b/control_router_b.py GET /ui/control，唯讀不動）：
+     active_isolations: [{ccid, ccno, plantno, plantid, stime, etime, mdfdesc, remark, empstr}]
+     plant_list: [{plantid, plantno}]
+   設計來源：design_handoff_voc_platform_V2/VOC Dashboard.dc.html 309–368 行 + buildCTL()（~776–824）。
+
+   V2 用「新增／修改／改時間」三個分頁籤取代 V1 三段互相遮蔽的表單（CLAUDE.md 交辦要求）。
+
+   隔離項目 checkbox 局部（GET /ui/control/items?plantno=）處理方式：
+   本檔選擇「沿用既有 HTMX 局部＋自己補深色樣式」──也就是保留 hx-get 把舊亮色片段
+   （templates/partials/control_items.html）原封不動塞進本檔容器，不繞過它另外撈 spec/item
+   （tests_integration/test_main_b_routes.py::test_control_items_contains_seeded_items 直接打
+   /ui/control/items 本身，與本檔呈現方式無關，不受影響）。
+   該片段內的 <label> 只寫了 background/border（var(--voc-bg-main)/var(--voc-border)）與
+   accent-color（var(--voc-primary)），文字顏色沒設、會繼承外層；本檔在 .vbctl-itemswrap
+   容器內就地「重新定義」這三個 A 棧變數名稱（對應到 voc_b.css 的深色 token），
+   讓舊片段不改一行程式碼就自動變成深色，比另外用 fetch() 重組 HTML 更省工也更不容易漏樣式。
+#}
+<div class="vbctl-root">
+  <div class="vbctl-titlebar">
+    <span class="vbctl-title">廠區隔離管理</span>
+    <span style="flex:1"></span>
+    <button type="button" class="vbctl-x" onclick="document.getElementById('voc-modal').close()">✕</button>
+  </div>
+
+  <div class="vbctl-body">
+
+    <div class="vbctl-info">
+      隔離時間上限一律 1 小時；簽核為單關卡 OR 邏輯，任一人核准/否決即結案；簽核人排除申請人本人與離職員工。
+    </div>
+
+    <div class="vbctl-section-label">目前有效隔離</div>
+    <div class="vbctl-list">
+      {% for r in active_isolations %}
+      <div class="vbctl-card">
+        <div class="vbctl-card-row">
+          <span class="vbctl-mono vbctl-muted">{{ r.ccno }}</span>
+          <span class="vbctl-mono vbctl-strong">{{ r.plantno }}</span>
+          <span class="vbctl-badge vbctl-badge-ok">生效中</span>
+          <span class="vbctl-fg2">{{ r.mdfdesc }}</span>
+          <span style="flex:1"></span>
+          <span class="vbctl-mono vbctl-muted vbctl-small">{{ r.stime.strftime('%Y-%m-%d %H:%M') if r.stime else '' }} ～ {{ r.etime.strftime('%Y-%m-%d %H:%M') if r.etime else '' }}</span>
+        </div>
+        <div class="vbctl-card-sub">申請人 {{ r.empstr }}{{ (' ・ ' + r.remark) if r.remark else '' }}</div>
+      </div>
+      {% else %}
+      <div class="vbctl-empty">目前無有效隔離</div>
+      {% endfor %}
+    </div>
+
+    <div class="vbctl-tabs">
+      <button type="button" class="vbctl-tab is-active" data-tab="new" onclick="vbctlSwitchTab('new')">新增申請</button>
+      <button type="button" class="vbctl-tab" data-tab="modify" onclick="vbctlSwitchTab('modify')">修改申請</button>
+      <button type="button" class="vbctl-tab" data-tab="time" onclick="vbctlSwitchTab('time')">改時間</button>
+    </div>
+
+    {# ── 分頁 1：新增隔離申請 ─────────────────────────────────────────── #}
+    <div class="vbctl-panel" data-panel="new">
+      <div class="vbctl-grid2">
+        <div>
+          <div class="vbctl-flabel">廠區 *</div>
+          <select name="plantno" id="ctl-new-plant" class="vbctl-input"
+                  hx-get="/ui/control/items" hx-target="#ctl-new-items" hx-trigger="change"
+                  onchange="document.getElementById('ctl-new-plantid').value = this.options[this.selectedIndex].dataset.plantid || ''">
+            <option value="">— 選擇廠區 —</option>
+            {% for p in plant_list %}
+            <option value="{{ p.plantno }}" data-plantid="{{ p.plantid }}">{{ p.plantno }}</option>
+            {% endfor %}
+          </select>
+          <input type="hidden" id="ctl-new-plantid">
+        </div>
+        <div>
+          <div class="vbctl-flabel">隔離原因 *</div>
+          <input type="text" id="ctl-new-mdfdesc" class="vbctl-input" placeholder="例：儀器校正">
+        </div>
+        <div>
+          <div class="vbctl-flabel">開始時間 *</div>
+          <input type="datetime-local" id="ctl-new-stime" class="vbctl-input vbctl-mono">
+        </div>
+        <div>
+          <div class="vbctl-flabel">結束時間 *（≤1 小時）</div>
+          <input type="datetime-local" id="ctl-new-etime" class="vbctl-input vbctl-mono">
+        </div>
+      </div>
+      <div class="vbctl-flabel" style="margin-top:10px">隔離項目 *（依廠區顯示可隔離項目）</div>
+      <div id="ctl-new-items" class="vbctl-itemswrap">
+        <p class="vbctl-hint">請先選擇廠區</p>
+      </div>
+      <div>
+        <div class="vbctl-flabel">備註（選填）</div>
+        <input type="text" id="ctl-new-remark" class="vbctl-input">
+      </div>
+      <div id="ctl-new-errors"></div>
+      <div class="vbctl-actions">
+        <button type="button" class="vbctl-btn vbctl-btn-primary" onclick="vbctlSubmitNew()">送出申請</button>
+      </div>
+      <div id="ctl-new-result"></div>
+    </div>
+
+    {# ── 分頁 2：修改申請（對應原單建立新單並送簽，非原地修改） ─────────── #}
+    <div class="vbctl-panel" data-panel="modify" hidden>
+      <div class="vbctl-flabel">選擇欲修改的原始隔離單 *</div>
+      <select id="ctl-mod-target" class="vbctl-input" onchange="vbctlOnModTargetChange()">
+        <option value="">— 選擇隔離單 —</option>
+        {% for r in active_isolations %}
+        <option value="{{ r.ccid }}" data-plantno="{{ r.plantno }}" data-plantid="{{ r.plantid }}"
+                data-mdfdesc="{{ r.mdfdesc or '' }}" data-remark="{{ r.remark or '' }}"
+                data-stime="{{ r.stime.strftime('%Y-%m-%dT%H:%M') if r.stime else '' }}"
+                data-etime="{{ r.etime.strftime('%Y-%m-%dT%H:%M') if r.etime else '' }}">
+          {{ r.ccno }}（{{ r.plantno }}・{{ r.mdfdesc }}）
+        </option>
+        {% endfor %}
+      </select>
+      <div class="vbctl-grid2" style="margin-top:10px">
+        <div>
+          <div class="vbctl-flabel">隔離原因 *</div>
+          <input type="text" id="ctl-mod-mdfdesc" class="vbctl-input">
+        </div>
+        <div>
+          <div class="vbctl-flabel">備註（選填）</div>
+          <input type="text" id="ctl-mod-remark" class="vbctl-input">
+        </div>
+        <div>
+          <div class="vbctl-flabel">開始時間 *</div>
+          <input type="datetime-local" id="ctl-mod-stime" class="vbctl-input vbctl-mono">
+        </div>
+        <div>
+          <div class="vbctl-flabel">結束時間 *（≤1 小時）</div>
+          <input type="datetime-local" id="ctl-mod-etime" class="vbctl-input vbctl-mono">
+        </div>
+      </div>
+      <div class="vbctl-flabel" style="margin-top:10px">隔離項目 *</div>
+      <div id="ctl-mod-items" class="vbctl-itemswrap">
+        <p class="vbctl-hint">請先選擇欲修改的隔離單</p>
+      </div>
+      <div id="ctl-mod-errors"></div>
+      <div class="vbctl-actions">
+        <button type="button" class="vbctl-btn vbctl-btn-primary" onclick="vbctlSubmitModify()">送出修改（將建立新單並送簽）</button>
+      </div>
+      <div id="ctl-mod-result"></div>
+    </div>
+
+    {# ── 分頁 3：隔離時間修改（不走簽核，僅限特定權限，401/403 顯示後端訊息） ── #}
+    <div class="vbctl-panel" data-panel="time" hidden>
+      <div class="vbctl-info" style="margin-bottom:12px">此功能僅限「隔離時間修改」權限角色使用，且只能延長不能縮短、不受 1 小時上限限制；無權限時送出後會顯示後端訊息。</div>
+      <div class="vbctl-flabel">選擇隔離單 *</div>
+      <select id="ctl-time-target" class="vbctl-input" onchange="vbctlOnTimeTargetChange()">
+        <option value="">— 選擇隔離單 —</option>
+        {% for r in active_isolations %}
+        <option value="{{ r.ccid }}" data-ccno="{{ r.ccno }}"
+                data-etime="{{ r.etime.strftime('%Y-%m-%dT%H:%M') if r.etime else '' }}">
+          {{ r.ccno }}（{{ r.plantno }}・{{ r.mdfdesc }}，原結束 {{ r.etime.strftime('%Y-%m-%d %H:%M') if r.etime else '' }}）
+        </option>
+        {% endfor %}
+      </select>
+      <div class="vbctl-grid2" style="margin-top:10px">
+        <div>
+          <div class="vbctl-flabel">新結束時間 *（只能延長）</div>
+          <input type="datetime-local" id="ctl-time-etime" class="vbctl-input vbctl-mono">
+        </div>
+        <div>
+          <div class="vbctl-flabel">備註（選填）</div>
+          <input type="text" id="ctl-time-remark" class="vbctl-input">
+        </div>
+      </div>
+      <div id="ctl-time-errors"></div>
+      <div class="vbctl-actions">
+        <button type="button" class="vbctl-btn vbctl-btn-primary" onclick="vbctlSubmitTime()">送出</button>
+      </div>
+      <div id="ctl-time-result"></div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+.vbctl-root{display:flex;flex-direction:column;max-height:86vh;color:var(--fg-1);font-family:var(--font-sans);font-size:14px}
+.vbctl-titlebar{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1);flex:none}
+.vbctl-title{font-size:16px;font-weight:700;color:var(--fg-1)}
+.vbctl-x{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px}
+.vbctl-x:hover{color:var(--fg-1)}
+.vbctl-body{padding:20px 22px;overflow-y:auto;flex:1;min-height:0}
+
+.vbctl-info{font-size:11.5px;color:var(--fg-2);background:var(--info-bg);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;line-height:1.6}
+.vbctl-section-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin-bottom:8px}
+.vbctl-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.vbctl-card{background:var(--bg-1);border:1px solid var(--border-1);border-radius:8px;padding:10px 14px;font-size:12.5px}
+.vbctl-card-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.vbctl-card-sub{color:var(--fg-3);font-size:11.5px;margin-top:4px}
+.vbctl-empty{color:var(--fg-3);font-size:12.5px;padding:12px 0}
+.vbctl-mono{font-family:var(--font-mono)}
+.vbctl-strong{font-weight:700}
+.vbctl-muted{color:var(--fg-3)}
+.vbctl-fg2{color:var(--fg-2)}
+.vbctl-small{font-size:11.5px}
+.vbctl-badge{padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;font-family:var(--font-mono)}
+.vbctl-badge-ok{background:var(--ok-bg);color:var(--ok)}
+
+.vbctl-tabs{display:flex;gap:6px;padding-top:6px;border-top:1px dashed var(--border-2);margin-top:4px}
+.vbctl-tab{padding:7px 16px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--bg-1);color:var(--fg-2);border:1px solid var(--border-2);cursor:pointer}
+.vbctl-tab.is-active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.vbctl-panel{padding-top:14px}
+
+.vbctl-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:10px}
+.vbctl-flabel{font-size:11px;color:var(--fg-3);margin-bottom:5px}
+.vbctl-input{width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;font-family:var(--font-sans)}
+.vbctl-input.vbctl-mono{font-family:var(--font-mono)}
+.vbctl-input:focus{outline:none;border-color:var(--accent)}
+.vbctl-hint{font-size:0.8rem;color:var(--fg-3);margin:.25rem 0}
+
+/* ── 沿用既有 /ui/control/items 局部（templates/partials/control_items.html）：
+   該片段的 inline style 直接引用 --voc-bg-main / --voc-border / --voc-primary，
+   在此就地補上這三個變數的深色對應值，不改片段本身一行程式碼 ── */
+.vbctl-itemswrap{
+  --voc-bg-main: var(--bg-3);
+  --voc-border: var(--border-3);
+  --voc-primary: var(--accent);
+  --voc-text-muted: var(--fg-3);
+  color: var(--fg-1);
+  min-height:2rem;
+  margin-bottom:12px;
+}
+
+.vbctl-actions{display:flex;justify-content:flex-end;margin-top:4px}
+.vbctl-btn{padding:8px 18px;border-radius:6px;font-size:12.5px;font-weight:600;border:none;cursor:pointer}
+.vbctl-btn-primary{background:var(--blue);color:#fff}
+.vbctl-btn-primary:hover{background:var(--blue-hover)}
+
+.vbctl-err-box{background:var(--err-bg);border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.vbctl-err-line{font-size:12px;color:var(--err)}
+.vbctl-ok-line{font-size:12px;color:var(--ok);padding:.4rem 0}
+</style>
+
+<script>
+(function () {
+  function toast(msg, isErr) {
+    if (window.vbToast) { window.vbToast(msg, { type: isErr ? 'error' : 'success' }); }
+    else { alert(msg); }
+  }
+
+  function joinDetail(data, fallback) {
+    if (Array.isArray(data && data.detail)) return data.detail.map(function (e) { return e.msg; }).join('；');
+    return (data && data.detail) || fallback;
+  }
+
+  function renderErrors(containerId, messages) {
+    var el = document.getElementById(containerId);
+    if (!messages || !messages.length) { el.innerHTML = ''; return; }
+    var html = '<div class="vbctl-err-box">';
+    messages.forEach(function (m) { html += '<div class="vbctl-err-line">・' + m + '</div>'; });
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  function reloadModalSoon() {
+    setTimeout(function () {
+      if (window.htmx) { htmx.ajax('GET', '/ui/control', { target: '#modal-container', swap: 'innerHTML' }); }
+    }, 1200);
+  }
+
+  window.vbctlSwitchTab = function (tab) {
+    document.querySelectorAll('.vbctl-tab').forEach(function (b) { b.classList.toggle('is-active', b.dataset.tab === tab); });
+    document.querySelectorAll('.vbctl-panel').forEach(function (p) { p.hidden = (p.dataset.panel !== tab); });
+  };
+
+  function checkedItems(wrapId, plantno) {
+    return Array.from(document.querySelectorAll('#' + wrapId + ' .item-checkbox:checked')).map(function (cb) {
+      return { plantno: plantno, item: cb.dataset.item, sourceid: cb.dataset.sourceid };
+    });
+  }
+
+  // ── 新增申請 ──────────────────────────────────────────────
+  window.vbctlSubmitNew = function () {
+    var plantno = document.getElementById('ctl-new-plant').value;
+    var plantid = parseInt(document.getElementById('ctl-new-plantid').value, 10);
+    var errors = [];
+    if (!plantno || !plantid) errors.push('請選擇廠區');
+    var items = plantno ? checkedItems('ctl-new-items', plantno) : [];
+    if (!items.length) errors.push('請至少勾選一個隔離項目');
+    var mdfdesc = document.getElementById('ctl-new-mdfdesc').value.trim();
+    var stime = document.getElementById('ctl-new-stime').value;
+    var etime = document.getElementById('ctl-new-etime').value;
+    if (!mdfdesc) errors.push('隔離原因為必填');
+    if (!stime || !etime) errors.push('開始／結束時間為必填');
+    if (errors.length) { renderErrors('ctl-new-errors', errors); return; }
+
+    fetch('/control/create?is_commit=true', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plantid: plantid, mdfdesc: mdfdesc, stime: stime, etime: etime,
+        remark: document.getElementById('ctl-new-remark').value, items: items })
+    })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        renderErrors('ctl-new-errors', null);
+        document.getElementById('ctl-new-result').innerHTML = '<div class="vbctl-ok-line">✅ ' + res.data.message + '</div>';
+        toast(res.data.message, false);
+        reloadModalSoon();
+      } else {
+        renderErrors('ctl-new-errors', [joinDetail(res.data, '送出失敗')]);
+        toast('送出失敗', true);
+      }
+    })
+    .catch(function () { renderErrors('ctl-new-errors', ['網路錯誤，請重試']); });
+  };
+
+  // ── 修改申請 ──────────────────────────────────────────────
+  window.vbctlOnModTargetChange = function () {
+    var sel = document.getElementById('ctl-mod-target');
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return;
+    document.getElementById('ctl-mod-mdfdesc').value = opt.dataset.mdfdesc || '';
+    document.getElementById('ctl-mod-remark').value = opt.dataset.remark || '';
+    document.getElementById('ctl-mod-stime').value = opt.dataset.stime || '';
+    document.getElementById('ctl-mod-etime').value = opt.dataset.etime || '';
+    var plantno = opt.dataset.plantno;
+    if (window.htmx) {
+      htmx.ajax('GET', '/ui/control/items?plantno=' + encodeURIComponent(plantno),
+        { target: '#ctl-mod-items', swap: 'innerHTML' }
+      ).then(function () {
+        fetch('/control/tags/' + opt.value).then(function (r) { return r.json(); }).then(function (tags) {
+          var names = new Set(tags.map(function (t) { return t.item; }));
+          document.querySelectorAll('#ctl-mod-items .item-checkbox').forEach(function (cb) {
+            if (names.has(cb.dataset.item)) cb.checked = true;
+          });
+        }).catch(function () { /* 預先勾選失敗不影響手動勾選 */ });
+      });
+    }
+  };
+
+  window.vbctlSubmitModify = function () {
+    var sel = document.getElementById('ctl-mod-target');
+    var opt = sel.options[sel.selectedIndex];
+    var errors = [];
+    if (!opt || !opt.value) errors.push('請選擇欲修改的原始隔離單');
+    var plantno = opt ? opt.dataset.plantno : '';
+    var plantid = opt ? parseInt(opt.dataset.plantid, 10) : NaN;
+    var items = plantno ? checkedItems('ctl-mod-items', plantno) : [];
+    if (!items.length) errors.push('請至少勾選一個隔離項目');
+    var mdfdesc = document.getElementById('ctl-mod-mdfdesc').value.trim();
+    var stime = document.getElementById('ctl-mod-stime').value;
+    var etime = document.getElementById('ctl-mod-etime').value;
+    if (!mdfdesc) errors.push('隔離原因為必填');
+    if (!stime || !etime) errors.push('開始／結束時間為必填');
+    if (errors.length) { renderErrors('ctl-mod-errors', errors); return; }
+
+    fetch('/control/modify?is_commit=true', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orgccid: parseInt(opt.value, 10), plantid: plantid, mdfdesc: mdfdesc,
+        stime: stime, etime: etime, remark: document.getElementById('ctl-mod-remark').value, items: items })
+    })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        renderErrors('ctl-mod-errors', null);
+        document.getElementById('ctl-mod-result').innerHTML = '<div class="vbctl-ok-line">✅ ' + res.data.message + '</div>';
+        toast(res.data.message, false);
+        reloadModalSoon();
+      } else {
+        renderErrors('ctl-mod-errors', [joinDetail(res.data, '送出失敗')]);
+        toast('送出失敗', true);
+      }
+    })
+    .catch(function () { renderErrors('ctl-mod-errors', ['網路錯誤，請重試']); });
+  };
+
+  // ── 隔離時間修改 ──────────────────────────────────────────
+  window.vbctlOnTimeTargetChange = function () {
+    var sel = document.getElementById('ctl-time-target');
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return;
+    document.getElementById('ctl-time-etime').value = opt.dataset.etime || '';
+    document.getElementById('ctl-time-remark').value = '';
+  };
+
+  window.vbctlSubmitTime = function () {
+    var sel = document.getElementById('ctl-time-target');
+    var opt = sel.options[sel.selectedIndex];
+    var errors = [];
+    if (!opt || !opt.value) errors.push('請選擇隔離單');
+    var etime = document.getElementById('ctl-time-etime').value;
+    if (!etime) errors.push('請輸入新的結束時間');
+    if (errors.length) { renderErrors('ctl-time-errors', errors); return; }
+
+    fetch('/control/time', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ccid: parseInt(opt.value, 10), ccno: opt.dataset.ccno,
+        orig_etime: opt.dataset.etime, etime: etime, remark: document.getElementById('ctl-time-remark').value })
+    })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data, status: r.status }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        renderErrors('ctl-time-errors', null);
+        document.getElementById('ctl-time-result').innerHTML = '<div class="vbctl-ok-line">✅ ' + res.data.message + '</div>';
+        toast(res.data.message, false);
+        reloadModalSoon();
+      } else {
+        // 403（無隔離時間修改權限）與其他錯誤都直接顯示後端訊息，不特別區分
+        renderErrors('ctl-time-errors', [joinDetail(res.data, '送出失敗')]);
+        toast('送出失敗', true);
+      }
+    })
+    .catch(function () { renderErrors('ctl-time-errors', ['網路錯誤，請重試']); });
+  };
+})();
+</script>

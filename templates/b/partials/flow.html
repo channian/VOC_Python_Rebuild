@@ -1,0 +1,154 @@
+{# templates/b/partials/flow.html — WP-C「簽核管理」modal（V2 原生深色版）
+   context（來自 routers_b/control_router_b.py GET /ui/flow，唯讀不動）：
+     todos: [{ccid, ccno, plantno, ttype, mdfdesc, empstr, ctime, flowid, fstatus}]
+       ttype 為 models_b.Isolation.ttype 的整數（1=新增隔離／2=修改隔離區間），非字串，
+       這裡在模板內轉換文字顯示（對齊 docs/功能頁設計簡報_給設計工具.md 頁面 4 的欄位說明）。
+   設計來源：VOC Dashboard.dc.html 370–403 行 + buildFLOW()（~826–849）。
+   退回一律要求填寫原因（頁內輸入，對齊規格維護頁否決慣例；後端 comment 欄位本身選填，
+   這裡只是前端多加一道要求，不影響 POST /flow/sign 契約）。
+#}
+<div class="vbflow-root">
+  <div class="vbflow-titlebar">
+    <span class="vbflow-title">簽核管理</span>
+    <span style="flex:1"></span>
+    <button type="button" class="vbflow-x" onclick="document.getElementById('voc-modal').close()">✕</button>
+  </div>
+
+  <div class="vbflow-body">
+    <div class="vbflow-info">
+      僅處理隔離申請的簽核（規格維護送簽在「規格維護／待簽核」頁籤，資料表不同）。退回一律要求填寫原因（統一自規格維護的作法）。
+    </div>
+
+    <div class="vbflow-list">
+      {% for r in todos %}
+      <div class="vbflow-card" data-ccno="{{ r.ccno }}" data-ccid="{{ r.ccid }}" data-flowid="{{ r.flowid }}">
+        <div class="vbflow-card-row">
+          <span class="vbflow-mono vbflow-muted vbflow-small">{{ r.ccno }}</span>
+          <span class="vbflow-mono vbflow-strong">{{ r.plantno }}</span>
+          <span class="vbflow-fg2">{{ '新增隔離' if r.ttype == 1 else '修改隔離區間' }}・{{ r.mdfdesc }}</span>
+          <span style="flex:1"></span>
+          <span class="vbflow-mono vbflow-muted vbflow-small">{{ r.empstr }} ・ {{ r.ctime.strftime('%Y-%m-%d %H:%M') if r.ctime else '' }}</span>
+        </div>
+
+        <div class="vbflow-reject-form" hidden>
+          <textarea class="vbflow-textarea" rows="2" placeholder="退回原因（必填）"></textarea>
+          <div class="vbflow-reject-err" hidden>請填寫退回原因</div>
+          <div class="vbflow-row-actions">
+            <button type="button" class="vbflow-btn vbflow-btn-outline" onclick="vbflowCancelReject(this)">取消</button>
+            <button type="button" class="vbflow-btn vbflow-btn-danger" onclick="vbflowConfirmReject(this)">確認退回</button>
+          </div>
+        </div>
+
+        <div class="vbflow-row-actions vbflow-default-actions">
+          <button type="button" class="vbflow-btn vbflow-btn-outline-danger" onclick="vbflowStartReject(this)">退回</button>
+          <button type="button" class="vbflow-btn vbflow-btn-ok" onclick="vbflowApprove(this)">核准</button>
+        </div>
+      </div>
+      {% else %}
+      <div class="vbflow-empty">目前沒有待簽核的隔離申請</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<style>
+.vbflow-root{display:flex;flex-direction:column;max-height:86vh;color:var(--fg-1);font-family:var(--font-sans);font-size:14px}
+.vbflow-titlebar{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1);flex:none}
+.vbflow-title{font-size:16px;font-weight:700;color:var(--fg-1)}
+.vbflow-x{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px}
+.vbflow-x:hover{color:var(--fg-1)}
+.vbflow-body{padding:20px 22px;overflow-y:auto;flex:1;min-height:0}
+
+.vbflow-info{font-size:11.5px;color:var(--fg-2);background:var(--info-bg);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;line-height:1.6}
+.vbflow-list{display:flex;flex-direction:column;gap:10px}
+.vbflow-card{background:var(--bg-1);border:1px solid var(--border-1);border-radius:10px;padding:12px 14px}
+.vbflow-card-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.vbflow-mono{font-family:var(--font-mono)}
+.vbflow-strong{font-weight:700}
+.vbflow-muted{color:var(--fg-3)}
+.vbflow-fg2{color:var(--fg-2);font-size:12.5px}
+.vbflow-small{font-size:11.5px}
+.vbflow-empty{color:var(--fg-3);font-size:12.5px;padding:12px 0;text-align:center}
+
+.vbflow-row-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.vbflow-btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;border:none;cursor:pointer}
+.vbflow-btn-outline{background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2)}
+.vbflow-btn-outline-danger{background:transparent;color:var(--err);border:1.5px solid rgba(239,68,68,0.4)}
+.vbflow-btn-danger{background:var(--err);color:#fff}
+.vbflow-btn-ok{background:var(--ok);color:#062012}
+
+.vbflow-reject-form{margin-top:10px}
+.vbflow-textarea{width:100%;padding:7px 9px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;font-family:var(--font-sans);resize:vertical}
+.vbflow-textarea:focus{outline:none;border-color:var(--accent)}
+.vbflow-reject-err{font-size:11.5px;color:var(--err);margin-top:3px}
+</style>
+
+<script>
+(function () {
+  function toast(msg, isErr) {
+    if (window.vbToast) { window.vbToast(msg, { type: isErr ? 'error' : 'success' }); }
+    else { alert(msg); }
+  }
+
+  function joinDetail(data, fallback) {
+    if (Array.isArray(data && data.detail)) return data.detail.map(function (e) { return e.msg; }).join('；');
+    return (data && data.detail) || fallback;
+  }
+
+  function removeCard(card) {
+    card.remove();
+    var list = document.querySelector('.vbflow-list');
+    if (list && !list.querySelector('.vbflow-card')) {
+      list.innerHTML = '<div class="vbflow-empty">目前沒有待簽核的隔離申請</div>';
+    }
+  }
+
+  function sign(card, actionid, comment) {
+    var payload = { ccid: parseInt(card.dataset.ccid, 10), flowid: parseInt(card.dataset.flowid, 10), actionid: actionid, comment: comment || '' };
+    return fetch('/flow/sign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    }).then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); });
+  }
+
+  window.vbflowApprove = function (btn) {
+    var card = btn.closest('.vbflow-card');
+    sign(card, 1, '').then(function (res) {
+      if (res.ok) {
+        toast('已核准 ' + (card.dataset.ccno || '') + ' 隔離申請');
+        removeCard(card);
+      } else {
+        toast(joinDetail(res.data, '簽核失敗，請重新整理後再試'), true);
+      }
+    }).catch(function () { toast('網路錯誤，請重試', true); });
+  };
+
+  window.vbflowStartReject = function (btn) {
+    var card = btn.closest('.vbflow-card');
+    card.querySelector('.vbflow-reject-form').hidden = false;
+    card.querySelector('.vbflow-default-actions').hidden = true;
+  };
+
+  window.vbflowCancelReject = function (btn) {
+    var card = btn.closest('.vbflow-card');
+    card.querySelector('.vbflow-reject-form').hidden = true;
+    card.querySelector('.vbflow-default-actions').hidden = false;
+  };
+
+  window.vbflowConfirmReject = function (btn) {
+    var card = btn.closest('.vbflow-card');
+    var textarea = card.querySelector('.vbflow-textarea');
+    var errEl = card.querySelector('.vbflow-reject-err');
+    var comment = textarea.value.trim();
+    if (!comment) { errEl.hidden = false; return; }
+    errEl.hidden = true;
+    sign(card, 9, comment).then(function (res) {
+      if (res.ok) {
+        toast('已退回 ' + (card.dataset.ccno || '') + ' 隔離申請');
+        removeCard(card);
+      } else {
+        toast(joinDetail(res.data, '操作失敗，請重新整理後再試'), true);
+      }
+    }).catch(function () { toast('網路錯誤，請重試', true); });
+  };
+})();
+</script>
