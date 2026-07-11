@@ -1,0 +1,215 @@
+{# ═══════════════════════════════════════════════════════════════════════
+   異常查詢／異常回覆（合併版 modal）
+   同一份模板服務兩個 URL：
+     - GET /ui/history → mode='history'（唯讀查詢）
+     - GET /ui/reason  → mode='reason' （查詢＋行內回覆）
+   對應 V2 設計稿 design_handoff_voc_platform_V2/VOC Dashboard.dc.html 429–474 行
+   （isModalHist／hist.* 段落）＋ docs/功能頁設計簡報_給設計工具.md 頁面 6／7。
+
+   Context（兩個既有 handler 現況 context 取聯集，缺的鍵一律防禦式處理）：
+     mode   : 'history' | 'reason'（新增，主控接線時傳入；未傳預設 'history'）
+     plants : list[str]            項目 items : list[str]
+     plant/item/sdate/edate : str   mt : bool
+     logs   : list[dict]  {no, plantno, cdatetime, msg, emp, reason, rdatetime, logid, ...}
+     error  : str（日期倒置等查詢錯誤，頂部錯誤區呈現）
+   ═══════════════════════════════════════════════════════════════════════ #}
+{% set mode = (mode | default('history')) %}
+{% set editable = (mode == 'reason') %}
+{% set plants = (plants | default([])) %}
+{% set items = (items | default([])) %}
+{% set logs = (logs | default([])) %}
+{% set plant = (plant | default('')) %}
+{% set item = (item | default('')) %}
+{% set sdate = (sdate | default('')) %}
+{% set edate = (edate | default('')) %}
+{% set mt = (mt | default(false)) %}
+{% set error = (error | default('')) %}
+{% set query_url = '/ui/reason' if editable else '/ui/history' %}
+{% set reason_col = '150px' if editable else '1fr' %}
+
+<div style="display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1);flex:none">
+  <span style="font-size:16px;font-weight:700;color:var(--fg-1)">{{ '異常回覆' if editable else '異常查詢' }}</span>
+  <span style="flex:1"></span>
+  <button type="button" onclick="document.getElementById('voc-modal').close()"
+          style="background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px">✕</button>
+</div>
+
+<div style="padding:20px 22px;overflow-y:auto;max-height:calc(86vh - 60px)">
+
+  {% if editable %}
+  <div style="font-size:11.5px;color:var(--fg-3);margin-bottom:12px;line-height:1.6">
+    按「回覆」填寫原因後儲存；已回覆的紀錄仍可補充修改。一封派報信只有一組回覆，不分項目。
+  </div>
+  {% endif %}
+
+  {# ── 篩選表單：GET 重載整個 modal（HTMX），廠區改變時動態刷新項目下拉 ── #}
+  <form id="hist-form" hx-get="{{ query_url }}" hx-target="#modal-container" hx-swap="innerHTML"
+        style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;background:var(--bg-1);border:1px solid var(--border-1);border-radius:8px;padding:10px 12px">
+    <select name="plant" id="hist-plant" onchange="histLoadItems(this.value)"
+            style="padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+      <option value="">全部廠區</option>
+      {% for p in plants %}<option value="{{ p }}" {% if p == plant %}selected{% endif %}>{{ p }}</option>{% endfor %}
+    </select>
+    <select name="item" id="hist-item"
+            style="padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px">
+      <option value="">全部項目</option>
+      {% for i in items %}<option value="{{ i }}" {% if i == item %}selected{% endif %}>{{ i }}</option>{% endfor %}
+    </select>
+    <input type="text" name="sdate" value="{{ sdate }}" placeholder="yyyy/MM/dd"
+           style="width:112px;padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px">
+    <span style="color:var(--fg-3)">～</span>
+    <input type="text" name="edate" value="{{ edate }}" placeholder="yyyy/MM/dd"
+           style="width:112px;padding:6px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-family:var(--font-mono);font-size:12px">
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--fg-2)">
+      <input type="checkbox" name="mt" value="true" {% if mt %}checked{% endif %} style="accent-color:var(--accent)">MT 全部
+    </label>
+    <button type="submit" style="padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">查詢</button>
+    <span style="flex:1"></span>
+    <span style="font-size:11px;color:var(--fg-3)">共 {{ logs | length }} 筆・大範圍查詢建議捲動瀏覽</span>
+  </form>
+
+  {# ── 錯誤區（日期倒置等查詢錯誤，頂部呈現） ── #}
+  {% if error %}
+  <div style="background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--err)">
+    ⚠️ {{ error }}
+  </div>
+  {% endif %}
+
+  {# ── 結果表格 ── #}
+  <div style="display:grid;grid-template-columns:32px 64px 118px 1fr 140px {{ reason_col }};gap:8px;padding:7px 8px;background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--fg-2)">
+    <span>No</span><span>廠區</span><span>異常時間</span><span>異常訊息</span><span>回覆人/時間</span><span>原因</span>
+  </div>
+  <div id="hist-body" style="max-height:340px;overflow-y:auto">
+    {% for r in logs %}
+    <div class="hist-rowgrp" data-page="{{ (loop.index0 // 50) + 1 }}">
+      <div style="display:grid;grid-template-columns:32px 64px 118px 1fr 140px {{ reason_col }};gap:8px;align-items:center;padding:8px 8px;border-bottom:1px solid var(--border-1)">
+        <span style="font-family:var(--font-mono);color:var(--fg-3);font-size:11.5px">{{ r.no }}</span>
+        <span style="font-family:var(--font-mono);font-weight:700">{{ r.plantno }}</span>
+        <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3)">{{ r.cdatetime }}</span>
+        <span style="font-size:12px;color:var(--fg-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.msg }}">{{ r.msg }}</span>
+        <span style="font-size:11.5px;color:var(--fg-3)">
+          {% if r.emp %}{{ r.emp }}{% if r.rdatetime %}<br>{{ r.rdatetime }}{% endif %}{% else %}—{% endif %}
+        </span>
+        {% if editable %}
+        <button type="button" id="hist-btn-{{ r.logid }}" onclick="histToggleReply({{ r.logid }})"
+                style="padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:600;background:transparent;color:var(--accent);border:1.5px solid var(--border-2);cursor:pointer;white-space:nowrap">{{ r.reason if r.reason else '＋填寫原因' }}</button>
+        {% else %}
+        <span style="font-size:12px;color:var(--fg-3)">{{ r.reason if r.reason else '（未填）' }}</span>
+        {% endif %}
+      </div>
+      {% if editable %}
+      <div id="hist-edit-{{ r.logid }}" style="display:none;padding:10px 8px 14px 40px;background:var(--bg-1);border-bottom:1px solid var(--border-1)">
+        <textarea id="hist-ta-{{ r.logid }}" rows="2" placeholder="填寫原因說明"
+                  style="width:100%;padding:7px 9px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;resize:vertical">{{ r.reason or '' }}</textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+          <button type="button" onclick="histCancelReply({{ r.logid }})"
+                  style="padding:5px 12px;border-radius:6px;font-size:11.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+          <button type="button" onclick="histSaveReply({{ r.logid }})"
+                  style="padding:5px 12px;border-radius:6px;font-size:11.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">儲存</button>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div style="padding:24px;text-align:center;color:var(--fg-3);font-size:12.5px">沒有符合篩選條件的紀錄</div>
+    {% endfor %}
+  </div>
+
+  {# ── 前端分頁（每頁 50 筆；資料量可能達數千筆，見 docs/V2實作計畫.md WP-D） ── #}
+  <div id="hist-pagebar" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:12px"></div>
+
+</div>
+
+<style>
+  #hist-pagebar button.hist-pagebtn{padding:4px 10px;border-radius:6px;font-size:11.5px;font-family:var(--font-mono);background:var(--bg-3);color:var(--fg-2);border:1.5px solid var(--border-3);cursor:pointer}
+  #hist-pagebar button.hist-pagebtn:hover{border-color:var(--accent)}
+  #hist-pagebar button.hist-pagebtn.is-active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:700}
+</style>
+
+<script>
+function histToast(msg, opts) {
+  if (window.vbToast) { window.vbToast(msg, opts); } else { alert(msg); }
+}
+
+function histLoadItems(plant) {
+  fetch('/history/items?plant=' + encodeURIComponent(plant))
+    .then(function (r) { return r.json(); })
+    .then(function (list) {
+      var sel = document.getElementById('hist-item');
+      sel.innerHTML = '<option value="">全部項目</option>';
+      list.forEach(function (i) {
+        var opt = document.createElement('option');
+        opt.value = i; opt.textContent = i;
+        sel.appendChild(opt);
+      });
+    })
+    .catch(function () {});
+}
+
+function histToggleReply(logid) {
+  document.querySelectorAll('[id^="hist-edit-"]').forEach(function (el) {
+    if (el.id !== 'hist-edit-' + logid) { el.style.display = 'none'; }
+  });
+  var editRow = document.getElementById('hist-edit-' + logid);
+  if (!editRow) { return; }
+  editRow.style.display = (editRow.style.display === 'none' || !editRow.style.display) ? '' : 'none';
+}
+
+function histCancelReply(logid) {
+  var editRow = document.getElementById('hist-edit-' + logid);
+  if (editRow) { editRow.style.display = 'none'; }
+}
+
+function histSaveReply(logid) {
+  var ta = document.getElementById('hist-ta-' + logid);
+  var reason = ta ? ta.value : '';
+  fetch('/history/reply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ logid: logid, reason: reason })
+  })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        var btn = document.getElementById('hist-btn-' + logid);
+        if (btn) { btn.textContent = reason.trim() ? reason.trim() : '＋填寫原因'; }
+        histCancelReply(logid);
+        histToast(res.data.message || '已儲存原因說明', {});
+      } else {
+        var msg = Array.isArray(res.data.detail) ? res.data.detail.map(function (e) { return e.msg; }).join('；') : (res.data.detail || '儲存失敗');
+        histToast(msg, { type: 'error' });
+      }
+    })
+    .catch(function () { histToast('網路錯誤，請重試', { type: 'error' }); });
+}
+
+// ── 前端分頁：每頁 50 筆（後端無筆數上限，跨月查詢可能一次撈回數千筆） ──
+(function histInitPaging() {
+  var PAGE_SIZE = 50;
+  var groups = Array.prototype.slice.call(document.querySelectorAll('.hist-rowgrp'));
+  var totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  var page = 1;
+  var bar = document.getElementById('hist-pagebar');
+
+  function render() {
+    groups.forEach(function (g, i) {
+      var p = parseInt(g.getAttribute('data-page'), 10) || (Math.floor(i / PAGE_SIZE) + 1);
+      g.style.display = (p === page) ? '' : 'none';
+    });
+    if (!bar) { return; }
+    bar.innerHTML = '';
+    if (totalPages <= 1) { return; }
+    for (var p2 = 1; p2 <= totalPages; p2++) {
+      (function (pageNo) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'hist-pagebtn' + (pageNo === page ? ' is-active' : '');
+        b.textContent = String(pageNo);
+        b.onclick = function () { page = pageNo; render(); };
+        bar.appendChild(b);
+      })(p2);
+    }
+  }
+  render();
+})();
+</script>

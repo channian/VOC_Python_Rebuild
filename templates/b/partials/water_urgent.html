@@ -1,0 +1,233 @@
+{# ═══════════════════════════════════════════════════════════════════════
+   中水緊急通知 modal（GET /warning/water_urgent/ui → POST /warning/water_urgent）
+   對應 V2 設計稿 429 行… 其實本段落在 476–531 行（isModalWATER／water.* 段落）＋
+   docs/功能頁設計簡報_給設計工具.md 頁面 9。主控接線時以「窄版」開啟
+   （vbOpenModalTool(true)，560px，見 docs/V2實作計畫.md WP-A）。
+
+   Context（既有 handler：routers_b/spec_router_b.py render_water_urgent_modal_b）：
+     plants  : list[dict]  {plantno}  ── 已排除 K14B、僅列「已登記水質異常收件人」的廠區
+     reasons : list[dict]  {reasonid, reason}
+     error   : str（查詢失敗時）
+   ═══════════════════════════════════════════════════════════════════════ #}
+{% set plants = (plants | default([])) %}
+{% set reasons = (reasons | default([])) %}
+{% set error = (error | default('')) %}
+
+<div style="display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1);flex:none">
+  <span style="font-size:16px;font-weight:700;color:var(--fg-1)">中水緊急通知</span>
+  <span style="flex:1"></span>
+  <button type="button" onclick="document.getElementById('voc-modal').close()"
+          style="background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px">✕</button>
+</div>
+
+<div style="padding:20px 22px;overflow-y:auto;max-height:calc(86vh - 60px)">
+
+  {% if error %}
+  <div style="background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--err)">
+    ⚠️ {{ error }}
+  </div>
+  {% endif %}
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+
+    {# ── 水質異常通知：頁內確認卡片取代原生 confirm ── #}
+    <div style="background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px 16px">
+      <div style="font-size:13px;font-weight:700;color:var(--err);margin-bottom:6px">水質異常通知</div>
+      <div style="font-size:12px;color:var(--fg-2);line-height:1.6;margin-bottom:10px">
+        查 K14B 目前異常讀值，對有登記收件人的廠區各發一封（讀值來源固定為 K14B，非可設定項目）。
+      </div>
+
+      <div id="wu-urgent-confirm" style="display:none;background:var(--bg-1);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg-2);margin-bottom:10px">
+        確認發送「水質異常通知」？此操作會實際寄送 Email 給外部收件人。
+      </div>
+      <div id="wu-urgent-confirm-btns" style="display:none;justify-content:flex-end;gap:8px">
+        <button type="button" onclick="wuCancelUrgent()"
+                style="padding:7px 14px;border-radius:6px;font-size:12.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+        <button type="button" onclick="wuConfirmUrgent()"
+                style="padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--err);color:#fff;border:none;cursor:pointer">確認發送</button>
+      </div>
+      <div id="wu-urgent-start" style="display:flex;justify-content:flex-end">
+        <button type="button" onclick="wuStartUrgent()"
+                style="padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--err);color:#fff;border:none;cursor:pointer">發送</button>
+      </div>
+    </div>
+
+    {# ── 改排水通知 ── #}
+    <div style="background:var(--bg-1);border:1px solid var(--border-1);border-radius:10px;padding:14px 16px">
+      <div style="font-size:13px;font-weight:700;color:var(--fg-1);margin-bottom:6px">改排水通知</div>
+      <div style="font-size:11.5px;color:var(--fg-3);margin-bottom:10px">
+        通知廠區僅列出「已登記水質異常收件人」的廠區；CC 會自動併入 K14B 水質異常 TO 名單。
+      </div>
+
+      <div style="font-size:11px;color:var(--fg-3);margin-bottom:6px">通知廠區 *</div>
+      <div id="wu-plant-group" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        {% for p in plants %}
+        <label class="wu-plant-pill">
+          <input type="checkbox" class="wu-plant-cb" value="{{ p.plantno }}" style="accent-color:var(--accent)">{{ p.plantno }}
+        </label>
+        {% else %}
+        <span style="font-size:12px;color:var(--fg-3)">尚無可通知廠區（需先在派送名單登記水質異常收件人）</span>
+        {% endfor %}
+      </div>
+
+      <div style="font-size:11px;color:var(--fg-3);margin-bottom:5px">改排水原因 *</div>
+      <select id="wu-reason" onchange="wuReasonChanged()"
+              style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;margin-bottom:10px">
+        <option value="">— 選擇原因 —</option>
+        {% for r in reasons %}<option value="{{ r.reason }}">{{ r.reason }}</option>{% endfor %}
+      </select>
+
+      <div id="wu-other-wrap" style="display:none">
+        <input id="wu-other" type="text" placeholder="請說明其他異常原因"
+               style="width:100%;padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12.5px;margin-bottom:10px">
+      </div>
+
+      <div id="wu-errors" style="display:none;background:var(--err-bg);border-radius:8px;padding:8px 10px;margin-bottom:10px"></div>
+
+      <div id="wu-change-confirm" style="display:none;background:var(--bg-2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg-2);margin-bottom:10px"></div>
+      <div id="wu-change-confirm-btns" style="display:none;justify-content:flex-end;gap:8px">
+        <button type="button" onclick="wuCancelChange()"
+                style="padding:7px 14px;border-radius:6px;font-size:12.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
+        <button type="button" onclick="wuConfirmChange()"
+                style="padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">確認送出</button>
+      </div>
+      <div id="wu-change-start" style="display:flex;justify-content:flex-end">
+        <button type="button" onclick="wuStartChange()"
+                style="padding:7px 16px;border-radius:6px;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">發送改排水通知</button>
+      </div>
+    </div>
+
+    {# ── 送出結果（success／empty／error 分開清楚呈現，empty 不是錯誤） ── #}
+    <div id="wu-result" style="min-height:1.2rem"></div>
+
+  </div>
+</div>
+
+<style>
+  .wu-plant-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:12px;background:var(--bg-2);color:var(--fg-2);border:1px solid var(--border-2);cursor:pointer}
+  .wu-plant-pill:has(input:checked){background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+</style>
+
+<script>
+function wuToast(msg, opts) {
+  if (window.vbToast) { window.vbToast(msg, opts); } else { alert(msg); }
+}
+
+function wuResult(msg, kind) {
+  // kind: 'success' | 'empty' | 'error' —— empty 不是錯誤，用中性樣式呈現
+  var color = kind === 'error' ? 'var(--err)' : (kind === 'empty' ? 'var(--fg-2)' : 'var(--ok)');
+  var icon = kind === 'error' ? '❌' : (kind === 'empty' ? 'ℹ️' : '✅');
+  var el = document.getElementById('wu-result');
+  el.innerHTML = '<div style="font-size:12.5px;color:' + color + ';line-height:1.6">' + icon + ' ' + msg + '</div>';
+}
+
+function wuSelectedPlants() {
+  return Array.prototype.slice.call(document.querySelectorAll('.wu-plant-cb:checked')).map(function (cb) { return cb.value; });
+}
+
+// ── 水質異常通知：頁內確認卡片 ──
+function wuStartUrgent() {
+  document.getElementById('wu-urgent-start').style.display = 'none';
+  document.getElementById('wu-urgent-confirm').style.display = '';
+  document.getElementById('wu-urgent-confirm-btns').style.display = 'flex';
+}
+function wuCancelUrgent() {
+  document.getElementById('wu-urgent-start').style.display = 'flex';
+  document.getElementById('wu-urgent-confirm').style.display = 'none';
+  document.getElementById('wu-urgent-confirm-btns').style.display = 'none';
+}
+function wuConfirmUrgent() {
+  wuCancelUrgent();
+  fetch('/warning/water_urgent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notify_type: 'water_abnormal' })
+  })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; }); })
+    .then(function (res) {
+      if (res.ok && res.data.status === 'success') {
+        wuResult(res.data.message || '通知已排入背景發送程序', 'success');
+        wuToast(res.data.message || '通知已排入背景發送程序', {});
+      } else if (res.ok && res.data.status === 'empty') {
+        wuResult(res.data.message || '沒有符合條件的收件人或資料，未寄出通知', 'empty');
+      } else {
+        var msg = Array.isArray(res.data.detail) ? res.data.detail.map(function (e) { return e.msg; }).join('；') : (res.data.detail || '發送失敗');
+        wuResult(msg, 'error');
+        wuToast(msg, { type: 'error' });
+      }
+    })
+    .catch(function () { wuResult('網路錯誤，請重試', 'error'); wuToast('網路錯誤，請重試', { type: 'error' }); });
+}
+
+// ── 改排水通知 ──
+function wuReasonChanged() {
+  var sel = document.getElementById('wu-reason');
+  var isOther = sel.value.indexOf('其他') !== -1; // 系統設定原因清單非固定值，寬鬆比對「其他」開頭字樣
+  document.getElementById('wu-other-wrap').style.display = isOther ? '' : 'none';
+}
+
+function wuShowErrors(errors) {
+  var box = document.getElementById('wu-errors');
+  if (!errors.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = errors.map(function (e) { return '<div style="font-size:11.5px;color:var(--err)">・' + e + '</div>'; }).join('');
+}
+
+function wuStartChange() {
+  var plantnos = wuSelectedPlants();
+  var sel = document.getElementById('wu-reason');
+  var reasonText = sel.value;
+  var isOther = reasonText.indexOf('其他') !== -1;
+  var other = document.getElementById('wu-other').value.trim();
+
+  var errors = [];
+  if (!plantnos.length) { errors.push('請至少勾選一個通知廠區'); }
+  if (!reasonText) { errors.push('請選擇改排水原因'); }
+  if (isOther && !other) { errors.push('選擇「其他」類原因時，其他異常原因為必填'); }
+  wuShowErrors(errors);
+  if (errors.length) { return; }
+
+  var finalReason = isOther ? other : reasonText;
+  document.getElementById('wu-change-start').style.display = 'none';
+  var box = document.getElementById('wu-change-confirm');
+  box.style.display = '';
+  box.textContent = '將對 ' + plantnos.join('、') + ' 發送改排水通知（原因：' + finalReason + '），確認送出？';
+  document.getElementById('wu-change-confirm-btns').style.display = 'flex';
+  box.dataset.plantnos = JSON.stringify(plantnos);
+  box.dataset.reason = finalReason;
+}
+
+function wuCancelChange() {
+  document.getElementById('wu-change-start').style.display = 'flex';
+  document.getElementById('wu-change-confirm').style.display = 'none';
+  document.getElementById('wu-change-confirm-btns').style.display = 'none';
+}
+
+function wuConfirmChange() {
+  var box = document.getElementById('wu-change-confirm');
+  var plantnos = JSON.parse(box.dataset.plantnos || '[]');
+  var reason = box.dataset.reason || '';
+  wuCancelChange();
+
+  fetch('/warning/water_urgent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notify_type: 'water_change', plantnos: plantnos, reason: reason })
+  })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; }); })
+    .then(function (res) {
+      if (res.ok && res.data.status === 'success') {
+        wuResult(res.data.message || ('通知已排入背景發送程序（' + plantnos.join('、') + '）'), 'success');
+        wuToast(res.data.message || '通知已排入背景發送程序', {});
+        document.querySelectorAll('.wu-plant-cb:checked').forEach(function (cb) { cb.checked = false; });
+      } else if (res.ok && res.data.status === 'empty') {
+        wuResult(res.data.message || '沒有符合條件的收件人或資料，未寄出通知', 'empty');
+      } else {
+        var msg = Array.isArray(res.data.detail) ? res.data.detail.map(function (e) { return e.msg; }).join('；') : (res.data.detail || '發送失敗');
+        wuResult(msg, 'error');
+        wuToast(msg, { type: 'error' });
+      }
+    })
+    .catch(function () { wuResult('網路錯誤，請重試', 'error'); wuToast('網路錯誤，請重試', { type: 'error' }); });
+}
+</script>
