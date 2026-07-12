@@ -46,8 +46,11 @@ main_b.py — Schema B（PostgreSQL）版 FastAPI 應用程式組裝
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
+from config import settings
 from routers_b import auth_router_b, control_router_b, spec_router_b, trend_router_b, ui_router_b
+from services_b.session_auth import SessionAuthMiddleware
 
 app = FastAPI(
     title="VOC 廠務法規許可標準化管理平台（Schema B / PostgreSQL 版）",
@@ -57,6 +60,14 @@ app = FastAPI(
 
 # 靜態資源（CSS / JS / 圖片）— 與 A 棧共用同一份 static/ 目錄，不用重複維護
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ── Session／登入（2026-07-12 AD 串接）────────────────────────────────────
+# add_middleware 是洋蔥「後加先跑」：SessionAuthMiddleware 先 add（後執行），
+# SessionMiddleware 後 add（先執行）——SessionAuth 讀 request.session 前 session 必須就緒。
+# AUTH_MOCK=True（開發/沙盒）不強制登入（MOCK 身分 fallback，登入頁可切測試身分）；
+# 正式環境 AUTH_MOCK=False 全面守門（未登入 HTML→/login、API→401）。
+app.add_middleware(SessionAuthMiddleware)
+app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET)
 
 app.include_router(ui_router_b.router)
 # WP6 補完（2026-07-05）：待整合清單全數接通——

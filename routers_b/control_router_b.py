@@ -32,9 +32,10 @@ templates = Jinja2Templates(directory="templates")
 
 
 def _user() -> tuple[str, str]:
-    """目前操作者（MOCK_USER_EMPNO 設定，request 時讀取以支援測試中切換身分；Phase 3 LDAP 後改真身分）。"""
-    from config import settings
-    return settings.MOCK_USER_EMPNO, settings.MOCK_USER_NAME
+    """目前操作者：session 登入身分（2026-07-12 AD 串接後）；未登入且 AUTH_MOCK=True 時
+    回退 MOCK_USER_EMPNO（沙盒/測試相容），詳見 services_b/session_auth.get_current_user。"""
+    from services_b.session_auth import get_current_user
+    return get_current_user()
 
 
 def _notify_sign_result(db: Session, isolation: Isolation, new_status: FlowStatus, action_id: int) -> None:

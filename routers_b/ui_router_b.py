@@ -45,6 +45,13 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
+def _user_no() -> str:
+    """目前操作者工號（session 登入身分；AUTH_MOCK=True 未登入時回退 MOCK 身分）。
+    2026-07-12 AD 串接：本檔原本寫死 "admin" 的操作者參數全部改走這裡。"""
+    from services_b.session_auth import get_current_user
+    return get_current_user()[0]
+
+
 def _isolation_checker(db: Session):
     return lambda plant_no, item: is_item_isolated(db, plant_no, item)
 
@@ -62,8 +69,11 @@ def read_home_b(request: Request, db: Session = Depends(get_b_db)):
     純轉換（燈號分類/分組/摘要）交給 services_b.dashboard_page_service。
     """
     ctx = dashboard_page_service.get_dashboard_page_data(db, _isolation_checker(db))
+    from services_b.session_auth import get_current_user
+    empno, name = get_current_user()
     return templates.TemplateResponse(
-        request=request, name="b/dashboard.html", context={"ctx": ctx}
+        request=request, name="b/dashboard.html",
+        context={"ctx": ctx, "current_user_empno": empno, "current_user_name": name},
     )
 
 
@@ -124,7 +134,7 @@ def api_lookup_employee_b(empno: str, db: Session = Depends(get_b_db)):
 def api_add_maillist_b(data: MailListAddReq, db: Session = Depends(get_b_db)):
     try:
         maillist_service.add_maillist(
-            db, current_user_empno="admin", plant_no=data.plantno, rpttype=data.rpttype,
+            db, current_user_empno=_user_no(), plant_no=data.plantno, rpttype=data.rpttype,
             emp_no=data.empno, emp_name=data.empname, notes_id=data.notesid,
             mail_type=data.mailtype, mail_on=bool(data.mail), sign_grp=bool(data.signgrp),
             remark=data.remark,
@@ -140,7 +150,7 @@ def api_add_maillist_b(data: MailListAddReq, db: Session = Depends(get_b_db)):
 def api_update_maillist_b(data: MailListUpdateReq, db: Session = Depends(get_b_db)):
     try:
         maillist_service.update_maillist(
-            db, current_user_empno="admin", plant_no=data.plantno, rpttype=data.rpttype,
+            db, current_user_empno=_user_no(), plant_no=data.plantno, rpttype=data.rpttype,
             old_emp_no=data.old_empno, emp_no=data.empno, emp_name=data.empname,
             notes_id=data.notesid, mail_type=data.mailtype, mail_on=bool(data.mail),
             sign_grp=bool(data.signgrp), remark=data.remark,
@@ -155,7 +165,7 @@ def api_update_maillist_b(data: MailListUpdateReq, db: Session = Depends(get_b_d
 @router.post("/maillist/delete")
 def api_delete_maillist_b(data: MailListDeleteReq, db: Session = Depends(get_b_db)):
     try:
-        maillist_service.delete_maillist(db, current_user_empno="admin", plant_no=data.plantno,
+        maillist_service.delete_maillist(db, current_user_empno=_user_no(), plant_no=data.plantno,
                                           rpttype=data.rpttype, emp_no=data.empno)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -201,7 +211,7 @@ def api_history_logs_b(plant: str = "", item: str = "", sdate: str = "", edate: 
 @router.post("/history/reply")
 def api_reason_reply_b(data: ReasonUpdateReq, db: Session = Depends(get_b_db)):
     try:
-        history_service.update_reason(db, data.logid, data.reason, current_user_empno="admin")
+        history_service.update_reason(db, data.logid, data.reason, current_user_empno=_user_no())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "success", "message": f"logid={data.logid} 原因已儲存"}
@@ -307,7 +317,7 @@ def api_get_dept_name_b(deptno: str, db: Session = Depends(get_b_db)):
 @router.post("/dept/add")
 def api_add_dept_b(data: DeptAddReq, db: Session = Depends(get_b_db)):
     try:
-        dept_service.add_dept(db, current_user_empno="admin", plant_id=data.plantid,
+        dept_service.add_dept(db, current_user_empno=_user_no(), plant_id=data.plantid,
                                dept_no=data.deptno, remark=data.remark)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -317,7 +327,7 @@ def api_add_dept_b(data: DeptAddReq, db: Session = Depends(get_b_db)):
 @router.post("/dept/update")
 def api_update_dept_b(data: DeptUpdateReq, db: Session = Depends(get_b_db)):
     try:
-        dept_service.update_dept(db, current_user_empno="admin", plant_id=data.plantid,
+        dept_service.update_dept(db, current_user_empno=_user_no(), plant_id=data.plantid,
                                   old_dept_no=data.old_deptno, new_dept_no=data.deptno, remark=data.remark)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -327,7 +337,7 @@ def api_update_dept_b(data: DeptUpdateReq, db: Session = Depends(get_b_db)):
 @router.post("/dept/delete")
 def api_delete_dept_b(data: DeptDeleteReq, db: Session = Depends(get_b_db)):
     try:
-        dept_service.delete_dept(db, current_user_empno="admin", plant_id=data.plantid, dept_no=data.deptno)
+        dept_service.delete_dept(db, current_user_empno=_user_no(), plant_id=data.plantid, dept_no=data.deptno)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "success", "message": f"{data.plantid}/{data.deptno} 已刪除"}
@@ -387,7 +397,7 @@ def api_lookup_acl_employee_b(empno: str, db: Session = Depends(get_b_db)):
 @router.post("/acl/create")
 def add_acl_b(data: AclCreateReq, db: Session = Depends(get_b_db)):
     try:
-        acl_service.create_acl_user(db, current_user_empno="admin", plantno=data.plantno,
+        acl_service.create_acl_user(db, current_user_empno=_user_no(), plantno=data.plantno,
                                      role_id=data.role_id, empno=data.empno, stype=data.stype, remark=data.remark)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -397,7 +407,7 @@ def add_acl_b(data: AclCreateReq, db: Session = Depends(get_b_db)):
 @router.post("/acl/update")
 def update_acl_b(data: AclUpdateReq, db: Session = Depends(get_b_db)):
     try:
-        acl_service.update_acl_user(db, current_user_empno="admin", plantno=data.plantno, role_id=data.role_id,
+        acl_service.update_acl_user(db, current_user_empno=_user_no(), plantno=data.plantno, role_id=data.role_id,
                                      old_empno=data.old_empno, empno=data.empno, stype=data.stype,
                                      old_stype=data.old_stype, remark=data.remark)
     except ValueError as e:
@@ -408,7 +418,7 @@ def update_acl_b(data: AclUpdateReq, db: Session = Depends(get_b_db)):
 @router.post("/acl/delete")
 def remove_acl_b(data: AclDeleteReq, db: Session = Depends(get_b_db)):
     try:
-        acl_service.delete_acl_user(db, current_user_empno="admin", plantno=data.plantno,
+        acl_service.delete_acl_user(db, current_user_empno=_user_no(), plantno=data.plantno,
                                      role_id=data.role_id, empno=data.empno)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
