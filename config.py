@@ -22,6 +22,18 @@ class Settings(BaseSettings):
     # LDAP 認證伺服器
     LDAP_SERVER: str = "ldap://KH"
 
+    # LDAP Base DN（search 屬性用，空字串＝不做屬性 search，只做 bind 驗證）
+    # 例如 "DC=aseglobal,DC=com"，實際值需向 IT 確認公司 AD 樹的完整 DN。
+    LDAP_BASE_DN: str = ""
+
+    # LDAP bind 帳號格式（{username} 會被換成使用者輸入的工號）。
+    # 若 IT 那邊的網域登入是 DOMAIN\user 格式而非 UPN，改這裡即可，不用動程式碼。
+    LDAP_USER_FORMAT: str = "{username}@aseglobal.com"
+
+    # Session cookie 簽章金鑰（見 services_b/session_auth.py 的 SessionMiddleware）。
+    # ⚠️ 正式環境務必改成隨機長字串，不可沿用預設值！
+    SESSION_SECRET: str = "dev-secret-change-in-production"
+
     # ACL 權限強制模式
     # False（預設）：check_permission 權限不足時只記 log warning，仍然放行。
     #   目的是避免 sys_acluserrole/sys_aclrolerights 權限資料尚未建置完成時，把整個系統鎖死。
