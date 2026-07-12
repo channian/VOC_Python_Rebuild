@@ -260,6 +260,15 @@ body{
         <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok-glow);animation:pulse 1.5s ease-in-out infinite;display:inline-block"></span>
         資料更新 <span id="vb-updated-at">--:--</span> ・ 下次刷新 <b style="color:var(--accent)" id="vb-countdown">--:--</b>
       </div>
+      {# 使用者 chip：由 /home handler 傳入 current_user_name / current_user_empno（防禦式
+         default，兩者皆空就整個 chip 不顯示——AD 串接前 main_b 尚未傳這兩個 context 變數時
+         topbar 不會多出空殼）#}
+      {% if current_user_empno %}
+      <div style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);padding:6px 12px;border-radius:999px;background:var(--bg-3)">
+        <span>{{ current_user_name | default('') }}（{{ current_user_empno }}）</span>
+        <a href="/logout" style="color:var(--fg-3);text-decoration:none" onmouseover="this.style.color='var(--err)'" onmouseout="this.style.color='var(--fg-3)'">登出</a>
+      </div>
+      {% endif %}
       <div class="vb-tools-wrap">
         {# 3 顆常駐鈕（V2 topbar toolBtns）：派送名單／隔離申請走既有 modal partial；
            規格維護已改版為獨立頁，一般 <a href> 導頁，不是 hx-get #}

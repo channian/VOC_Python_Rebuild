@@ -61,9 +61,9 @@
         <input type="checkbox" name="remember" id="vb-remember-input" checked style="display:none">
       </label>
 
-      <div id="vb-error" style="display:none;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);color:var(--err);font-size:12.5px">
+      <div id="vb-error" style="display:{{ 'flex' if error else 'none' }};align-items:center;gap:8px;padding:9px 12px;border-radius:6px;background:var(--err-bg);border:1px solid rgba(239,68,68,0.35);color:var(--err);font-size:12.5px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;flex:none"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
-        帳號或密碼錯誤，請重新輸入
+        <span id="vb-error-text">{% if error == '2' %}無法連線驗證伺服器，請稍後再試或聯絡 IT{% else %}帳號或密碼錯誤，請重新輸入{% endif %}</span>
       </div>
 
       <button type="submit" id="vb-submit-btn" class="vb-btn-primary" style="margin-top:4px">
