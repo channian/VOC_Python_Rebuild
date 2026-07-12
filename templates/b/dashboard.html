@@ -44,9 +44,7 @@ body{
 .vb-rail-fill{flex:1}
 .vb-rail-normal{font-size:10.5px;padding:1px 7px;border-radius:999px;color:var(--fg-3)}
 
-/* ── 側欄：工具 TOOLS 分區 ────────────────────────────────── */
-.vb-tool-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;color:var(--fg-2);transition:background 120ms var(--ease);border:none;background:transparent;width:100%;text-align:left;font-family:var(--font-mono);font-size:11.5px}
-.vb-tool-item:hover{background:var(--bg-3);color:var(--fg-1)}
+/* （側欄工具分區已移除——工具入口統一在 topbar；.vb-pill-new 仍由「更多工具」下拉使用） */
 .vb-tool-icon{width:14px;height:14px;flex:none;color:var(--fg-3)}
 
 /* ── 側欄：LEGEND ─────────────────────────────────────────── */
@@ -233,54 +231,8 @@ body{
 
     <div style="flex:1"></div>
 
-    {# ═══ 工具 TOOLS 分區：與 topbar「更多工具」同一組 11 項、同 4 群組（V2 WP-A）═══
-       (label, href, is_page, is_new)：is_page=真 → 一般 <a href> 連獨立頁；
-       is_new=真 → 標「已改版」pill（目前只有規格維護／異常報表兩個獨立頁已改版）。 #}
-    {% set tool_groups = [
-      ('派送與簽核', [
-        ('派送名單維護', '/ui/maillist', false, false),
-        ('隔離申請', '/ui/control', false, false),
-        ('簽核管理', '/ui/flow', false, false),
-      ]),
-      ('資料與量測', [
-        ('規格維護', '/ui/spec', true, true),
-        ('QA 手測值', '/ui/qa', false, false),
-      ]),
-      ('異常紀錄', [
-        ('異常查詢', '/ui/history', false, false),
-        ('異常回覆', '/ui/reason', false, false),
-        ('異常報表', '/report/ui', true, true),
-      ]),
-      ('系統管理', [
-        ('中水緊急通知', '/warning/water_urgent/ui', false, false),
-        ('部門權限', '/dept/ui', false, false),
-        ('ACL 使用者權限', '/ui/acl', false, false),
-      ]),
-    ] %}
-    <div style="padding:14px 16px 6px;border-top:1px solid var(--border-1)">
-      <div class="vb-rail-label" style="padding:0 0 8px">工具 TOOLS</div>
-      {% for group_label, items in tool_groups %}
-      <div style="font-size:10px;font-weight:600;color:var(--fg-3);padding:{{ '10px 2px 4px' if not loop.first else '0 2px 4px' }};font-family:var(--font-mono)">{{ group_label }}</div>
-      <div class="vb-rail-list" style="padding:0">
-        {% for label, href, is_page, is_new in items %}
-        {% if is_page %}
-        <a href="{{ href }}" class="vb-tool-item" style="text-decoration:none">
-          <svg class="vb-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          {{ label }}
-          {% if is_new %}<span class="vb-pill-new">已改版</span>{% endif %}
-        </a>
-        {% else %}
-        <button type="button" class="vb-tool-item"
-                hx-get="{{ href }}" hx-target="#modal-container" hx-swap="innerHTML"
-                onclick="vbOpenModalTool({{ 'true' if href == '/warning/water_urgent/ui' else 'false' }})">
-          <svg class="vb-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          {{ label }}
-        </button>
-        {% endif %}
-        {% endfor %}
-      </div>
-      {% endfor %}
-    </div>
+    {# 工具入口只保留 topbar（3 常駐鈕＋「更多工具」下拉）；側欄原本的「工具 TOOLS」分區
+       與 topbar 重複，2026-07-11 使用者實測回饋後移除（設計稿 V2 側欄本來就只有廠區＋LEGEND）。 #}
 
     <div style="padding:14px 16px;border-top:1px solid var(--border-1)">
       <div class="vb-rail-label" style="padding:0 0 8px">燈號 LEGEND</div>
