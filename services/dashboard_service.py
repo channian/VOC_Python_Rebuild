@@ -85,7 +85,7 @@ def _bounds_mismatch(scada_val, spec_val, voc_exception: bool = False) -> bool:
     return round(sb[0], 2) != round(pb[0], 2) or round(sb[1], 2) != round(pb[1], 2)
 
 
-def _calculate_light(row: dict) -> tuple[str, bool]:
+def _calculate_light(row: dict, check_lower_bound: bool = False) -> tuple[str, bool]:
     """
     計算燈號與是否異常旗標。
 
@@ -103,6 +103,16 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
       - VOC 項目：SCADA OOS/OOC 比 SPEC 嚴（更低）時不算不一致（不亮橙燈）。
       - 比對順序 R → O(範圍) → O(不一致) → Y → G，對齊舊 Home.aspx.cs
         last-wins 的等效優先序（紅 > 橙 > 黃）。
+
+    check_lower_bound（2026-07-12 使用者確認新增）：
+      - 舊系統（沿用至今的 A 棧預設行為）雙邊規格（pH/溫度 '6-9'）只比對上界，
+        數值過低不示警——本參數 **預設 False**，維持這個舊行為完全不變，
+        確保 A 棧（main.py，公司平行測試中）不受影響。
+      - B 棧呼叫端固定傳 True：使用者已確認新系統要對雙邊規格的下界也示警
+        （例如 pH 過低也要亮燈，不再只看過高）。
+      - 為 True 時，僅對「雙邊規格」（_parse_bounds 回傳 low != high）額外用下界
+        比對 R/O/Y，取「上界判定」與「下界判定」中較嚴重者；單邊規格（low==high）
+        不受影響，因為沒有獨立的下界可比。
     """
     rvalue_raw: str = str(row.get("rvalue_raw") or "").strip()
     broken: int     = int(row.get("broken") or 0)
@@ -121,45 +131,62 @@ def _calculate_light(row: dict) -> tuple[str, bool]:
     # 取各門檻高界（單邊 = 數值本身，雙邊 pH/溫度 = 上限）
     oos_b = _parse_bounds(row.get("oos"))
     ooc_b = _parse_bounds(row.get("ooc"))
+    alert_b = _parse_bounds(row.get("alert_spec"))
+    recv_b = _parse_bounds(row.get("recv"))
     oos = oos_b[1] if oos_b else None
     ooc = ooc_b[1] if ooc_b else None
+    alert = alert_b[1] if alert_b else None
+    recv = recv_b[1] if recv_b else None
 
     # VOC 項目：SCADA 管制值比 SPEC 嚴（更低）時不算不一致
     is_voc = "VOC" in item
 
-    # ── 紅燈：讀值 >= OOS ────────────────────────────────────────────────
-    if oos is not None and rvalue >= oos:
-        return "R", False
+    # ── 上界判定（既有邏輯，R → O(範圍) → Y(alert) → Y(recv) → G，不含不一致）──
+    def _upper_verdict() -> str:
+        if oos is not None and rvalue >= oos:
+            return "R"
+        if ooc is not None and oos is not None and ooc <= rvalue < oos:
+            return "O"
+        if alert is not None and ooc is not None and alert < rvalue < ooc:
+            return "Y"
+        if recv is not None and rvalue > recv:
+            return "Y"
+        return "G"
 
-    # ── 橙燈（條件 1）：讀值落在 OOC ~ OOS 之間 ─────────────────────────
-    if ooc is not None and oos is not None and ooc <= rvalue < oos:
-        return "O", False
+    # ── 下界判定（check_lower_bound=True 時才啟用，僅對雙邊規格 low != high 生效）──
+    # 2026-07-12 使用者確認：pH/溫度等雙邊規格數值過低也要示警，鏡射上界的
+    # R/O/Y 規則改用「<=」/「<」比對下界；單邊規格 low==high，_lo 一律為 None
+    # （沒有獨立下界可比），因此對單邊項目完全不影響。
+    def _lower_verdict() -> str:
+        if not check_lower_bound:
+            return "G"
+        oos_lo = oos_b[0] if oos_b and oos_b[0] != oos_b[1] else None
+        ooc_lo = ooc_b[0] if ooc_b and ooc_b[0] != ooc_b[1] else None
+        alert_lo = alert_b[0] if alert_b and alert_b[0] != alert_b[1] else None
+        if oos_lo is not None and rvalue <= oos_lo:
+            return "R"
+        if ooc_lo is not None and oos_lo is not None and oos_lo < rvalue <= ooc_lo:
+            return "O"
+        if alert_lo is not None and rvalue < alert_lo:
+            return "Y"
+        return "G"
 
-    # ── 橙燈（條件 2）：SCADA/CWMS 管制值與 SPEC 設定值不一致 ─────────────
-    # 意義：有人改了 SPEC 但忘了同步到 SCADA 或反過來
-    if (
+    _RANK = {"R": 3, "O": 2, "Y": 1, "G": 0}
+    light = max(_upper_verdict(), _lower_verdict(), key=lambda l: _RANK[l])
+
+    # ── 橙燈（不一致）：SCADA/CWMS 管制值與 SPEC 設定值不一致 ─────────────
+    # 意義：有人改了 SPEC 但忘了同步到 SCADA 或反過來。
+    # 只在目前判定比 O 弱（Y/G）時才拉高到 O，維持與既有 R/O(範圍) 判定同序。
+    if _RANK[light] < _RANK["O"] and (
         _bounds_mismatch(row.get("scada_oos"),   row.get("oos"), voc_exception=is_voc) or
         _bounds_mismatch(row.get("scada_ooc"),   row.get("ooc"), voc_exception=is_voc) or
         _bounds_mismatch(row.get("scada_alert"), row.get("alert_spec")) or
         _bounds_mismatch(row.get("cwms_oos"),    row.get("oos")) or
         _bounds_mismatch(row.get("cwms_ooc"),    row.get("ooc"))
     ):
-        return "O", False
+        light = "O"
 
-    # ── 黃燈（條件 1）：讀值落在 Alert ~ OOC 之間 ────────────────────────
-    alert_b = _parse_bounds(row.get("alert_spec"))
-    alert = alert_b[1] if alert_b else None
-    if alert is not None and ooc is not None and alert < rvalue < ooc:
-        return "Y", False
-
-    # ── 黃燈（條件 2）：讀值超過允收值 ──────────────────────────────────
-    recv_b = _parse_bounds(row.get("recv"))
-    recv = recv_b[1] if recv_b else None
-    if recv is not None and rvalue > recv:
-        return "Y", False
-
-    # ── 綠燈：正常 ───────────────────────────────────────────────────────
-    return "G", False
+    return light, False
 
 
 def get_dashboard_data(db: Session, plant_permissions: str = "29") -> List[DashboardRow]:

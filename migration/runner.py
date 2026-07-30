@@ -38,6 +38,10 @@ _SYSTEM_CONFIG_DEFAULTS = {
     "sync_interval_minutes": "5",
     "dispatch_interval_minutes": "15",
     "mail_paused": "false",
+    # ControlTime（隔離時間修改，roleid=12 環工部例外通道）的隔離總時長上限（小時）。
+    # "0" = 無上限（維持現行「不受 1 小時上限限制」的既有行為），語意見
+    # services_b/control_service.py._get_control_time_max_hours()。
+    "control_time_max_hours": "0",
 }
 
 

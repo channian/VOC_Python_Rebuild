@@ -140,6 +140,15 @@ def _seed_catalog(session) -> None:
         {"key": "mail_paused"},
         {"value": "false", "updated_at": datetime.now(timezone.utc)},
     )
+    _upsert(
+        session,
+        SystemConfig,
+        # ControlTime（隔離時間修改，roleid=12 環工部例外通道）的隔離總時長上限（小時）。
+        # "0" = 無上限（維持現行「不受 1 小時上限限制」的既有行為），語意見
+        # services_b/control_service.py._get_control_time_max_hours()。
+        {"key": "control_time_max_hours"},
+        {"value": "0", "updated_at": datetime.now(timezone.utc)},
+    )
 
 
 def _seed_plant_item_spec(session) -> None:

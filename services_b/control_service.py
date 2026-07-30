@@ -32,13 +32,40 @@ from typing import Callable, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from models_b import Isolation, IsolationItem, IsolationHistory, Tranlog, Plant, AclUserRole
+from models_b import Isolation, IsolationItem, IsolationHistory, SystemConfig, Tranlog, Plant, AclUserRole
 from schemas.control_schema import ControlCreate, ControlModify, ControlTimeUpdate
 from services.control_service import next_ccno, RIGHTSID_CONTROL_TIME  # noqa: F401（供呼叫端引用）
 from services.flow_service import FlowStatus, Ttype, Utype, build_rtype_list
 from services_b.flow_service import create_sign_flow
 
 logger = logging.getLogger(__name__)
+
+
+# ── 系統設定 ──────────────────────────────────────────────────────────────────
+
+def _get_control_time_max_hours(db: Session) -> Optional[float]:
+    """
+    讀 system_config['control_time_max_hours']，做為 ControlTime（隔離時間修改）例外通道的
+    隔離總時長上限（小時）。
+
+    仿 services_b/sync_service.py._get_config_int() 的風格，差別是這裡「找不到/格式錯誤/
+    非正數」一律視為「無上限」（回傳 None），而不是回傳某個數字預設值——這是刻意設計：
+    C5 只是「加開關」，不是「加限制」，維持本例外通道原本不受 1 小時上限限制的行為，
+    直到有人主動在 system_config 設定正數才生效。
+    """
+    row = db.execute(
+        select(SystemConfig.value).where(SystemConfig.key == "control_time_max_hours")
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    try:
+        hours = float(row)
+    except (TypeError, ValueError):
+        logger.warning("system_config[control_time_max_hours]=%r 無法轉為數字，視為無上限", row)
+        return None
+    if hours <= 0:
+        return None
+    return hours
 
 
 # ── ccno 流水號（DB 查詢，純邏輯沿用 services.control_service.next_ccno）───────────
@@ -363,7 +390,7 @@ def modify_isolation(
 def update_isolation_time(db: Session, current_user_empno: str, data: ControlTimeUpdate) -> bool:
     """
     對應 A 棧 update_control_time()（ControlTime.aspx）：直接修改主表 etime，
-    不建立/不呼叫任何簽核流程（特定權限者 roleid=12「隔離時間修改」的例外通道）。
+    不建立/不呼叫任何簽核流程（特定權限者 roleid=12「隔離時間修改」環工部權限的例外通道）。
 
     只能延長/持平不能縮短已由 schemas.control_schema.ControlTimeUpdate.validate_etime() 在
     pydantic 建構當下驗證完畢，本函式不重複驗證。
@@ -372,6 +399,12 @@ def update_isolation_time(db: Session, current_user_empno: str, data: ControlTim
 
     ⚠️ 與 A 棧的刻意差異：A 棧會連帶 UPDATE 同 ccno 底下所有歷程列的 etime；
     B 棧 isolation_history 是 append-only 的 jsonb 快照，不回改舊快照（見本檔頂部說明）。
+
+    ★ C5（2026-07-30）：舊系統這條通道刻意不套用一般申請的「隔離總時長 1 小時上限」，
+    這裡維持「不走簽核」的既有行為，但把上限改成可由 system_config['control_time_max_hours']
+    設定（見 _get_control_time_max_hours()）。量的是「隔離總時長」= 本次新 etime − 該隔離單的
+    stime（與一般申請 ControlCreate/ControlModify 的 1 小時上限同一個量法），未設定/設 0/
+    負數/空字串/無法轉數字時一律視為無上限（維持現行行為，不報錯）。
     """
     try:
         record = db.execute(
@@ -379,6 +412,22 @@ def update_isolation_time(db: Session, current_user_empno: str, data: ControlTim
         ).scalar_one_or_none()
         if record is None:
             raise ValueError(f"找不到隔離申請單! ccno={data.ccno}")
+
+        max_hours = _get_control_time_max_hours(db)
+        if max_hours is not None and record.stime is not None:
+            new_etime, stime = data.etime, record.stime
+            # 兩者 tz-aware 狀態可能不一致（DB 讀回一律 tz-aware，pydantic 輸入未必帶時區），
+            # 相減前一律轉成 naive，只取時長差，不受時區標記影響（與 modify_isolation 的
+            # tz 處理原則一致，見本檔頂部說明）。
+            if new_etime.tzinfo is not None:
+                new_etime = new_etime.replace(tzinfo=None)
+            if stime.tzinfo is not None:
+                stime = stime.replace(tzinfo=None)
+            total_hours = (new_etime - stime).total_seconds() / 3600
+            if total_hours > max_hours:
+                raise ValueError(
+                    f"隔離總時長不可超過 {max_hours:g} 小時(目前設定)，本次將達 {total_hours:g} 小時!"
+                )
 
         before_etime = record.etime
         record.etime = data.etime
