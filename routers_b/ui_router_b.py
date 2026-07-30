@@ -185,7 +185,10 @@ def api_toggle_mail_b(enable: bool, db: Session = Depends(get_b_db)):
 # ══════════════════════════════════════════════════════════════════════════
 
 class ReasonUpdateReq(BaseModel):
-    logid: int
+    """2026-07-12 C8：回覆改成逐項目層級，item_id 是 history_service._make_item_id()
+    組出的複合鍵字串（對應 mail_log_item 的 (mail_log_id, item, condition_code) 複合主鍵），
+    由 /history/logs、/ui/history、/ui/reason 回傳的每一列帶出，前端原樣送回即可。"""
+    item_id: str
     reason: str
 
 
@@ -210,11 +213,12 @@ def api_history_logs_b(plant: str = "", item: str = "", sdate: str = "", edate: 
 
 @router.post("/history/reply")
 def api_reason_reply_b(data: ReasonUpdateReq, db: Session = Depends(get_b_db)):
+    """URL 沿用舊路徑（避免斷鏈），但 body 形狀已改成逐項目（item_id 取代 logid）。"""
     try:
-        history_service.update_reason(db, data.logid, data.reason, current_user_empno=_user_no())
+        history_service.update_reason(db, data.item_id, data.reason, current_user_empno=_user_no())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"status": "success", "message": f"logid={data.logid} 原因已儲存"}
+    return {"status": "success", "message": "原因已儲存"}
 
 
 @router.get("/ui/history")

@@ -49,7 +49,10 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
-from routers_b import auth_router_b, control_router_b, spec_router_b, trend_router_b, ui_router_b
+from routers_b import (
+    auth_router_b, basedata_router_b, control_router_b, spec_router_b,
+    trend_router_b, ui_router_b,
+)
 from services_b.session_auth import SessionAuthMiddleware
 
 app = FastAPI(
@@ -81,6 +84,9 @@ app.include_router(spec_router_b.router)
 #   新儀表板在 ui_router_b 的 /home（舊版保留於 /home/classic 供對照）
 app.include_router(auth_router_b.router)
 app.include_router(trend_router_b.router)
+# 基礎資料維護（2026-07-12）：/ui/basedata、/basedata/*——廠區/項目/Tag 對應三分頁，
+# 讓環工部自行新增新廠棟與監測項目，不必每次找工程師動資料庫。
+app.include_router(basedata_router_b.router)
 
 
 @app.get("/", include_in_schema=False)

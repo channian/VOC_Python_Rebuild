@@ -10,8 +10,15 @@
      mode   : 'history' | 'reason'（新增，主控接線時傳入；未傳預設 'history'）
      plants : list[str]            項目 items : list[str]
      plant/item/sdate/edate : str   mt : bool
-     logs   : list[dict]  {no, plantno, cdatetime, msg, emp, reason, rdatetime, logid, ...}
+     logs   : list[dict]  {no, plantno, cdatetime, msg, emp, reason, rdatetime, logid, item_id, ...}
      error  : str（日期倒置等查詢錯誤，頂部錯誤區呈現）
+
+   2026-07-12 C8（使用者確認的行為變更）：異常回覆從「信件層級」改成「逐項目層級」。
+   舊系統一封信只有一組回覆，分不清是回覆信裡的哪個項目；新版每個異常項目（每一列）
+   都有自己的回覆按鈕/欄位，`r.item_id` 是該列在 mail_log_item 的複合鍵字串
+   （history_service._make_item_id()），前端回覆時原樣送回 /history/reply 即可，不用
+   理解複合鍵細節。改排水記錄（沒有 mail_log_item 明細）目前 item_id 固定為空字串，
+   逐項目回覆對這條路徑不適用（B 棧 UI 目前也未串接 change='Y' 查詢）。
    ═══════════════════════════════════════════════════════════════════════ #}
 {% set mode = (mode | default('history')) %}
 {% set editable = (mode == 'reason') %}
@@ -38,7 +45,7 @@
 
   {% if editable %}
   <div style="font-size:11.5px;color:var(--fg-3);margin-bottom:12px;line-height:1.6">
-    按「回覆」填寫原因後儲存；已回覆的紀錄仍可補充修改。一封派報信只有一組回覆，不分項目。
+    按「回覆」填寫原因後儲存；已回覆的紀錄仍可補充修改。每個異常項目各自回覆，互不影響。
   </div>
   {% endif %}
 
@@ -81,6 +88,12 @@
   </div>
   <div id="hist-body" style="max-height:340px;overflow-y:auto">
     {% for r in logs %}
+    {# rowkey：行內展開用的 DOM id，用 loop.index（本次渲染內唯一）避免 item_id 裡的 '||'
+       混進 id 屬性；實際回覆送給後端的是 data-item-id（r.item_id，逐項目複合鍵字串）。
+       改排水記錄 item_id 固定為空字串，不適用逐項目回覆，直接不顯示回覆按鈕。
+       set 放在 for 迴圈最外層（不放在 if 區塊內），避免 Jinja2 的 if 區塊變數作用域
+       只在區塊內有效、跳出後续 if 讀不到的問題。 #}
+    {% set rowkey = loop.index %}
     <div class="hist-rowgrp" data-page="{{ (loop.index0 // 50) + 1 }}">
       <div style="display:grid;grid-template-columns:32px 64px 118px 1fr 140px {{ reason_col }};gap:8px;align-items:center;padding:8px 8px;border-bottom:1px solid var(--border-1)">
         <span style="font-family:var(--font-mono);color:var(--fg-3);font-size:11.5px">{{ r.no }}</span>
@@ -91,20 +104,24 @@
           {% if r.emp %}{{ r.emp }}{% if r.rdatetime %}<br>{{ r.rdatetime }}{% endif %}{% else %}—{% endif %}
         </span>
         {% if editable %}
-        <button type="button" id="hist-btn-{{ r.logid }}" onclick="histToggleReply({{ r.logid }})"
+        {% if r.item_id %}
+        <button type="button" id="hist-btn-{{ rowkey }}" data-item-id="{{ r.item_id }}" onclick="histToggleReply({{ rowkey }})"
                 style="padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:600;background:transparent;color:var(--accent);border:1.5px solid var(--border-2);cursor:pointer;white-space:nowrap">{{ r.reason if r.reason else '＋填寫原因' }}</button>
+        {% else %}
+        <span style="font-size:12px;color:var(--fg-3)">{{ r.reason if r.reason else '（未填，不適用逐項目回覆）' }}</span>
+        {% endif %}
         {% else %}
         <span style="font-size:12px;color:var(--fg-3)">{{ r.reason if r.reason else '（未填）' }}</span>
         {% endif %}
       </div>
-      {% if editable %}
-      <div id="hist-edit-{{ r.logid }}" style="display:none;padding:10px 8px 14px 40px;background:var(--bg-1);border-bottom:1px solid var(--border-1)">
-        <textarea id="hist-ta-{{ r.logid }}" rows="2" placeholder="填寫原因說明"
+      {% if editable and r.item_id %}
+      <div id="hist-edit-{{ rowkey }}" style="display:none;padding:10px 8px 14px 40px;background:var(--bg-1);border-bottom:1px solid var(--border-1)">
+        <textarea id="hist-ta-{{ rowkey }}" rows="2" placeholder="填寫原因說明"
                   style="width:100%;padding:7px 9px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;resize:vertical">{{ r.reason or '' }}</textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
-          <button type="button" onclick="histCancelReply({{ r.logid }})"
+          <button type="button" onclick="histCancelReply({{ rowkey }})"
                   style="padding:5px 12px;border-radius:6px;font-size:11.5px;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer">取消</button>
-          <button type="button" onclick="histSaveReply({{ r.logid }})"
+          <button type="button" onclick="histSaveReply({{ rowkey }})"
                   style="padding:5px 12px;border-radius:6px;font-size:11.5px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer">儲存</button>
         </div>
       </div>
@@ -146,34 +163,38 @@ function histLoadItems(plant) {
     .catch(function () {});
 }
 
-function histToggleReply(logid) {
+// rowkey：本次渲染內唯一的行內展開識別碼（loop.index）。實際回覆對象是該按鈕
+// data-item-id 帶的逐項目複合鍵字串（見 history_service._make_item_id），rowkey 只是
+// DOM id 用，兩者不要混淆。
+function histToggleReply(rowkey) {
   document.querySelectorAll('[id^="hist-edit-"]').forEach(function (el) {
-    if (el.id !== 'hist-edit-' + logid) { el.style.display = 'none'; }
+    if (el.id !== 'hist-edit-' + rowkey) { el.style.display = 'none'; }
   });
-  var editRow = document.getElementById('hist-edit-' + logid);
+  var editRow = document.getElementById('hist-edit-' + rowkey);
   if (!editRow) { return; }
   editRow.style.display = (editRow.style.display === 'none' || !editRow.style.display) ? '' : 'none';
 }
 
-function histCancelReply(logid) {
-  var editRow = document.getElementById('hist-edit-' + logid);
+function histCancelReply(rowkey) {
+  var editRow = document.getElementById('hist-edit-' + rowkey);
   if (editRow) { editRow.style.display = 'none'; }
 }
 
-function histSaveReply(logid) {
-  var ta = document.getElementById('hist-ta-' + logid);
+function histSaveReply(rowkey) {
+  var ta = document.getElementById('hist-ta-' + rowkey);
+  var btn = document.getElementById('hist-btn-' + rowkey);
   var reason = ta ? ta.value : '';
+  var itemId = btn ? btn.getAttribute('data-item-id') : '';
   fetch('/history/reply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ logid: logid, reason: reason })
+    body: JSON.stringify({ item_id: itemId, reason: reason })
   })
     .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
     .then(function (res) {
       if (res.ok) {
-        var btn = document.getElementById('hist-btn-' + logid);
         if (btn) { btn.textContent = reason.trim() ? reason.trim() : '＋填寫原因'; }
-        histCancelReply(logid);
+        histCancelReply(rowkey);
         histToast(res.data.message || '已儲存原因說明', {});
       } else {
         var msg = Array.isArray(res.data.detail) ? res.data.detail.map(function (e) { return e.msg; }).join('；') : (res.data.detail || '儲存失敗');

@@ -65,10 +65,12 @@ def test_list_voclog_filters_by_plant_item_date_and_mt(b_db):
 
 
 def test_update_reason_writes_reply_fields(b_db):
+    """2026-07-12 C8：回覆改為逐項目，update_reason 改吃 item_id 複合鍵（非 logid）。"""
     d1 = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
     logid = _make_log(b_db, TEST_PLANT_NO, d1, "Cu 超標通知", [("Cu", "OOS", False)])
 
-    hs.update_reason(b_db, logid, "已確認為設備校正誤差", current_user_empno=SIGNER_EMPNO)
+    item_id = hs._make_item_id(logid, "Cu", "OOS")
+    hs.update_reason(b_db, item_id, "已確認為設備校正誤差", current_user_empno=SIGNER_EMPNO)
 
     rows = hs.list_voclog(b_db, plant=TEST_PLANT_NO, sdate="2026/06/01", edate="2026/06/30", mt=True)
     row = next(r for r in rows if r["logid"] == logid)
@@ -79,10 +81,14 @@ def test_update_reason_writes_reply_fields(b_db):
     assert "TEST_PLACEHOLDER" in row["emp"]
 
 
-def test_update_reason_raises_for_unknown_logid(b_db):
+def test_update_reason_raises_for_unknown_item(b_db):
+    """查無此項目、或 item_id 格式錯誤，都應 raise ValueError（C8 後改吃複合鍵字串）。"""
     import pytest
     with pytest.raises(ValueError):
-        hs.update_reason(b_db, 999999, "不存在的紀錄", current_user_empno=SIGNER_EMPNO)
+        hs.update_reason(b_db, hs._make_item_id(999999, "Cu", "OOS"),
+                          "不存在的紀錄", current_user_empno=SIGNER_EMPNO)
+    with pytest.raises(ValueError):
+        hs.update_reason(b_db, "格式錯誤的鍵", "x", current_user_empno=SIGNER_EMPNO)
 
 
 # ══════════════════════════════════════════════════════════════════════════

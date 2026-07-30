@@ -8,9 +8,13 @@ B 版資料層差異（schema_B_設計提案.md D 項決策）：
     （不需要 A 版的 DT CTE 母集合／msg2 LIKE 排除保養中：B 版每筆 mail_log_item 已經是
     正規化的「這封信、這個項目、這個條件」一列，is_maintenance 欄位直接標記，
     mt=False 對應 A 版 msg2 篩選，直接 filter is_maintenance=False 即可）。
-  - reason/rdatetime/empno 回覆欄位在 A 版與 msg/msg1 同一列（VOC_MAIL_Log 一列涵蓋多項目），
-    B 版對應搬到 mail_log 主檔（reply_empno/reply_reason/reply_at），語意不變：
-    一封信只能回覆一次（不分項目）。
+  - reason/rdatetime/empno 回覆欄位：A 版與 msg/msg1 同一列（VOC_MAIL_Log 一列涵蓋多項目，
+    一封信只能回覆一次、分不清是回覆哪個項目）。
+    **2026-07-12 C8 使用者確認變更**：B 版回覆欄位改掛在 mail_log_item（逐項目回覆），
+    不再共用 mail_log 一組回覆——同一封信底下的每個異常項目可以各自獨立回覆。
+    改排水記錄（change='Y'）因為本來就沒有 mail_log_item 明細（非監測項目通知），
+    這條路徑目前無法附掛逐項目回覆，reason/rdatetime/emp 固定回空字串（見
+    `_list_change_water_log`；B 棧 UI 目前也未串接 change='Y' 查詢，此為已知限制）。
   - change='Y'（改排水記錄）：A 版用 msg LIKE '%改排水%' 且 item 留空。B 版沿用同樣精神，
     改查 mail_log.body_note LIKE '%改排水%' 且該封信沒有 mail_log_item 明細
     （warning_service 的改排水/水質異常通知走同一張 mail_log 但不寫 mail_log_item，
@@ -99,6 +103,24 @@ def _time_bounds(sdate: str, edate: str, stime: str) -> tuple[datetime, datetime
     return start, end
 
 
+def _make_item_id(mail_log_id: int, item: str, condition_code: str) -> str:
+    """組出逐項目回覆用的複合鍵字串（mail_log_item 為 (mail_log_id, item, condition_code)
+    複合主鍵，前端/API 一律用這組字串當作單一識別碼，不需要理解複合鍵細節）。"""
+    return f"{mail_log_id}||{item}||{condition_code}"
+
+
+def _parse_item_id(item_id: str) -> tuple[int, str, str]:
+    parts = item_id.split("||", 2)
+    if len(parts) != 3:
+        raise ValueError(f"item_id 格式錯誤：{item_id!r}")
+    mail_log_id_str, item, condition_code = parts
+    try:
+        mail_log_id = int(mail_log_id_str)
+    except ValueError:
+        raise ValueError(f"item_id 格式錯誤：{item_id!r}")
+    return mail_log_id, item, condition_code
+
+
 def _emp_label(db: Session, empno: str | None) -> str:
     if not empno:
         return ""
@@ -135,10 +157,12 @@ def _list_item_log(db: Session, plant: str, item: str, sdate: str, edate: str,
             "item": li.item,
             "cdatetime": log.sent_at.strftime("%Y/%m/%d %H:%M") if log.sent_at else "",
             "msg": log.body_note or li.detail or "",
-            "emp": _emp_label(db, log.reply_empno),
-            "reason": log.reply_reason or "",
-            "rdatetime": log.reply_at.strftime("%Y/%m/%d %H:%M") if log.reply_at else "",
+            # C8：回覆改成逐項目（掛在 mail_log_item，不再共用 mail_log 一組回覆）
+            "emp": _emp_label(db, li.reply_empno),
+            "reason": li.reply_reason or "",
+            "rdatetime": li.reply_at.strftime("%Y/%m/%d %H:%M") if li.reply_at else "",
             "logid": log.id,
+            "item_id": _make_item_id(li.mail_log_id, li.item, li.condition_code),
             "msg1": li.detail or "",
         })
     return result
@@ -164,21 +188,37 @@ def _list_change_water_log(db: Session, plant: str, sdate: str, edate: str, stim
             "item": "",
             "cdatetime": log.sent_at.strftime("%Y/%m/%d %H:%M") if log.sent_at else "",
             "msg": log.body_note or "",
-            "emp": _emp_label(db, log.reply_empno),
-            "reason": log.reply_reason or "",
-            "rdatetime": log.reply_at.strftime("%Y/%m/%d %H:%M") if log.reply_at else "",
+            # 改排水通知沒有 mail_log_item 明細可掛回覆，逐項目回覆功能對這條路徑無法套用
+            # （見檔頭說明；B 棧 UI 目前也未串接 change='Y' 查詢，屬已知限制）。
+            "emp": "",
+            "reason": "",
+            "rdatetime": "",
             "logid": log.id,
+            "item_id": "",
             "msg1": log.body_note or "",
         })
     return result
 
 
-def update_reason(db: Session, logid: int, reason: str, current_user_empno: str) -> None:
-    """儲存異常原因回覆（對應 A 版 update_reason）。"""
-    log = db.execute(select(MailLog).where(MailLog.id == logid)).scalar_one_or_none()
-    if not log:
-        raise ValueError(f"找不到派報紀錄 logid={logid}")
-    log.reply_empno = current_user_empno
-    log.reply_reason = reason.strip()
-    log.reply_at = datetime.now(timezone.utc)
+def update_reason(db: Session, item_id: str, reason: str, current_user_empno: str) -> None:
+    """儲存異常原因回覆（逐項目，2026-07-12 C8）。
+
+    對應 A 版 update_reason()，但 B 版改成以 mail_log_item 複合主鍵
+    (mail_log_id, item, condition_code) 為單位回覆，不再是整封信共用一組回覆。
+    `item_id` 是 `_make_item_id()` 組出的複合鍵字串，由 `list_voclog()` 回傳的每一列帶出，
+    前端原樣送回即可，不需要理解複合鍵細節。
+    """
+    mail_log_id, item, condition_code = _parse_item_id(item_id)
+    li = db.execute(
+        select(MailLogItem).where(
+            MailLogItem.mail_log_id == mail_log_id,
+            MailLogItem.item == item,
+            MailLogItem.condition_code == condition_code,
+        )
+    ).scalar_one_or_none()
+    if not li:
+        raise ValueError(f"找不到派報項目紀錄 item_id={item_id!r}")
+    li.reply_empno = current_user_empno
+    li.reply_reason = reason.strip()
+    li.reply_at = datetime.now(timezone.utc)
     db.commit()

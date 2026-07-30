@@ -244,6 +244,8 @@ def qa_update_b(data: QAUpdate, db: Session = Depends(get_b_db)):
 @router.get("/ui/reason")
 def render_reason_modal_b(request: Request, plant: str = "", item: str = "", sdate: str = "",
                           edate: str = "", mt: bool = False, db: Session = Depends(get_b_db)):
+    """2026-07-12 C8：logs 每一列改帶 item_id（逐項目複合鍵字串，見
+    history_service._make_item_id），模板行內回覆改用 item_id 呼叫 /history/reply。"""
     if not sdate or not edate:
         sdate, edate = history_service.default_date_range()
     logs, error = [], ""

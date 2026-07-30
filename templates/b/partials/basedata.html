@@ -1,0 +1,439 @@
+{# ══════════════════════════════════════════════════════════════════════════
+   templates/b/partials/basedata.html — 基礎資料維護（廠區 / 項目 / Tag 對應，V2 深色原生版）
+   第 12 個工具頁：讓環工部能自行新增/維護廠區、監測項目、Kepware Tag 對應，
+   不必每次找工程師動資料庫（公司蓋新廠棟時尤其需要）。
+
+   對應 routers_b/basedata_router_b.py::render_basedata_modal_b（GET /ui/basedata）context：
+     plants: [{plant_id, plant_no, kind, is_show, sort}]
+     items:  [{item_id, item, display_name, unit, is_active}]
+     tags:   [{id, source_table, tagname, plant_no, item, target_field, enabled, remark}]
+     error:  str，查詢失敗訊息
+     plant_kind_choices:   ['normal','virtual_group','all']
+     target_field_choices: [(value, label), ...]
+
+   風格照抄 dept.html / maillist.html：原生 <dialog>、✕ 關閉用
+   document.getElementById('voc-modal').close()、toast 用 window.vbToast fallback alert、
+   寫入一律 fetch + Content-Type: application/json（禁 hx-vals，CLAUDE.md 規定）。
+   三分頁籤參照 control.html 的 vbctl-tabs 寫法（原生 tab 切換，不用 Bootstrap）。
+
+   偏差：新增分頁未提供表格內「編輯」欄位比 dept.html/maillist.html 更進一步（設計稿沒有
+   此頁的原始樣式可循，本頁需求明確要「新增/編輯/刪除」三者皆有），因此每列多一顆「編輯」
+   按鈕，點擊後把該列資料帶進下方新增表單並切換成「更新模式」（表單標題與送出按鈕文字改變、
+   多一顆「取消編輯」按鈕），送出打對應的 update 端點；此互動模式為本頁新設計，非照抄既有頁。
+══════════════════════════════════════════════════════════════════════════ #}
+<div class="bdv2-root">
+
+  <div class="bdv2-titlebar">
+    <span class="bdv2-title">基礎資料維護</span>
+    <span class="bdv2-spacer"></span>
+    <button type="button" class="bdv2-close" onclick="document.getElementById('voc-modal').close()">✕</button>
+  </div>
+
+  <div class="bdv2-body">
+
+    {% if error %}
+    <div class="bdv2-error-banner">{{ error }}</div>
+    {% endif %}
+
+    <div class="bdv2-tabs">
+      <button type="button" class="bdv2-tab is-active" data-tab="plant" onclick="bdv2SwitchTab('plant')">廠區 PLANT</button>
+      <button type="button" class="bdv2-tab" data-tab="item" onclick="bdv2SwitchTab('item')">項目 ITEM</button>
+      <button type="button" class="bdv2-tab" data-tab="tag" onclick="bdv2SwitchTab('tag')">Tag 對應</button>
+    </div>
+
+    {# ══════════════════════════ 分頁 1：廠區 PLANT ══════════════════════════ #}
+    <div class="bdv2-panel" data-panel="plant">
+
+      <div class="bdv2-thead" style="grid-template-columns:70px 90px 110px 70px 60px 1fr;">
+        <span>代碼</span><span>編號</span><span>種類</span><span>首頁顯示</span><span>排序</span><span></span>
+      </div>
+      <div id="bdv2-plant-tbody">
+        {% for r in plants %}
+        <div class="bdv2-row" style="grid-template-columns:70px 90px 110px 70px 60px 1fr;"
+             data-plant_id="{{ r.plant_id }}" data-plant_no="{{ r.plant_no }}" data-kind="{{ r.kind }}"
+             data-is_show="{{ '1' if r.is_show else '0' }}" data-sort="{{ r.sort }}">
+          <span class="bdv2-mono">{{ r.plant_id }}</span>
+          <span class="bdv2-mono bdv2-strong">{{ r.plant_no }}</span>
+          <span class="bdv2-fs12 bdv2-fg2">{{ r.kind }}</span>
+          <span class="bdv2-flag {{ 'bdv2-flag-on' if r.is_show else 'bdv2-flag-off' }}">{{ '✓' if r.is_show else '—' }}</span>
+          <span class="bdv2-mono bdv2-fs12">{{ r.sort }}</span>
+          <span class="bdv2-rowactions">
+            <button type="button" class="bdv2-edit" onclick="bdv2EditPlant(this.closest('.bdv2-row'))">編輯</button>
+            <button type="button" class="bdv2-del" onclick="bdv2DeletePlant(this.closest('.bdv2-row'))">✕</button>
+          </span>
+        </div>
+        {% else %}
+        <div class="bdv2-empty">尚無廠區資料</div>
+        {% endfor %}
+      </div>
+
+      <div class="bdv2-add">
+        <div class="bdv2-add-title" id="bdv2-plant-form-title">新增廠區</div>
+        <div class="bdv2-add-grid" style="grid-template-columns:80px 100px 130px 90px 70px auto auto;">
+          <input id="bdv2-p-id" class="bdv2-in bdv2-mono" placeholder="代碼(數字)" type="number">
+          <input id="bdv2-p-no" class="bdv2-in bdv2-mono" placeholder="編號 例K7">
+          <select id="bdv2-p-kind" class="bdv2-in">
+            {% for k in plant_kind_choices %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+          </select>
+          <select id="bdv2-p-show" class="bdv2-in">
+            <option value="1">首頁顯示</option><option value="0">不顯示</option>
+          </select>
+          <input id="bdv2-p-sort" class="bdv2-in bdv2-mono" placeholder="排序" type="number" value="0">
+          <button type="button" class="bdv2-btn-primary" id="bdv2-p-submit" onclick="bdv2SubmitPlant()">新增</button>
+          <button type="button" class="bdv2-btn-cancel" id="bdv2-p-cancel" style="display:none" onclick="bdv2CancelPlantEdit()">取消編輯</button>
+        </div>
+        <div id="bdv2-p-form-error" class="bdv2-form-error"></div>
+      </div>
+    </div>
+
+    {# ══════════════════════════ 分頁 2：項目 ITEM ══════════════════════════ #}
+    <div class="bdv2-panel" data-panel="item" hidden>
+
+      <div class="bdv2-thead" style="grid-template-columns:70px 90px 110px 90px 70px 1fr;">
+        <span>代碼</span><span>項目</span><span>顯示別名</span><span>單位</span><span>啟用</span><span></span>
+      </div>
+      <div id="bdv2-item-tbody">
+        {% for r in items %}
+        <div class="bdv2-row" style="grid-template-columns:70px 90px 110px 90px 70px 1fr;"
+             data-item_id="{{ r.item_id }}" data-item="{{ r.item }}"
+             data-display_name="{{ r.display_name or '' }}" data-unit="{{ r.unit or '' }}"
+             data-is_active="{{ '1' if r.is_active else '0' }}">
+          <span class="bdv2-mono">{{ r.item_id }}</span>
+          <span class="bdv2-mono bdv2-strong">{{ r.item }}</span>
+          <span class="bdv2-fs12 bdv2-fg2">{{ r.display_name or '—' }}</span>
+          <span class="bdv2-fs12 bdv2-fg2">{{ r.unit or '—' }}</span>
+          <span class="bdv2-flag {{ 'bdv2-flag-on' if r.is_active else 'bdv2-flag-off' }}">{{ '✓' if r.is_active else '—' }}</span>
+          <span class="bdv2-rowactions">
+            <button type="button" class="bdv2-edit" onclick="bdv2EditItem(this.closest('.bdv2-row'))">編輯</button>
+            <button type="button" class="bdv2-del" onclick="bdv2DeleteItem(this.closest('.bdv2-row'))">✕</button>
+          </span>
+        </div>
+        {% else %}
+        <div class="bdv2-empty">尚無項目資料</div>
+        {% endfor %}
+      </div>
+
+      <div class="bdv2-add">
+        <div class="bdv2-add-title" id="bdv2-item-form-title">新增項目</div>
+        <div class="bdv2-add-grid" style="grid-template-columns:100px 110px 90px 70px auto auto;">
+          <input id="bdv2-i-item" class="bdv2-in bdv2-mono" placeholder="項目原名 例pH1">
+          <input id="bdv2-i-display" class="bdv2-in" placeholder="顯示別名(可空)">
+          <input id="bdv2-i-unit" class="bdv2-in" placeholder="單位">
+          <select id="bdv2-i-active" class="bdv2-in">
+            <option value="1">啟用</option><option value="0">停用</option>
+          </select>
+          <button type="button" class="bdv2-btn-primary" id="bdv2-i-submit" onclick="bdv2SubmitItem()">新增</button>
+          <button type="button" class="bdv2-btn-cancel" id="bdv2-i-cancel" style="display:none" onclick="bdv2CancelItemEdit()">取消編輯</button>
+        </div>
+        <div id="bdv2-i-form-error" class="bdv2-form-error"></div>
+      </div>
+    </div>
+
+    {# ══════════════════════════ 分頁 3：Tag 對應 ══════════════════════════ #}
+    <div class="bdv2-panel" data-panel="tag" hidden>
+
+      <div class="bdv2-hint" style="margin-bottom:10px">
+        這張表決定哪些 Kepware Tag 會被同步進來：同步 JOB 只依此表的 (來源表, Tag 名稱) 對照，
+        寫入對應廠區/項目的目標欄位；未在此設定的 Tag 不會被同步。
+      </div>
+
+      <div class="bdv2-thead" style="grid-template-columns:90px 120px 70px 70px 110px 60px 1fr;">
+        <span>來源表</span><span>Tag 名稱</span><span>廠區</span><span>項目</span><span>目標欄位</span><span>啟用</span><span></span>
+      </div>
+      <div id="bdv2-tag-tbody">
+        {% for r in tags %}
+        <div class="bdv2-row" style="grid-template-columns:90px 120px 70px 70px 110px 60px 1fr;"
+             data-id="{{ r.id }}" data-source_table="{{ r.source_table }}" data-tagname="{{ r.tagname }}"
+             data-plant_no="{{ r.plant_no }}" data-item="{{ r.item }}" data-target_field="{{ r.target_field }}"
+             data-enabled="{{ '1' if r.enabled else '0' }}" data-remark="{{ r.remark or '' }}">
+          <span class="bdv2-fs12">{{ r.source_table }}</span>
+          <span class="bdv2-mono bdv2-fs12">{{ r.tagname }}</span>
+          <span class="bdv2-mono bdv2-strong">{{ r.plant_no }}</span>
+          <span class="bdv2-mono bdv2-fs12">{{ r.item }}</span>
+          <span class="bdv2-fs11 bdv2-fg2">{{ r.target_field }}</span>
+          <span class="bdv2-flag {{ 'bdv2-flag-on' if r.enabled else 'bdv2-flag-off' }}">{{ '✓' if r.enabled else '—' }}</span>
+          <span class="bdv2-rowactions">
+            <button type="button" class="bdv2-edit" onclick="bdv2EditTag(this.closest('.bdv2-row'))">編輯</button>
+            <button type="button" class="bdv2-del" onclick="bdv2DeleteTag(this.closest('.bdv2-row'))">✕</button>
+          </span>
+        </div>
+        {% else %}
+        <div class="bdv2-empty">尚無 Tag 對應資料</div>
+        {% endfor %}
+      </div>
+
+      <div class="bdv2-add">
+        <div class="bdv2-add-title" id="bdv2-tag-form-title">新增 Tag 對應</div>
+        <div class="bdv2-add-grid" style="grid-template-columns:100px 130px 90px 90px 130px 80px auto auto;">
+          <input id="bdv2-t-source" class="bdv2-in" placeholder="來源表" value="kepware_sim">
+          <input id="bdv2-t-tagname" class="bdv2-in bdv2-mono" placeholder="Tag 名稱">
+          <select id="bdv2-t-plant" class="bdv2-in">
+            <option value="">— 廠區 —</option>
+            {% for p in plants %}<option value="{{ p.plant_no }}">{{ p.plant_no }}</option>{% endfor %}
+          </select>
+          <select id="bdv2-t-item" class="bdv2-in">
+            <option value="">— 項目 —</option>
+            {% for it in items %}<option value="{{ it.item }}">{{ it.item }}</option>{% endfor %}
+          </select>
+          <select id="bdv2-t-target" class="bdv2-in">
+            {% for v, label in target_field_choices %}<option value="{{ v }}">{{ label }}</option>{% endfor %}
+          </select>
+          <select id="bdv2-t-enabled" class="bdv2-in">
+            <option value="1">啟用</option><option value="0">停用</option>
+          </select>
+          <button type="button" class="bdv2-btn-primary" id="bdv2-t-submit" onclick="bdv2SubmitTag()">新增</button>
+          <button type="button" class="bdv2-btn-cancel" id="bdv2-t-cancel" style="display:none" onclick="bdv2CancelTagEdit()">取消編輯</button>
+        </div>
+        <input id="bdv2-t-remark" class="bdv2-in" placeholder="備註(選填)" style="margin-top:8px;max-width:320px">
+        <div id="bdv2-t-form-error" class="bdv2-form-error"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  .bdv2-root{background:var(--bg-2);color:var(--fg-1);font-family:var(--font-sans,'Inter',sans-serif);font-size:14px}
+  .bdv2-titlebar{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--border-1)}
+  .bdv2-title{font-size:16px;font-weight:700;color:var(--fg-1)}
+  .bdv2-spacer{flex:1}
+  .bdv2-close{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:16px;line-height:1;padding:4px}
+  .bdv2-close:hover{color:var(--fg-1)}
+  .bdv2-body{padding:20px 22px}
+
+  .bdv2-error-banner{background:var(--err-bg);color:var(--err);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px}
+
+  .bdv2-tabs{display:flex;gap:6px;margin-bottom:14px}
+  .bdv2-tab{padding:7px 16px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--bg-1);color:var(--fg-2);border:1px solid var(--border-2);cursor:pointer;font-family:inherit}
+  .bdv2-tab.is-active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+
+  .bdv2-hint{font-size:11.5px;color:var(--fg-3);line-height:1.6}
+
+  .bdv2-thead,.bdv2-row{display:grid;gap:8px;align-items:center;padding:8px 10px}
+  .bdv2-thead{background:var(--bg-1);border-radius:8px 8px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-2)}
+  .bdv2-row{border-bottom:1px solid var(--border-1)}
+  .bdv2-row:hover{background:var(--bg-3)}
+  .bdv2-mono{font-family:var(--font-mono)}
+  .bdv2-strong{font-weight:700}
+  .bdv2-fs12{font-size:12px}
+  .bdv2-fs11{font-size:11px}
+  .bdv2-fg2{color:var(--fg-2)}
+  .bdv2-flag{text-align:center;font-weight:700}
+  .bdv2-flag-on{color:var(--ok)}
+  .bdv2-flag-off{color:var(--fg-3)}
+  .bdv2-rowactions{display:flex;justify-content:flex-end;gap:10px}
+  .bdv2-edit{background:transparent;border:none;color:var(--accent);cursor:pointer;font-size:12px;font-family:inherit}
+  .bdv2-edit:hover{text-decoration:underline}
+  .bdv2-del{background:transparent;border:none;color:var(--fg-3);cursor:pointer;font-size:13px}
+  .bdv2-del:hover{color:var(--err)}
+  .bdv2-empty{color:var(--fg-3);font-size:12.5px;padding:16px 10px;text-align:center}
+
+  .bdv2-add{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-2)}
+  .bdv2-add-title{font-size:11.5px;font-weight:600;color:var(--fg-2);margin-bottom:8px}
+  .bdv2-add-grid{display:grid;gap:8px;align-items:center}
+  .bdv2-in{padding:7px 8px;background:var(--bg-3);border:1.5px solid var(--border-3);border-radius:6px;color:var(--fg-1);font-size:12px;font-family:inherit;width:100%}
+  .bdv2-in:focus{outline:none;border-color:var(--accent)}
+  .bdv2-form-error{font-size:11.5px;color:var(--err);margin-top:6px;min-height:14px}
+  .bdv2-btn-primary{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;cursor:pointer;white-space:nowrap;font-family:inherit}
+  .bdv2-btn-primary:hover{background:var(--blue-hover)}
+  .bdv2-btn-cancel{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;background:transparent;color:var(--fg-2);border:1.5px solid var(--border-2);cursor:pointer;white-space:nowrap;font-family:inherit}
+  .bdv2-btn-cancel:hover{color:var(--fg-1);border-color:var(--fg-3)}
+</style>
+
+<script>
+(function () {
+  function toast(msg, isErr) {
+    if (window.vbToast) { window.vbToast(msg, { type: isErr ? 'error' : 'success' }); }
+    else { alert(msg); }
+  }
+  function extractErrorMsg(data) {
+    if (data && Array.isArray(data.detail)) return data.detail.map(e => (typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
+    if (data && typeof data.detail === 'string') return data.detail;
+    return '操作失敗，請重試';
+  }
+  async function parseResponse(res) {
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* 非 JSON 回應忽略 */ }
+    return { ok: res.ok, data };
+  }
+  function reloadModal() {
+    if (window.htmx) { htmx.ajax('GET', '/ui/basedata', { target: '#modal-container', swap: 'innerHTML' }); }
+  }
+  async function submitJson(url, payload) {
+    return parseResponse(await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    }));
+  }
+
+  // ── 分頁切換 ────────────────────────────────────────────────────────────
+  window.bdv2SwitchTab = function (tab) {
+    document.querySelectorAll('.bdv2-tab').forEach(function (b) { b.classList.toggle('is-active', b.dataset.tab === tab); });
+    document.querySelectorAll('.bdv2-panel').forEach(function (p) { p.hidden = (p.dataset.panel !== tab); });
+  };
+
+  // ── 廠區 PLANT ──────────────────────────────────────────────────────────
+  let plantEditing = false;
+  window.bdv2EditPlant = function (row) {
+    plantEditing = true;
+    document.getElementById('bdv2-p-id').value = row.dataset.plant_id;
+    document.getElementById('bdv2-p-id').disabled = true; // plant_id 是主鍵，編輯模式不可改
+    document.getElementById('bdv2-p-no').value = row.dataset.plant_no;
+    document.getElementById('bdv2-p-kind').value = row.dataset.kind;
+    document.getElementById('bdv2-p-show').value = row.dataset.is_show;
+    document.getElementById('bdv2-p-sort').value = row.dataset.sort;
+    document.getElementById('bdv2-plant-form-title').textContent = '編輯廠區 (plant_id=' + row.dataset.plant_id + ')';
+    document.getElementById('bdv2-p-submit').textContent = '儲存修改';
+    document.getElementById('bdv2-p-cancel').style.display = '';
+  };
+  window.bdv2CancelPlantEdit = function () {
+    plantEditing = false;
+    document.getElementById('bdv2-p-id').value = '';
+    document.getElementById('bdv2-p-id').disabled = false;
+    document.getElementById('bdv2-p-no').value = '';
+    document.getElementById('bdv2-p-sort').value = '0';
+    document.getElementById('bdv2-plant-form-title').textContent = '新增廠區';
+    document.getElementById('bdv2-p-submit').textContent = '新增';
+    document.getElementById('bdv2-p-cancel').style.display = 'none';
+  };
+  window.bdv2SubmitPlant = async function () {
+    const errBox = document.getElementById('bdv2-p-form-error');
+    errBox.textContent = '';
+    const plant_id = parseInt(document.getElementById('bdv2-p-id').value, 10);
+    const plant_no = document.getElementById('bdv2-p-no').value.trim();
+    if (!plant_id && plant_id !== 0) { errBox.textContent = '請輸入廠區代碼(數字)'; return; }
+    if (!plant_no) { errBox.textContent = '請輸入廠區編號'; return; }
+    const payload = {
+      plant_id: plant_id, plant_no: plant_no,
+      kind: document.getElementById('bdv2-p-kind').value,
+      is_show: document.getElementById('bdv2-p-show').value === '1',
+      sort: parseInt(document.getElementById('bdv2-p-sort').value, 10) || 0,
+    };
+    const url = plantEditing ? '/basedata/plant/update' : '/basedata/plant/create';
+    try {
+      const { ok, data } = await submitJson(url, payload);
+      if (ok) { toast(data.message || '已儲存'); reloadModal(); }
+      else { errBox.textContent = extractErrorMsg(data); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+  window.bdv2DeletePlant = async function (row) {
+    const plant_no = row.dataset.plant_no;
+    if (!confirm('確定刪除廠區 ' + plant_no + '？（若仍有規格/Tag對應使用中將無法刪除）')) return;
+    try {
+      const { ok, data } = await submitJson('/basedata/plant/delete', { plant_id: parseInt(row.dataset.plant_id, 10) });
+      if (ok) { toast(data.message || '已刪除'); reloadModal(); }
+      else { toast(extractErrorMsg(data), true); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+
+  // ── 項目 ITEM ───────────────────────────────────────────────────────────
+  let itemEditing = false, itemOldKey = '';
+  window.bdv2EditItem = function (row) {
+    itemEditing = true;
+    itemOldKey = row.dataset.item;
+    document.getElementById('bdv2-i-item').value = row.dataset.item;
+    document.getElementById('bdv2-i-display').value = row.dataset.display_name;
+    document.getElementById('bdv2-i-unit').value = row.dataset.unit;
+    document.getElementById('bdv2-i-active').value = row.dataset.is_active;
+    document.getElementById('bdv2-item-form-title').textContent = '編輯項目 (' + itemOldKey + ')';
+    document.getElementById('bdv2-i-submit').textContent = '儲存修改';
+    document.getElementById('bdv2-i-cancel').style.display = '';
+  };
+  window.bdv2CancelItemEdit = function () {
+    itemEditing = false; itemOldKey = '';
+    document.getElementById('bdv2-i-item').value = '';
+    document.getElementById('bdv2-i-display').value = '';
+    document.getElementById('bdv2-i-unit').value = '';
+    document.getElementById('bdv2-item-form-title').textContent = '新增項目';
+    document.getElementById('bdv2-i-submit').textContent = '新增';
+    document.getElementById('bdv2-i-cancel').style.display = 'none';
+  };
+  window.bdv2SubmitItem = async function () {
+    const errBox = document.getElementById('bdv2-i-form-error');
+    errBox.textContent = '';
+    const item = document.getElementById('bdv2-i-item').value.trim();
+    if (!item) { errBox.textContent = '請輸入項目原名'; return; }
+    const payload = {
+      item: item,
+      display_name: document.getElementById('bdv2-i-display').value.trim() || null,
+      unit: document.getElementById('bdv2-i-unit').value.trim() || null,
+      is_active: document.getElementById('bdv2-i-active').value === '1',
+    };
+    let url = '/basedata/item/create';
+    if (itemEditing) { url = '/basedata/item/update'; payload.old_item = itemOldKey; }
+    try {
+      const { ok, data } = await submitJson(url, payload);
+      if (ok) { toast(data.message || '已儲存'); reloadModal(); }
+      else { errBox.textContent = extractErrorMsg(data); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+  window.bdv2DeleteItem = async function (row) {
+    const item = row.dataset.item;
+    if (!confirm('確定刪除項目 ' + item + '？（若仍有規格/Tag對應使用中將無法刪除）')) return;
+    try {
+      const { ok, data } = await submitJson('/basedata/item/delete', { item: item });
+      if (ok) { toast(data.message || '已刪除'); reloadModal(); }
+      else { toast(extractErrorMsg(data), true); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+
+  // ── Tag 對應 TAG MAPPING ──────────────────────────────────────────────
+  let tagEditing = false, tagEditId = null;
+  window.bdv2EditTag = function (row) {
+    tagEditing = true;
+    tagEditId = parseInt(row.dataset.id, 10);
+    document.getElementById('bdv2-t-source').value = row.dataset.source_table;
+    document.getElementById('bdv2-t-tagname').value = row.dataset.tagname;
+    document.getElementById('bdv2-t-plant').value = row.dataset.plant_no;
+    document.getElementById('bdv2-t-item').value = row.dataset.item;
+    document.getElementById('bdv2-t-target').value = row.dataset.target_field;
+    document.getElementById('bdv2-t-enabled').value = row.dataset.enabled;
+    document.getElementById('bdv2-t-remark').value = row.dataset.remark;
+    document.getElementById('bdv2-tag-form-title').textContent = '編輯 Tag 對應 (id=' + tagEditId + ')';
+    document.getElementById('bdv2-t-submit').textContent = '儲存修改';
+    document.getElementById('bdv2-t-cancel').style.display = '';
+  };
+  window.bdv2CancelTagEdit = function () {
+    tagEditing = false; tagEditId = null;
+    document.getElementById('bdv2-t-tagname').value = '';
+    document.getElementById('bdv2-t-plant').value = '';
+    document.getElementById('bdv2-t-item').value = '';
+    document.getElementById('bdv2-t-remark').value = '';
+    document.getElementById('bdv2-tag-form-title').textContent = '新增 Tag 對應';
+    document.getElementById('bdv2-t-submit').textContent = '新增';
+    document.getElementById('bdv2-t-cancel').style.display = 'none';
+  };
+  window.bdv2SubmitTag = async function () {
+    const errBox = document.getElementById('bdv2-t-form-error');
+    errBox.textContent = '';
+    const source_table = document.getElementById('bdv2-t-source').value.trim();
+    const tagname = document.getElementById('bdv2-t-tagname').value.trim();
+    const plant_no = document.getElementById('bdv2-t-plant').value;
+    const item = document.getElementById('bdv2-t-item').value;
+    if (!source_table || !tagname) { errBox.textContent = '請輸入來源表與 Tag 名稱'; return; }
+    if (!plant_no) { errBox.textContent = '請選擇廠區'; return; }
+    if (!item) { errBox.textContent = '請選擇項目'; return; }
+    const payload = {
+      source_table: source_table, tagname: tagname, plant_no: plant_no, item: item,
+      target_field: document.getElementById('bdv2-t-target').value,
+      enabled: document.getElementById('bdv2-t-enabled').value === '1',
+      remark: document.getElementById('bdv2-t-remark').value.trim(),
+    };
+    let url = '/basedata/tag/create';
+    if (tagEditing) { url = '/basedata/tag/update'; payload.id = tagEditId; }
+    try {
+      const { ok, data } = await submitJson(url, payload);
+      if (ok) { toast(data.message || '已儲存'); reloadModal(); }
+      else { errBox.textContent = extractErrorMsg(data); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+  window.bdv2DeleteTag = async function (row) {
+    const label = row.dataset.source_table + '/' + row.dataset.tagname;
+    if (!confirm('確定刪除 Tag 對應 ' + label + '？')) return;
+    try {
+      const { ok, data } = await submitJson('/basedata/tag/delete', { id: parseInt(row.dataset.id, 10) });
+      if (ok) { toast(data.message || '已刪除'); reloadModal(); }
+      else { toast(extractErrorMsg(data), true); }
+    } catch (e) { toast('網路錯誤，請重試', true); }
+  };
+})();
+</script>
