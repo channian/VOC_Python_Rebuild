@@ -4,6 +4,17 @@ routers_b/spec_router_b.py — B 棧「規格維護/規格簽核＋QA＋異常�
 原則同 control_router_b.py：URL 對齊 A 棧、模板零修改、業務走 services_b。
 關鍵轉接：A 棧前端送的是字串門檻（'6-9'／'80'），B 棧 spec 表存 numeric low/high＋status——
 由本檔的 _bound_fields() 用既有純函式 parse_spec_bound() 轉換，兩棧驗證規則同源。
+
+★ 2026-07-31「雙邊規格判定改資料驅動」（見 models_b.Item.is_dual_bound）：
+  問題：`SpecCreate`/`SpecUpdate`/`SpecApplyCreate` 是 Pydantic model，**FastAPI 在解析 body
+  的當下就跑完 model_validator**，也就是「名稱不像 pH 的雙邊項目（如 K21 溫度填 20-35）」
+  會在 request 還沒進到 router 函式之前就被打成 422，根本來不及查 DB 問 item.is_dual_bound。
+  解法：B 棧三個寫入端點改收**寬鬆**輸入模型 `SpecInputB`/`SpecApplyInputB`（同樣欄位、
+  但**沒有** model_validator，所以純解析不驗證），進到 router 後先查 `Item.is_dual_bound`，
+  再把查到的值當 `is_dual_bound` 注入、建構原本那個嚴格 model 完成驗證（`_validate_b()`）。
+  驗證規則因此仍與 A 棧同源（同一個 SpecBase.validate_limits），只是判「單邊/雙邊」的依據
+  由「猜名稱」換成「查資料」；item 查無或該欄為 NULL 時自動退回名稱推測，現況不受影響。
+  A 棧（routers/spec_router.py）完全不動，仍直接以 SpecCreate 解析 → 一律走名稱推測。
 """
 
 import logging
@@ -11,6 +22,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,7 +30,7 @@ from database_b import get_b_db
 from models_b import Item, SpecApply
 from schemas.qa_schema import QAUpdate
 from schemas.spec_schema import (
-    SpecApplyCreate, SpecCreate, SpecSignAction, SpecUpdate, parse_spec_bound,
+    SpecApplyCreate, SpecBase, SpecCreate, SpecSignAction, SpecUpdate, parse_spec_bound,
 )
 from services.flow_service import FlowStatus  # 兩棧同源狀態值
 from services.spec_service import to_storage_item  # pH1/COD2 別名對應（既有純函式）
@@ -42,26 +54,87 @@ def _user_no() -> str:
 _INVALID_STATUS = {"": "na", "-": "na", "N/A": "na", "建置中": "building"}
 
 
-def _bound_fields(prefix: str, raw: str, is_ph: bool, item_name: str) -> dict:
+def _bound_fields(prefix: str, raw: str, is_dual: bool, item_name: str) -> dict:
     """A 形狀字串（'6-9'/'80'/'-'/'N/A'/'建置中'）→ B 的 {prefix}_low/_high/_status 三欄。"""
     raw = (raw or "").strip()
     if raw in _INVALID_STATUS:
         return {f"{prefix}_low": None, f"{prefix}_high": None, f"{prefix}_status": _INVALID_STATUS[raw]}
-    parsed = parse_spec_bound(raw, prefix.upper(), is_ph, item_name)  # 驗證規則與 A 棧同源
+    parsed = parse_spec_bound(raw, prefix.upper(), is_dual, item_name)  # 驗證規則與 A 棧同源
     if parsed is None:
         return {f"{prefix}_low": None, f"{prefix}_high": None, f"{prefix}_status": "na"}
     low, high = (parsed[0], parsed[1]) if len(parsed) == 2 else (None, parsed[0])
     return {f"{prefix}_low": low, f"{prefix}_high": high, f"{prefix}_status": "valid"}
 
 
-def _fields_from_schema(data) -> tuple[str, dict]:
-    """SpecBase（A 形狀）→ (B 儲存用 item 名, B numeric 欄位 dict)。"""
+def _fields_from_schema(data: SpecBase) -> tuple[str, dict]:
+    """SpecBase（A 形狀）→ (B 儲存用 item 名, B numeric 欄位 dict)。
+
+    ★ 雙邊判定改用 `data.effective_dual_bound()`（＝router 先查 item.is_dual_bound 注入的值，
+      未指定時才退回名稱推測），取代原本這裡自己寫的第三套字串比對 `"pH" in data.item`——
+      那套連 schemas 與載入器的兩套都對不齊，溫度更是永遠猜不到。
+    """
     storage_item = to_storage_item(data.plantno, data.item)
-    is_ph = "pH" in data.item
+    is_dual = data.effective_dual_bound()
     fields: dict = {"law_text": data.LAW or "", "source_id": data.source_id}
     for prefix, raw in (("oos", data.OOS), ("ooc", data.OOC), ("alert", data.alert)):
-        fields.update(_bound_fields(prefix, raw, is_ph, data.item))
+        fields.update(_bound_fields(prefix, raw, is_dual, data.item))
     return storage_item, fields
+
+
+# ── 寬鬆輸入模型 + 資料驅動的雙邊判定（見檔頭 ★ 說明）──────────────────────────
+
+class SpecInputB(BaseModel):
+    """B 棧規格寫入端點的輸入模型：欄位與 `SpecBase` 相同，但**刻意不帶 model_validator**。
+
+    目的是把「門檻格式驗證」延後到 router 內部（查得到 item.is_dual_bound 之後）再做，
+    而不是在 FastAPI 解析 body 的當下就用名稱推測驗完（那會讓溫度這種雙邊項目永遠 422）。
+    """
+    plantno: str
+    item: str
+    LAW: str
+    OOS: str
+    OOC: str
+    alert: str
+    source_id: int
+    remark: Optional[str] = ""
+
+
+class SpecApplyInputB(SpecInputB):
+    """送簽版寬鬆輸入模型（多一個 ftype；ftype 合法值由嚴格 model SpecApplyCreate 驗）。"""
+    ftype: str
+
+
+def _resolve_dual_bound(db: Session, storage_item: str) -> Optional[bool]:
+    """查 `item.is_dual_bound`（B 棧資料驅動的規格型態）。
+
+    回傳 None 有兩種情況，語意相同——「沒有明確指定」，交回 `SpecBase` 用名稱推測：
+      1. item 主檔查無此項目（例如送簽新增一個尚未建立的項目）；
+      2. 查到了但該欄位是 NULL（基礎資料還沒填「規格型態」）。
+    """
+    return db.execute(
+        select(Item.is_dual_bound).where(Item.item == storage_item)
+    ).scalar_one_or_none()
+
+
+def _validate_b(model_cls, raw: SpecInputB, db: Session) -> SpecBase:
+    """寬鬆輸入 → 查 item.is_dual_bound → 建構嚴格 model 完成驗證。
+
+    驗證失敗時轉成 422，且 detail 形狀比照 FastAPI 自己產生的 RequestValidationError
+    （`[{"loc": [...], "msg": ..., "type": ...}]`），前端 `extractErrors()` 不必改就能顯示
+    原因（例：「Value error, OOS 值錯誤, 溫度 必須為雙邊規格 (如: 6-9)!」）。
+    """
+    is_dual = _resolve_dual_bound(db, to_storage_item(raw.plantno, raw.item))
+    try:
+        return model_cls(**raw.model_dump(), is_dual_bound=is_dual)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=[
+            {
+                "loc": ["body"] + [str(x) for x in err.get("loc", ())],
+                "msg": err.get("msg", ""),
+                "type": err.get("type", ""),
+            }
+            for err in e.errors()
+        ])
 
 
 def _spec_row_for_template(r: dict) -> dict:
@@ -115,7 +188,10 @@ def spec_list_b(plantno: str = "", item: str = "", db: Session = Depends(get_b_d
 
 
 @router.post("/spec/create")
-def spec_create_b(data: SpecCreate, db: Session = Depends(get_b_db)):
+def spec_create_b(raw: SpecInputB, db: Session = Depends(get_b_db)):
+    # 驗證刻意放在 try 之外：_validate_b 失敗會丟 HTTPException(422)，
+    # 若放進 try 會被下面的 `except Exception` 吃掉、變成語焉不詳的 500。
+    data = _validate_b(SpecCreate, raw, db)
     try:
         storage_item, fields = _fields_from_schema(data)
         spec_service.create_spec(db, _user_no(), data.plantno, storage_item, remark=data.remark or "", **fields)
@@ -128,7 +204,8 @@ def spec_create_b(data: SpecCreate, db: Session = Depends(get_b_db)):
 
 
 @router.post("/spec/update")
-def spec_update_b(data: SpecUpdate, db: Session = Depends(get_b_db)):
+def spec_update_b(raw: SpecInputB, db: Session = Depends(get_b_db)):
+    data = _validate_b(SpecUpdate, raw, db)  # 同 spec_create_b：驗證放 try 之外
     try:
         storage_item, fields = _fields_from_schema(data)
         spec_service.update_spec(db, _user_no(), data.plantno, storage_item, remark=data.remark or "", **fields)
@@ -155,7 +232,8 @@ def spec_delete_b(plantno: str, item: str, remark: str = "", db: Session = Depen
 # ── 規格簽核 ────────────────────────────────────────────────────────────────
 
 @router.post("/spec/apply")
-def spec_apply_b(data: SpecApplyCreate, db: Session = Depends(get_b_db)):
+def spec_apply_b(raw: SpecApplyInputB, db: Session = Depends(get_b_db)):
+    data = _validate_b(SpecApplyCreate, raw, db)  # 同 spec_create_b：驗證放 try 之外
     try:
         storage_item, fields = _fields_from_schema(data)
         sa = spec_service.create_spec_apply(

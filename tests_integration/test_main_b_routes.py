@@ -179,6 +179,119 @@ def test_spec_apply_and_sign_via_api(client, b_db):
     assert float(spec.oos_high) == pytest.approx(5.0)  # 申請新值已套用回 spec
 
 
+# ── 雙邊規格判定改資料驅動（2026-07-31，item.is_dual_bound）────────────────────
+#
+# B 棧規格端點改成「先查 item.is_dual_bound 再驗證」，不再靠項目名稱猜單/雙邊。
+# 驗證此路徑：明確雙邊的項目（名稱是「溫度D」，完全沒有 pH 字樣）能存雙邊門檻；
+# 明確單邊的擋下雙邊門檻；未指定（NULL）時退回舊的名稱推測（現況不變）。
+
+_DUAL_ITEMS = [("溫度D", True), ("溫度S", False), ("溫度N", None)]
+
+
+@pytest.fixture()
+def dual_bound_items(b_db):
+    """建三個規格型態不同的項目（雙邊/單邊/未指定）＋各一筆空白 spec 供 /spec/update 用。"""
+    from sqlalchemy import func
+
+    from models_b import Item
+
+    max_id = b_db.execute(select(func.max(Item.item_id))).scalar() or 0
+    for offset, (name, dual) in enumerate(_DUAL_ITEMS, start=1):
+        b_db.add(Item(item_id=max_id + offset, item=name, display_name=name, unit="°C",
+                      is_active=True, is_dual_bound=dual))
+        b_db.add(Spec(plant_no=TEST_PLANT_NO, item=name, source_id=1, seqno=90 + offset))
+    b_db.commit()
+    yield
+
+
+def test_spec_update_accepts_double_sided_for_is_dual_bound_true(client, b_db, dual_bound_items):
+    """★ 核心驗收：is_dual_bound=True 的項目（名稱不含 pH）可成功存雙邊門檻。"""
+    r = client.post("/spec/update", json={
+        "plantno": TEST_PLANT_NO, "item": "溫度D",
+        "LAW": "20-35", "OOS": "20-35", "OOC": "22-33", "alert": "23-32",
+        "source_id": 1, "remark": "dual-bound",
+    })
+    assert r.status_code == 200, r.text
+
+    b_db.expire_all()
+    spec = b_db.execute(
+        select(Spec).where(Spec.plant_no == TEST_PLANT_NO, Spec.item == "溫度D")
+    ).scalar_one()
+    assert float(spec.oos_low) == pytest.approx(20.0)
+    assert float(spec.oos_high) == pytest.approx(35.0)
+    assert spec.oos_status == "valid"
+    assert float(spec.ooc_low) == pytest.approx(22.0)
+    assert float(spec.alert_high) == pytest.approx(32.0)
+
+
+def test_spec_create_accepts_double_sided_for_is_dual_bound_true(client, b_db):
+    """新增路徑同樣吃 item.is_dual_bound（此項目尚無 spec，走 /spec/create）。"""
+    from sqlalchemy import func
+
+    from models_b import Item
+
+    max_id = b_db.execute(select(func.max(Item.item_id))).scalar() or 0
+    b_db.add(Item(item_id=max_id + 1, item="溫度C", display_name="溫度C", unit="°C",
+                  is_active=True, is_dual_bound=True))
+    b_db.commit()
+
+    r = client.post("/spec/create", json={
+        "plantno": TEST_PLANT_NO, "item": "溫度C",
+        "LAW": "20-35", "OOS": "20-35", "OOC": "22-33", "alert": "23-32", "source_id": 1,
+    })
+    assert r.status_code == 200, r.text
+
+    spec = b_db.execute(
+        select(Spec).where(Spec.plant_no == TEST_PLANT_NO, Spec.item == "溫度C")
+    ).scalar_one()
+    assert float(spec.oos_high) == pytest.approx(35.0)
+
+
+def test_spec_update_rejects_double_sided_for_is_dual_bound_false(client, dual_bound_items):
+    """is_dual_bound=False → 填雙邊門檻要被擋，且錯誤原因要傳到前端（不可吞掉）。"""
+    r = client.post("/spec/update", json={
+        "plantno": TEST_PLANT_NO, "item": "溫度S",
+        "LAW": "20-35", "OOS": "20-35", "OOC": "22-33", "alert": "23-32", "source_id": 1,
+    })
+    assert r.status_code == 422, r.text
+    detail = r.json()["detail"]
+    assert isinstance(detail, list)
+    assert any("必須為單邊規格" in d["msg"] for d in detail)
+
+
+def test_spec_update_falls_back_to_name_guess_when_null(client, dual_bound_items):
+    """is_dual_bound=NULL → 退回名稱推測（溫度猜成單邊），維持現況不變。"""
+    r = client.post("/spec/update", json={
+        "plantno": TEST_PLANT_NO, "item": "溫度N",
+        "LAW": "20-35", "OOS": "20-35", "OOC": "22-33", "alert": "23-32", "source_id": 1,
+    })
+    assert r.status_code == 422, r.text
+    assert any("必須為單邊規格" in d["msg"] for d in r.json()["detail"])
+
+
+def test_spec_apply_accepts_double_sided_for_is_dual_bound_true(client, b_db, dual_bound_items):
+    """送簽路徑（/spec/apply）同樣以 item.is_dual_bound 為準。"""
+    r = client.post("/spec/apply", json={
+        "plantno": TEST_PLANT_NO, "item": "溫度D", "ftype": "M",
+        "LAW": "20-35", "OOS": "20-35", "OOC": "22-33", "alert": "23-32", "source_id": 1,
+    })
+    assert r.status_code == 200, r.text
+
+    sa = b_db.get(SpecApply, r.json()["formid"])
+    assert float(sa.payload["oos_low"]) == pytest.approx(20.0)
+    assert float(sa.payload["oos_high"]) == pytest.approx(35.0)
+
+
+def test_spec_update_ph_still_requires_double_sided(client):
+    """回歸保護：種子項目 pH1（is_dual_bound 未設定）仍走名稱推測，單邊值要被擋。"""
+    r = client.post("/spec/update", json={
+        "plantno": TEST_PLANT_NO, "item": "pH1",
+        "LAW": "6", "OOS": "6", "OOC": "7", "alert": "7.2", "source_id": 1,
+    })
+    assert r.status_code == 422, r.text
+    assert any("必須為雙邊規格" in d["msg"] for d in r.json()["detail"])
+
+
 # ── 規格清單形狀（B numeric → A 字串轉接）──────────────────────────────────
 
 def test_spec_list_shape(client):

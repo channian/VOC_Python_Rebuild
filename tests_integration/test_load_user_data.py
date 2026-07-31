@@ -22,6 +22,7 @@ import csv
 import os
 import subprocess
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -31,15 +32,16 @@ from database_b import BSessionLocal
 from models_b import Item, Plant, Spec, TagMapping
 from scripts.load_user_data import (
     COL_ALERT, COL_DISPLAY, COL_ITEM, COL_LAW, COL_OOC, COL_OOS, COL_PLANT_NO,
-    COL_RECV, COL_SEQ, COL_SOURCE, COL_TAG, COL_TYPE,
-    apply_load, is_ph_item, read_main_and_config, validate_main_rows, validate_plant_config,
+    COL_RECV, COL_SEQ, COL_SOURCE, COL_SPEC_KIND, COL_TAG, COL_TYPE,
+    apply_load, is_ph_item, parse_spec_kind, read_main_and_config, validate_main_rows,
+    validate_plant_config,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / "scripts" / "load_user_data.py"
 
 MAIN_HEADERS = [
-    COL_PLANT_NO, COL_ITEM, COL_DISPLAY, "單位", COL_TYPE, COL_LAW,
+    COL_PLANT_NO, COL_ITEM, COL_DISPLAY, "單位", COL_TYPE, COL_SPEC_KIND, COL_LAW,
     COL_OOS, COL_OOC, COL_ALERT, COL_RECV, COL_SOURCE, COL_TAG, COL_SEQ,
 ]
 
@@ -63,8 +65,10 @@ def _run_cli(file_path, extra_args=None):
 
 
 def _row(plant_no, item, display="", unit="", type_="水質", law="", oos="", ooc="", alert="",
-         recv="", source="SCADA", tag="", seq=""):
-    return [plant_no, item, display, unit, type_, law, oos, ooc, alert, recv, source, tag, seq]
+         recv="", source="SCADA", tag="", seq="", spec_kind=""):
+    """組一列主表資料。spec_kind＝「規格型態」欄（選填，單邊/雙邊；留空＝未指定→名稱推測）。"""
+    return [plant_no, item, display, unit, type_, spec_kind, law, oos, ooc, alert, recv,
+            source, tag, seq]
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -341,6 +345,167 @@ def test_threshold_ladder_no_warning_when_all_blank_or_building():
     assert warnings == []
 
 
+# ── 規格型態欄（2026-07-31）：雙邊判定改資料驅動，寫入 item.is_dual_bound ──────
+
+def test_parse_spec_kind_pure_function():
+    assert parse_spec_kind(None) == (None, None)
+    assert parse_spec_kind("") == (None, None)
+    assert parse_spec_kind("單邊") == (False, None)
+    assert parse_spec_kind(" 雙邊 ") == (True, None)          # 前後空白要 strip
+    value, err = parse_spec_kind("兩邊")
+    assert value is None and "單邊/雙邊" in err and "兩邊" in err
+
+
+def test_spec_kind_invalid_value_is_row_error():
+    rows = [_row("ZK1", "ITEM_SK1", unit="mg/L", oos="100", spec_kind="雙向")]
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert parsed == []
+    assert len(errors) == 1
+    assert errors[0].field == COL_SPEC_KIND
+    assert "單邊/雙邊" in errors[0].message
+
+
+def test_spec_kind_dual_allows_temperature_double_sided():
+    """★ 核心：名稱不像 pH 的「溫度」填雙邊門檻，只要規格型態=雙邊就要通過。"""
+    rows = [_row("ZK2", "溫度", unit="°C", law="20-35", oos="20-35", ooc="22-33",
+                 alert="23-32", recv="22-33", spec_kind="雙邊")]
+    parsed, errors, warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert errors == []
+    assert warnings == []                    # 明確填了就不該再警告
+    assert len(parsed) == 1
+    assert parsed[0].is_dual_bound is True
+    assert parsed[0].oos == (Decimal("20"), Decimal("35"), "valid")
+
+
+def test_spec_kind_blank_still_rejects_temperature_double_sided():
+    """留空 → 退回名稱推測（猜成單邊），溫度填 20-35 仍被擋——證明 fallback 沒被改壞。"""
+    rows = [_row("ZK3", "溫度", unit="°C", oos="20-35", spec_kind="")]
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert parsed == []
+    assert any(e.field == COL_OOS and "必須為單邊規格" in e.message for e in errors)
+
+
+def test_spec_kind_single_rejects_double_sided_even_for_ph_name():
+    """明確填單邊時，即使名稱是 pH1 也要擋下雙邊門檻（資料勝過名稱推測）。"""
+    rows = [_row("ZK4", "pH1", display="pH", oos="6-9", spec_kind="單邊")]
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert parsed == []
+    assert any(e.field == COL_OOS and "必須為單邊規格" in e.message for e in errors)
+
+
+def test_spec_kind_blank_but_guessed_dual_emits_warning():
+    """留空且名稱像 pH（推測為雙邊）→ 出警告提醒明確填寫，但不擋載入。"""
+    rows = [_row("ZK5", "pH2", oos="6-9", spec_kind="")]
+    parsed, errors, warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert errors == []
+    assert len(parsed) == 1
+    assert parsed[0].is_dual_bound is None          # 推測值不寫進 DB，保留 NULL＝未指定
+    assert len(warnings) == 1
+    assert warnings[0].field == COL_SPEC_KIND
+    assert "推測" in warnings[0].message and "雙邊" in warnings[0].message
+
+
+def test_spec_kind_blank_single_guess_emits_no_warning():
+    """留空但推測為單邊（絕大多數項目）不警告，避免整份檔案都是噪音。"""
+    rows = [_row("ZK6", "CODX", unit="mg/L", oos="100", spec_kind="")]
+    _parsed, errors, warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert errors == []
+    assert warnings == []
+
+
+def test_spec_kind_conflict_between_rows_is_error():
+    """同一 item 在不同列的規格型態不一致 → error（item 主檔只有一個 is_dual_bound）。"""
+    rows = [
+        _row("ZK7", "ITEM_SK7", unit="mg/L", oos="100", spec_kind="單邊"),
+        _row("ZK8", "ITEM_SK7", unit="mg/L", oos="80", spec_kind="雙邊"),
+    ]
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    conflict = [e for e in errors if e.field == COL_SPEC_KIND]
+    assert len(conflict) == 1
+    assert conflict[0].row == 3
+    assert "第 2 列不一致" in conflict[0].message
+    assert len(parsed) == 1          # 第一列仍然通過
+
+
+def test_spec_kind_written_to_item_is_dual_bound(b_db):
+    """規格型態要真的寫進 item.is_dual_bound；留空時新項目寫入「推測值」（見下一個測試）。"""
+    rows = [
+        _row("ZK9", "溫度", unit="°C", oos="20-35", ooc="22-33", alert="23-32", spec_kind="雙邊"),
+        _row("ZK9", "CODY", unit="mg/L", oos="100", spec_kind="單邊"),
+        _row("ZK9", "ITEM_SKN", unit="mg/L", oos="50", spec_kind=""),
+    ]
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    assert errors == []
+
+    apply_load(b_db, parsed, {}, "kepware_sim")
+    b_db.commit()
+
+    assert b_db.execute(select(Item).where(Item.item == "溫度")).scalar_one().is_dual_bound is True
+    assert b_db.execute(select(Item).where(Item.item == "CODY")).scalar_one().is_dual_bound is False
+    # 留空且推測為單邊 → 新項目一律把推測值存下來（不留 NULL），理由見下一個測試。
+    assert b_db.execute(select(Item).where(Item.item == "ITEM_SKN")).scalar_one().is_dual_bound is False
+
+
+def test_blank_spec_kind_persists_guess_so_spec_page_agrees(b_db):
+    """
+    回歸鎖（2026-07-31 主控驗收時實測發現）：規格型態留空時，載入器**必須**把自己用來
+    驗證該列的推測值寫進 DB，否則「灌得進去卻改不動」會換個項目名重現。
+
+    重現路徑（修正前）：pH3 留空 → 載入器用 `is_ph_item()`（`^ph\\d*$`）推測為雙邊 →
+    '6-9' 驗證通過、spec 寫入成功 → 但 item.is_dual_bound 留 NULL →
+    日後在規格維護頁編輯這筆，B 棧查到 NULL 就退回 `guess_dual_bound_by_name()`，
+    而那個 fallback 是 A 棧凍結行為、只認得 'pH'/'pH1' → pH3 被判單邊 → '6-9' 被打回。
+
+    修正後：載入器把實際採用的判定存下來，兩處不會再各自推測出不同答案。
+    """
+    from schemas.spec_schema import guess_dual_bound_by_name
+
+    rows = [_row("ZKA", "pH3", unit="pH", oos="6-9", ooc="6.5-8.5", alert="6.5-8.5", spec_kind="")]
+    parsed, errors, warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    assert errors == []
+    assert len(warnings) == 1          # 仍然提醒使用者明確填寫
+
+    apply_load(b_db, parsed, {}, "kepware_sim")
+    b_db.commit()
+
+    stored = b_db.execute(select(Item).where(Item.item == "pH3")).scalar_one().is_dual_bound
+    assert stored is True              # ← 修正前是 None，正是漏洞所在
+    # 關鍵：規格頁的名稱 fallback 對 pH3 是猜錯的（False），所以資料一定要存對，
+    # 否則規格頁就會拒絕這筆自己剛灌進去的雙邊資料。
+    assert guess_dual_bound_by_name("pH3") is False
+
+
+def test_blank_spec_kind_does_not_overwrite_existing_item(b_db):
+    """既有項目已設定規格型態時，主表留空**不可**覆寫（留空＝這次沒指定，不是要清掉）。"""
+    # 先以「雙邊」建立項目（雙邊項目的門檻必須寫成 低-高，否則會被格式驗證擋下）
+    parsed, errors, _w = validate_main_rows([dict(zip(
+        MAIN_HEADERS, _row("ZKB", "ITEM_KEEP", unit="mg/L", oos="10-20", spec_kind="雙邊")))])
+    assert errors == []
+    apply_load(b_db, parsed, {}, "kepware_sim")
+    b_db.commit()
+    assert b_db.execute(select(Item).where(Item.item == "ITEM_KEEP")).scalar_one().is_dual_bound is True
+
+    # 第二次載入同一項目但規格型態留空 → 沿用 DB 既有值（不退回名稱推測、不覆寫）。
+    # existing_dual 比照 main() 的作法從 DB 撈：這正是「載入器可重複執行」的關鍵，
+    # 少了它，ITEM_KEEP 會被名稱推測判成單邊，'10-20' 當場被擋成格式錯誤。
+    existing_dual = {n: d for n, d in b_db.execute(select(Item.item, Item.is_dual_bound)).all()}
+    parsed2, errors2, warns2 = validate_main_rows([dict(zip(
+        MAIN_HEADERS, _row("ZKB", "ITEM_KEEP", unit="mg/L", oos="10-20", spec_kind="")))],
+        existing_dual)
+    assert errors2 == []
+    assert warns2 == []          # 沿用 DB 既有值不算「靠猜」，不該每次重跑都被念一次
+    apply_load(b_db, parsed2, {}, "kepware_sim")
+    b_db.commit()
+    assert b_db.execute(select(Item).where(Item.item == "ITEM_KEEP")).scalar_one().is_dual_bound is True
+
+
 def test_seqno_optional_int_validation():
     rows = [_row("K7", "ITEMD", oos="1", seq="abc")]
     parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
@@ -517,6 +682,35 @@ def test_cli_dry_run_prints_threshold_ladder_warning(b_db, tmp_path):
     assert "⚠ 警告 第 2 列 [CLI5／CLIITEM5]" in result.stdout
     assert "警告 1 筆" in result.stdout
     assert "DRY-RUN" in result.stdout
+
+
+def test_cli_spec_kind_errors_and_warnings(b_db, tmp_path):
+    """CLI 端整合：規格型態非法值 → 錯誤段；留空且推測為雙邊 → 警告段；雙邊溫度 → 通過。"""
+    path = tmp_path / "主表.csv"
+    _write_csv(path, [
+        _row("CLI9", "溫度", unit="°C", oos="20-35", ooc="22-33", alert="23-32", spec_kind="雙邊"),
+        _row("CLI9", "CLIPH2", oos="6-9", spec_kind=""),          # 留空 + 名稱不像 pH → 會被擋
+        _row("CLI9", "pH2", oos="6-9", spec_kind=""),              # 留空 + 推測雙邊 → 警告
+        _row("CLI9", "CLIBAD", oos="10", spec_kind="兩邊"),        # 非法值 → 錯誤
+    ])
+
+    result = _run_cli(path, ["--dry-run"])
+    assert result.returncode == 2                       # 有錯誤列 → 離開碼 2
+    assert "第 5 列 [規格型態]" in result.stdout
+    assert "單邊/雙邊" in result.stdout
+    assert "[警告] 共 1 筆" in result.stdout
+    assert "⚠ 警告 第 4 列 [CLI9／pH2]" in result.stdout
+    assert "成功 2 列、失敗 2 列" in result.stdout       # 溫度與 pH2 兩列通過
+
+
+def test_cli_template_csv_dry_run_passes():
+    """交付給環工部的範本檔本身必須驗得過（含 K21 溫度那列雙邊規格）。"""
+    template = REPO_ROOT / "scripts" / "templates" / "基礎資料主表_範本.csv"
+    result = _run_cli(template, ["--dry-run"])
+
+    assert "[驗證錯誤]" not in result.stdout
+    assert "失敗 0 列" in result.stdout
+    assert result.returncode == 0
 
 
 def test_cli_missing_file_reports_error():

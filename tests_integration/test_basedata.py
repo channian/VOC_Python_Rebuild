@@ -185,6 +185,54 @@ def test_update_item(b_db):
     assert row["is_active"] is False
 
 
+# ── 規格型態 is_dual_bound（2026-07-31）：新廠上線的常態維護路徑，一定要能改 ──────
+
+def test_item_is_dual_bound_defaults_to_null(b_db):
+    """不帶 is_dual_bound 建項目 → NULL（未指定，規格頁退回名稱推測）。"""
+    client = _make_client(b_db)
+    res = client.post("/basedata/item/create", json={"item": "DUALDEF", "is_active": True})
+    assert res.status_code == 200, res.text
+    row = next(r for r in client.get("/basedata/items").json()["rows"] if r["item"] == "DUALDEF")
+    assert row["is_dual_bound"] is None
+
+
+def test_item_create_with_is_dual_bound_true(b_db):
+    """★ 新增項目時可直接設定雙邊（例如新廠的 K21 溫度）。"""
+    client = _make_client(b_db)
+    res = client.post("/basedata/item/create", json={
+        "item": "溫度BD", "unit": "°C", "is_active": True, "is_dual_bound": True,
+    })
+    assert res.status_code == 200, res.text
+    row = next(r for r in client.get("/basedata/items").json()["rows"] if r["item"] == "溫度BD")
+    assert row["is_dual_bound"] is True
+
+
+def test_item_update_can_switch_is_dual_bound(b_db):
+    """既有項目可改規格型態：未指定 → 雙邊 → 單邊 → 回未指定（整份覆寫語意）。"""
+    client = _make_client(b_db)
+    client.post("/basedata/item/create", json={"item": "DUALUPD", "is_active": True})
+
+    def _set(value):
+        res = client.post("/basedata/item/update", json={
+            "old_item": "DUALUPD", "item": "DUALUPD", "is_active": True, "is_dual_bound": value,
+        })
+        assert res.status_code == 200, res.text
+        rows = client.get("/basedata/items").json()["rows"]
+        return next(r for r in rows if r["item"] == "DUALUPD")["is_dual_bound"]
+
+    assert _set(True) is True
+    assert _set(False) is False
+    assert _set(None) is None
+
+
+def test_basedata_page_renders_spec_kind_column(b_db):
+    """項目分頁要看得到「規格型態」欄與表單控制項（新廠維護走這條路）。"""
+    client = _make_client(b_db)
+    html = client.get("/ui/basedata").text
+    assert "規格型態" in html
+    assert 'id="bdv2-i-dual"' in html
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Tag 對應 TAG MAPPING
 # ══════════════════════════════════════════════════════════════════════════

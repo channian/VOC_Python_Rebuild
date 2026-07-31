@@ -5,7 +5,9 @@
 
    對應 routers_b/basedata_router_b.py::render_basedata_modal_b（GET /ui/basedata）context：
      plants: [{plant_id, plant_no, kind, is_show, sort}]
-     items:  [{item_id, item, display_name, unit, is_active}]
+     items:  [{item_id, item, display_name, unit, is_active, is_dual_bound}]
+             is_dual_bound：規格型態，true=雙邊（pH/溫度，門檻填「低-高」）／false=單邊／
+             null=未指定（規格維護頁會退回舊的「名稱像不像 pH」推測，見 models_b.Item.is_dual_bound）
      tags:   [{id, source_table, tagname, plant_no, item, target_field, enabled, remark}]
      error:  str，查詢失敗訊息
      plant_kind_choices:   ['normal','virtual_group','all']
@@ -89,19 +91,27 @@
     {# ══════════════════════════ 分頁 2：項目 ITEM ══════════════════════════ #}
     <div class="bdv2-panel" data-panel="item" hidden>
 
-      <div class="bdv2-thead" style="grid-template-columns:70px 90px 110px 90px 70px 1fr;">
-        <span>代碼</span><span>項目</span><span>顯示別名</span><span>單位</span><span>啟用</span><span></span>
+      <div class="bdv2-hint" style="margin-bottom:10px">
+        「規格型態」決定規格維護頁怎麼驗門檻：<b>雙邊</b>要填「低-高」（pH 的 6-9、K21 溫度的 20-35），
+        <b>單邊</b>只填一個數字（COD 的 100）。留「未指定」時系統會退回舊的「名稱像不像 pH」推測，
+        溫度這類雙邊項目會被誤判成單邊而改不動門檻，請務必明確設定。
+      </div>
+
+      <div class="bdv2-thead" style="grid-template-columns:70px 90px 110px 90px 80px 70px 1fr;">
+        <span>代碼</span><span>項目</span><span>顯示別名</span><span>單位</span><span>規格型態</span><span>啟用</span><span></span>
       </div>
       <div id="bdv2-item-tbody">
         {% for r in items %}
-        <div class="bdv2-row" style="grid-template-columns:70px 90px 110px 90px 70px 1fr;"
+        <div class="bdv2-row" style="grid-template-columns:70px 90px 110px 90px 80px 70px 1fr;"
              data-item_id="{{ r.item_id }}" data-item="{{ r.item }}"
              data-display_name="{{ r.display_name or '' }}" data-unit="{{ r.unit or '' }}"
+             data-is_dual_bound="{{ '' if r.is_dual_bound is none else ('1' if r.is_dual_bound else '0') }}"
              data-is_active="{{ '1' if r.is_active else '0' }}">
           <span class="bdv2-mono">{{ r.item_id }}</span>
           <span class="bdv2-mono bdv2-strong">{{ r.item }}</span>
           <span class="bdv2-fs12 bdv2-fg2">{{ r.display_name or '—' }}</span>
           <span class="bdv2-fs12 bdv2-fg2">{{ r.unit or '—' }}</span>
+          <span class="bdv2-fs12 bdv2-fg2">{{ '未指定' if r.is_dual_bound is none else ('雙邊' if r.is_dual_bound else '單邊') }}</span>
           <span class="bdv2-flag {{ 'bdv2-flag-on' if r.is_active else 'bdv2-flag-off' }}">{{ '✓' if r.is_active else '—' }}</span>
           <span class="bdv2-rowactions">
             <button type="button" class="bdv2-edit" onclick="bdv2EditItem(this.closest('.bdv2-row'))">編輯</button>
@@ -115,10 +125,15 @@
 
       <div class="bdv2-add">
         <div class="bdv2-add-title" id="bdv2-item-form-title">新增項目</div>
-        <div class="bdv2-add-grid" style="grid-template-columns:100px 110px 90px 70px auto auto;">
+        <div class="bdv2-add-grid" style="grid-template-columns:100px 110px 90px 110px 70px auto auto;">
           <input id="bdv2-i-item" class="bdv2-in bdv2-mono" placeholder="項目原名 例pH1">
           <input id="bdv2-i-display" class="bdv2-in" placeholder="顯示別名(可空)">
           <input id="bdv2-i-unit" class="bdv2-in" placeholder="單位">
+          <select id="bdv2-i-dual" class="bdv2-in" title="規格型態：雙邊門檻填「低-高」(如 6-9)，單邊只填一個數字">
+            <option value="">規格型態:未指定</option>
+            <option value="0">單邊 (如 100)</option>
+            <option value="1">雙邊 (如 6-9)</option>
+          </select>
           <select id="bdv2-i-active" class="bdv2-in">
             <option value="1">啟用</option><option value="0">停用</option>
           </select>
@@ -333,6 +348,7 @@
     document.getElementById('bdv2-i-item').value = row.dataset.item;
     document.getElementById('bdv2-i-display').value = row.dataset.display_name;
     document.getElementById('bdv2-i-unit').value = row.dataset.unit;
+    document.getElementById('bdv2-i-dual').value = row.dataset.is_dual_bound;  // ''=未指定
     document.getElementById('bdv2-i-active').value = row.dataset.is_active;
     document.getElementById('bdv2-item-form-title').textContent = '編輯項目 (' + itemOldKey + ')';
     document.getElementById('bdv2-i-submit').textContent = '儲存修改';
@@ -343,6 +359,7 @@
     document.getElementById('bdv2-i-item').value = '';
     document.getElementById('bdv2-i-display').value = '';
     document.getElementById('bdv2-i-unit').value = '';
+    document.getElementById('bdv2-i-dual').value = '';
     document.getElementById('bdv2-item-form-title').textContent = '新增項目';
     document.getElementById('bdv2-i-submit').textContent = '新增';
     document.getElementById('bdv2-i-cancel').style.display = 'none';
@@ -352,10 +369,13 @@
     errBox.textContent = '';
     const item = document.getElementById('bdv2-i-item').value.trim();
     if (!item) { errBox.textContent = '請輸入項目原名'; return; }
+    // 規格型態：'' → null（未指定，後端退回名稱推測）／'0' → false 單邊／'1' → true 雙邊
+    const dualRaw = document.getElementById('bdv2-i-dual').value;
     const payload = {
       item: item,
       display_name: document.getElementById('bdv2-i-display').value.trim() || null,
       unit: document.getElementById('bdv2-i-unit').value.trim() || null,
+      is_dual_bound: dualRaw === '' ? null : (dualRaw === '1'),
       is_active: document.getElementById('bdv2-i-active').value === '1',
     };
     let url = '/basedata/item/create';

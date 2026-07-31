@@ -7,7 +7,7 @@ scripts/load_user_data.py — 基礎資料一鍵載入器（環工部主表 → 
 的狀況。本腳本讀那張主表（+ 選填的廠區設定表），推導並 upsert 出 plant/item/spec/tag_mapping。
 
 主表欄位（表頭固定用中文，與環工部約定的格式，不可自行更改欄名）：
-    廠區代號*／項目*／顯示名／單位／類型*／法規值／OOS／OOC／Alert／允收值／
+    廠區代號*／項目*／顯示名／單位／類型*／規格型態／法規值／OOS／OOC／Alert／允收值／
     資料來源*／Tag名稱／排序
     （*=必填；一列＝一個廠區的一個監測項目）
 
@@ -21,7 +21,8 @@ scripts/load_user_data.py — 基礎資料一鍵載入器（環工部主表 → 
      已存在的沿用既有 id；新的從現有最大值 +1 開始遞增（plant_id 是 smallint，上限 32767，
      超過報錯中止）。
   2. 建 spec：門檻欄一律經 schemas.spec_schema.parse_spec_bound() 驗證後拆成 low/high/status
-     （可解析→valid；空→na；'建置中'→building；pH 類項目必須雙邊，由該函式負責擋）。
+     （可解析→valid；空→na；'建置中'→building；雙邊項目必須填「低-高」，由該函式負責擋，
+     單/雙邊依「規格型態」欄或名稱推測決定，見下方 ★）。
   3. 建 tag_mapping：資料來源=SCADA 且 Tag名稱有值時才產生一列（target_field 固定 'value'，
      enabled 固定 True，source_table 由 --source-table 指定，預設 'kepware_sim'）。
   4. 冪等：以業務鍵（plant_no / item / (plant_no,item) / (source_table,tagname)）查找後
@@ -30,16 +31,28 @@ scripts/load_user_data.py — 基礎資料一鍵載入器（環工部主表 → 
   6. 逐列錯誤報告：任一列有問題時印出「第 N 列 [欄位]：原因」，不中斷整批——全部檢查完
      一次報告，最後彙總「成功 X 列、失敗 Y 列」。同一列若有多個欄位出錯，全部列出，
      該列所有異動（含連動的 tag_mapping）都不會寫入。
-  6-1. 逐列**警告**（「⚠ 警告」前綴，獨立一段輸出，--dry-run 也照印）：門檻階梯不完整
-     （填了 OOC 卻沒填 OOS、填了 Alert 卻沒填 OOC）時提醒該門檻不會生效。警告**不是錯誤**、
-     不影響載入也不影響離開碼——「建置中」項目整排留空是合法的，只有「填一半」才可疑。
-     詳見 check_threshold_ladder()。
+  6-1. 逐列**警告**（「⚠ 警告」前綴，獨立一段輸出，--dry-run 也照印）：
+     (a) 門檻階梯不完整（填了 OOC 卻沒填 OOS、填了 Alert 卻沒填 OOC）時提醒該門檻不會生效，
+         詳見 check_threshold_ladder()；
+     (b) 「規格型態」留空、系統依名稱推測為雙邊時提醒明確填寫，詳見 check_spec_kind_guess()。
+     警告**不是錯誤**、不影響載入也不影響離開碼——「建置中」項目整排留空是合法的，
+     只有「填一半」才可疑。
   7. 支援 .csv（UTF-8，含 BOM 也讀得動）與 .xlsx（openpyxl）。
 
 用法：
   python scripts/load_user_data.py --file 基礎資料主表.xlsx
   python scripts/load_user_data.py --file 基礎資料主表.csv --dry-run
   python scripts/load_user_data.py --file 基礎資料主表.csv --source-table kepware_sim
+
+★ 「規格型態」欄（單邊/雙邊，**選填**）驗證後寫入 item.is_dual_bound（2026-07-31 新增的欄位）。
+  背景：門檻是單邊（COD 填 '100'）還是雙邊（pH 填 '6-9'）原本靠**項目名稱字串比對**判斷，
+  而且各處實作互不一致（本檔的 `^ph\\d*$` 正則 vs schemas/spec_schema.py 只認 'pH'/'pH1'），
+  造成 pH2 灌得進去卻在規格維護頁改不動；更嚴重的是**溫度（如 K21）也是雙邊規格**
+  （見 services/dashboard_service.py 燈號規則），名稱裡沒有 pH 字樣，兩處都判成單邊，
+  環工部填 '20-35' 一定被打回「必須為單邊規格」，等於溫度項目根本建不起來。
+  現在改成資料驅動：使用者在「規格型態」明確填單邊/雙邊 → 寫入 item.is_dual_bound，
+  B 棧規格維護頁（routers_b/spec_router_b.py）改讀這個欄位驗證，不再猜名稱。
+  留空時**沿用**舊的 `is_ph_item()` 名稱推測（既有主表不會失效），但推測為雙邊時會發警告。
 
 ★ 「類型」欄（水質/空汙/雨水溝）驗證後寫入 item.category（2026-07-31 新增的欄位）。
   背景：現有程式碼判斷項目類別是用名稱字串比對（services/dispatch_service.py 的
@@ -75,6 +88,7 @@ COL_ITEM = "項目"
 COL_DISPLAY = "顯示名"
 COL_UNIT = "單位"
 COL_TYPE = "類型"
+COL_SPEC_KIND = "規格型態"
 COL_LAW = "法規值"
 COL_OOS = "OOS"
 COL_OOC = "OOC"
@@ -85,7 +99,7 @@ COL_TAG = "Tag名稱"
 COL_SEQ = "排序"
 
 MAIN_COLUMNS = [
-    COL_PLANT_NO, COL_ITEM, COL_DISPLAY, COL_UNIT, COL_TYPE, COL_LAW,
+    COL_PLANT_NO, COL_ITEM, COL_DISPLAY, COL_UNIT, COL_TYPE, COL_SPEC_KIND, COL_LAW,
     COL_OOS, COL_OOC, COL_ALERT, COL_RECV, COL_SOURCE, COL_TAG, COL_SEQ,
 ]
 REQUIRED_MAIN_COLUMNS = [COL_PLANT_NO, COL_ITEM, COL_TYPE, COL_SOURCE]
@@ -96,6 +110,9 @@ PLANT_CONF_SORT = "顯示排序"
 PLANT_CONF_SHOW = "是否顯示"
 
 ITEM_TYPES = ("水質", "空汙", "雨水溝")
+
+# 規格型態（選填）：中文字面 → item.is_dual_bound。留空＝未指定（退回 is_ph_item() 名稱推測）。
+SPEC_KIND_MAP = {"單邊": False, "雙邊": True}
 SOURCE_MAP = {"SCADA": 1, "CWMS": 2, "QA": 3}
 SCADA_SOURCE_ID = SOURCE_MAP["SCADA"]
 
@@ -152,6 +169,10 @@ class ParsedRow:
     tagname: Optional[str]
     seqno: Optional[int]
     category: Optional[str]   # 類型（水質/空汙/雨水溝）→ item.category
+    # 規格型態（單邊=False／雙邊=True）→ item.is_dual_bound。
+    # None＝使用者留空（未指定），**不會**寫進 DB（保留 NULL 的「未指定」語意），
+    # 該列的門檻驗證則退回 is_ph_item() 名稱推測並發警告。
+    is_dual_bound: Optional[bool]
 
 
 class _IdAllocator:
@@ -186,21 +207,64 @@ def _s(v: Any) -> Optional[str]:
 
 
 def is_ph_item(item: str) -> bool:
-    """項目名稱是否為 pH 類（雙邊規格）：'pH'/'pH1'/'pH2'... 皆算，不分大小寫。"""
+    """項目名稱是否為 pH 類（雙邊規格）：'pH'/'pH1'/'pH2'... 皆算，不分大小寫。
+
+    ⚠️ 這是「規格型態」欄留空時的**過渡性推測**，不是正解——雙邊規格不只 pH，溫度（如 K21）
+    也是雙邊，這個正則永遠猜不到。正解是使用者在主表「規格型態」欄明確填「單邊/雙邊」
+    （→ item.is_dual_bound）。推測為雙邊時本載入器會發警告提醒補填，見 check_spec_kind_guess()。
+    """
     return bool(_PH_RE.match((item or "").strip()))
 
 
-def _bound_triplet(raw: Any, field_name: str, is_ph: bool, item_name: str) -> Tuple[Optional[Decimal], Optional[Decimal], str]:
+def parse_spec_kind(raw: Any) -> Tuple[Optional[bool], Optional[str]]:
+    """「規格型態」欄字串 → (is_dual_bound, 錯誤訊息)。
+
+    留空 → (None, None)：合法，代表未指定，由呼叫端退回名稱推測。
+    「單邊」→ (False, None)；「雙邊」→ (True, None)（前後空白已由 _s() strip）。
+    其他值 → (None, 錯誤訊息)，該列以 error 擋下（合法值會列在訊息裡）。
+    """
+    s = _s(raw)
+    if s is None:
+        return None, None
+    if s not in SPEC_KIND_MAP:
+        return None, (f"必須為「{'/'.join(SPEC_KIND_MAP)}」其一（或留空由系統依項目名稱推測），"
+                      f"實際為「{s}」")
+    return SPEC_KIND_MAP[s], None
+
+
+def check_spec_kind_guess(row_no: int, plant_no: Optional[str], item: Optional[str],
+                           explicit: Optional[bool], guessed: bool,
+                           from_db: bool = False) -> List[RowWarning]:
+    """「規格型態」留空且**推測為雙邊**時發警告 → 提醒明確填寫（不是錯誤，不擋列）。
+
+    為什麼只在「推測為雙邊」時警告：單邊是絕大多數（幾乎所有水質/空汙項目都是單邊），
+    每一列都警告會變成噪音、反而沒人看；而推測為雙邊的那幾列（名稱像 pH）正是最需要
+    使用者確認的——因為名稱推測**只認得 pH**，溫度那種雙邊項目它根本猜不到，
+    這種「靠猜」的設定一旦猜錯，載入時不會報錯，等到有人要在規格維護頁改門檻才會炸。
+
+    `from_db=True`（DB 既有項目已有規格型態，本次留空沿用）**不算靠猜**，不警告——
+    那個值是使用者先前確認過並寫進資料的，重跑載入器不該每次都被念一次。
+    """
+    if explicit is not None or from_db or not guessed:
+        return []
+    return [RowWarning(
+        row_no, plant_no, item, COL_SPEC_KIND,
+        f"{COL_SPEC_KIND} 留空，系統依項目名稱推測為「雙邊」規格（門檻須填「低-高」）。"
+        f"名稱推測只認得 pH，溫度等其他雙邊項目猜不到，請於 {COL_SPEC_KIND} 欄明確填寫"
+        f"「{'/'.join(SPEC_KIND_MAP)}」，不要依賴系統猜名稱。")]
+
+
+def _bound_triplet(raw: Any, field_name: str, is_dual: bool, item_name: str) -> Tuple[Optional[Decimal], Optional[Decimal], str]:
     """單一門檻欄位字串 → (low, high, status)。
 
-    格式驗證一律重用 schemas.spec_schema.parse_spec_bound()（單邊/雙邊、pH 雙邊、最多兩位
+    格式驗證一律重用 schemas.spec_schema.parse_spec_bound()（單邊/雙邊、最多兩位
     小數等規則都在裡面，不在這裡重寫）；'建置中' 是 parse_spec_bound 無法辨識的特例
     （它會判成格式錯誤丟例外），在這裡另外攔截、轉成 status='building'（比照
     migration/normalize/spec.py 的 _bounds_triplet 手法）。
     """
     s = _s(raw)
     try:
-        vals = parse_spec_bound(s, field_name, is_ph, item_name)
+        vals = parse_spec_bound(s, field_name, is_dual, item_name)
     except ValueError:
         if s == _BUILDING_TEXT:
             return None, None, "building"
@@ -303,19 +367,30 @@ def read_main_and_config(file_path: str) -> Tuple[List[Dict[str, Any]], List[Dic
 # 驗證 + 解析（純邏輯，不連 DB）
 # ══════════════════════════════════════════════════════════════════════════
 
-def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow], List[RowError], List[RowWarning]]:
+def validate_main_rows(
+    main_rows: List[Dict[str, Any]],
+    existing_dual: Optional[Dict[str, bool]] = None,
+) -> Tuple[List[ParsedRow], List[RowError], List[RowWarning]]:
     """逐列驗證主表。任一列有錯就整列排除（其他列不受影響，全部驗完才回傳）。
 
     回傳 (通過的列, 錯誤清單, 警告清單)。警告只針對**通過驗證的列**產生
     （沒通過的列本來就不會寫入，再報警告只是噪音；使用者修好錯誤後重跑自然會看到）。
 
     表頭列＝Excel 第 1 列，故第一筆資料列的 row 編號＝2，與使用者在 Excel 看到的列號一致。
+
+    existing_dual（2026-07-31 主控驗收時補上）：`{item 名稱: is_dual_bound}`，DB 既有項目的
+    規格型態。**「規格型態」留空時的判定順序是：主表填的值 → DB 既有值 → 名稱推測。**
+    少了中間這層，載入器就**不能重複執行**——例如溫度已經以「雙邊」建檔，第二次載入若把
+    規格型態留空，會退回名稱推測判成單邊，'20-35' 當場被擋成格式錯誤，而載入器對外承諾
+    「可重複執行，不會產生重複資料」。DB 既有值本來就是使用者先前確認過的設定，
+    留空的語意是「這次沒指定」，理應沿用它，而不是倒退回猜名稱。
     """
+    existing_dual = existing_dual or {}
     parsed: List[ParsedRow] = []
     errors: List[RowError] = []
     warnings: List[RowWarning] = []
 
-    # 同一 item 在不同列的 顯示名/單位 必須一致（item 是全域主檔，非逐廠區各自一份）；
+    # 同一 item 在不同列的 顯示名/單位/規格型態 必須一致（item 是全域主檔，非逐廠區各自一份）；
     # 以「該 item 第一次出現的非空值」為基準，之後出現不同的非空值即視為衝突。
     item_seen: Dict[str, Dict[str, Any]] = {}
 
@@ -348,6 +423,11 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
         else:
             source_id = SOURCE_MAP[source_text.upper()]
 
+        # 規格型態（選填）：填了就據此判單/雙邊並寫入 item.is_dual_bound；留空退回名稱推測。
+        spec_kind, spec_kind_err = parse_spec_kind(raw_row.get(COL_SPEC_KIND))
+        if spec_kind_err:
+            row_errors.append(RowError(row_no, COL_SPEC_KIND, spec_kind_err))
+
         display_name = _s(raw_row.get(COL_DISPLAY))
         unit = _s(raw_row.get(COL_UNIT))
         law_text = _s(raw_row.get(COL_LAW))
@@ -361,14 +441,20 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
             except ValueError:
                 row_errors.append(RowError(row_no, COL_SEQ, f"必須為整數，實際為「{seq_raw}」"))
 
-        # 門檻四欄：item 為空時無法判斷是否為 pH，略過（已有「項目不可空白」的錯誤在報了，
+        # 門檻四欄：item 為空時無法做名稱推測（判不出單/雙邊），略過（已有「項目不可空白」的錯誤在報了，
         # 不需要再疊加令人困惑的門檻錯誤）。
         oos: Tuple[Optional[Decimal], Optional[Decimal], str] = (None, None, "na")
         ooc: Tuple[Optional[Decimal], Optional[Decimal], str] = (None, None, "na")
         alert: Tuple[Optional[Decimal], Optional[Decimal], str] = (None, None, "na")
         recv: Tuple[Optional[Decimal], Optional[Decimal], str] = (None, None, "na")
         if item:
-            is_ph = is_ph_item(item)
+            # 雙邊判定順序：主表填的值 → DB 既有值（讓載入器可重複執行）→ 名稱推測（過渡）。
+            if spec_kind is not None:
+                is_dual = spec_kind
+            elif item in existing_dual and existing_dual[item] is not None:
+                is_dual = existing_dual[item]
+            else:
+                is_dual = is_ph_item(item)
             for col, field_label, setter in (
                 (COL_OOS, "OOS", "oos"),
                 (COL_OOC, "OOC", "ooc"),
@@ -376,7 +462,7 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
                 (COL_RECV, "允收值", "recv"),
             ):
                 try:
-                    triplet = _bound_triplet(raw_row.get(col), field_label, is_ph, item)
+                    triplet = _bound_triplet(raw_row.get(col), field_label, is_dual, item)
                 except ValueError as e:
                     row_errors.append(RowError(row_no, col, str(e)))
                     continue
@@ -398,14 +484,15 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
                 ooc_vals = [float(v) for v in (ooc[0], ooc[1]) if v is not None]
                 alert_vals = [float(v) for v in (alert[0], alert[1]) if v is not None]
                 try:
-                    check_ooc_alert_hierarchy(ooc_vals, alert_vals, is_ph)
+                    check_ooc_alert_hierarchy(ooc_vals, alert_vals, is_dual, item)
                 except ValueError as e:
                     row_errors.append(RowError(row_no, f"{COL_OOC}/{COL_ALERT}", str(e)))
 
-        # 同一 item 顯示名/單位一致性檢查
+        # 同一 item 顯示名/單位/規格型態一致性檢查
         if item:
             info = item_seen.setdefault(item, {
                 "display_row": None, "display": None, "unit_row": None, "unit": None,
+                "kind_row": None, "kind": None,
             })
             if display_name is not None:
                 if info["display"] is None:
@@ -425,6 +512,19 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
                         row_no, COL_UNIT,
                         f"項目「{item}」單位與第 {info['unit_row']} 列不一致"
                         f"（{info['unit']} vs {unit}），同一項目的單位須全檔一致"))
+            # 規格型態同理（is_dual_bound 是 item 主檔上的單一欄位，一個項目只能有一種型態）；
+            # 留空的列不參與比對（＝未指定，不算衝突），與顯示名/單位的處理方式一致。
+            if spec_kind is not None:
+                if info["kind"] is None:
+                    info["kind"] = spec_kind
+                    info["kind_row"] = row_no
+                elif info["kind"] != spec_kind:
+                    _label = {v: k for k, v in SPEC_KIND_MAP.items()}
+                    row_errors.append(RowError(
+                        row_no, COL_SPEC_KIND,
+                        f"項目「{item}」{COL_SPEC_KIND}與第 {info['kind_row']} 列不一致"
+                        f"（{_label[info['kind']]} vs {_label[spec_kind]}），"
+                        f"同一項目的{COL_SPEC_KIND}須全檔一致"))
 
         if row_errors:
             errors.extend(row_errors)
@@ -433,11 +533,16 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
         # 門檻階梯完整性提醒（警告，不擋列）：填了 OOC 沒填 OOS、填了 Alert 沒填 OOC
         warnings.extend(check_threshold_ladder(
             row_no, plant_no, item, oos[2], ooc[2], alert[2]))
+        # 規格型態留空且推測為雙邊的提醒（警告，不擋列）
+        warnings.extend(check_spec_kind_guess(
+            row_no, plant_no, item, spec_kind, is_ph_item(item),
+            from_db=(item in existing_dual and existing_dual[item] is not None)))
 
         parsed.append(ParsedRow(
             row=row_no, plant_no=plant_no, item=item, display_name=display_name, unit=unit,
             law_text=law_text, oos=oos, ooc=ooc, alert=alert, recv=recv,
             source_id=source_id, tagname=tagname, seqno=seqno, category=item_type,
+            is_dual_bound=spec_kind,
         ))
 
     return parsed, errors, warnings
@@ -536,26 +641,28 @@ def apply_load(db, parsed_rows: List[ParsedRow], plant_config: Dict[str, Dict[st
 
     # ── 項目：全域唯一，顯示名/單位取「第一次出現的非空值」（驗證階段已擋掉衝突）──
     item_order: List[str] = []
-    item_meta: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
+    item_meta: Dict[str, Tuple[Optional[str], Optional[str], Optional[str], Optional[bool]]] = {}
     for row in parsed_rows:
         if row.item not in item_order:
             item_order.append(row.item)
-            item_meta[row.item] = (None, None, None)
-        dn, un, cat = item_meta[row.item]
+            item_meta[row.item] = (None, None, None, None)
+        dn, un, cat, dual = item_meta[row.item]
         if dn is None and row.display_name is not None:
             dn = row.display_name
         if un is None and row.unit is not None:
             un = row.unit
         if cat is None and row.category:
             cat = row.category
-        item_meta[row.item] = (dn, un, cat)
+        if dual is None and row.is_dual_bound is not None:
+            dual = row.is_dual_bound
+        item_meta[row.item] = (dn, un, cat, dual)
 
     existing_items = {i.item: i for i in db.execute(select(Item)).scalars().all()}
     item_id_start = (db.execute(select(func.max(Item.item_id))).scalar() or 0) + 1
     item_id_alloc = _IdAllocator(item_id_start, None, "項目代碼(item_id)")
 
     for item_name in item_order:
-        display_name, unit, category = item_meta[item_name]
+        display_name, unit, category, is_dual_bound = item_meta[item_name]
         entry = existing_items.get(item_name)
         if entry is not None:
             if display_name is not None:
@@ -564,11 +671,27 @@ def apply_load(db, parsed_rows: List[ParsedRow], plant_config: Dict[str, Dict[st
                 entry.unit = unit
             if category is not None:
                 entry.category = category
+            # 規格型態留空（None）時不覆寫既有值——留空的語意是「這次沒指定」，
+            # 不是「要把已設定的規格型態清掉」（比照上面顯示名/單位/類型的處理）。
+            if is_dual_bound is not None:
+                entry.is_dual_bound = is_dual_bound
             summary["item_reused"] += 1
         else:
             new_id = item_id_alloc.take()
+            # 新建項目時，規格型態留空**要把推測值一併存下來**（不能留 NULL）。
+            # 理由：本載入器已經用 is_ph_item() 的推測值驗證過這一列的門檻格式了
+            # （例如 pH3 留空 → 推測雙邊 → '6-9' 驗證通過並寫入 spec）。若 DB 留 NULL，
+            # 日後在規格維護頁編輯同一筆時，B 棧會退回 schemas.guess_dual_bound_by_name()，
+            # 而那個 fallback 只認得 'pH'/'pH1'（A 棧凍結行為，刻意比這裡窄），
+            # 於是 pH3 會被判成單邊、'6-9' 被打回「必須為單邊規格」——
+            # 正是本次要修掉的「灌得進去卻改不動」。把實際採用的判定寫進資料，
+            # 資料才會與當初驗證它的規則一致，兩處不會再各自推測出不同答案。
+            # （既有項目仍不覆寫，見上面 if 分支：留空＝這次沒指定，不是要清掉已設定的值。）
             db.add(Item(item_id=new_id, item=item_name, display_name=display_name,
-                        unit=unit, category=category, is_active=True))
+                        unit=unit, category=category,
+                        is_dual_bound=is_dual_bound if is_dual_bound is not None
+                                      else is_ph_item(item_name),
+                        is_active=True))
             summary["item_new"] += 1
     db.flush()
 
@@ -668,7 +791,19 @@ def main() -> None:
     print(f"[load_user_data] 主表共 {len(main_rows)} 列資料"
           + (f"、廠區設定表 {len(conf_rows)} 列" if conf_rows else "（未提供廠區設定表，將依主表首次出現順序排序、一律顯示）"))
 
-    parsed, row_errors, row_warnings = validate_main_rows(main_rows)
+    # 先撈 DB 既有項目的規格型態，讓「規格型態」留空時能沿用既有設定（見 validate_main_rows）。
+    # 這一步讓載入器真正可以重複執行：已建檔的溫度（雙邊）第二次載入即使留空也不會被判成單邊。
+    # --dry-run 也要撈（純唯讀），否則試跑與實跑的驗證結果會不一致，失去試跑的意義。
+    _probe = BSessionLocal()
+    try:
+        existing_dual = {
+            name: dual for name, dual in _probe.execute(
+                select(Item.item, Item.is_dual_bound)).all()
+        }
+    finally:
+        _probe.close()
+
+    parsed, row_errors, row_warnings = validate_main_rows(main_rows, existing_dual)
     plant_config, conf_errors = validate_plant_config(conf_rows)
     all_errors = row_errors + conf_errors
 

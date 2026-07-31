@@ -189,7 +189,7 @@ def list_items(db: Session) -> list[dict]:
     rows = db.execute(select(Item).order_by(Item.item_id)).scalars().all()
     return [
         {"item_id": r.item_id, "item": r.item, "display_name": r.display_name,
-         "unit": r.unit, "is_active": r.is_active}
+         "unit": r.unit, "is_active": r.is_active, "is_dual_bound": r.is_dual_bound}
         for r in rows
     ]
 
@@ -210,7 +210,13 @@ def _item_reference_counts(db: Session, item: str) -> tuple[int, int]:
 
 
 def add_item(db: Session, current_user_empno: str, item: str, display_name: Optional[str],
-             unit: Optional[str], is_active: bool, remark: str = "") -> None:
+             unit: Optional[str], is_active: bool, remark: str = "",
+             is_dual_bound: Optional[bool] = None) -> None:
+    """新增項目。
+
+    is_dual_bound＝規格型態（True=雙邊『低-高』如 pH/溫度、False=單邊、None=未指定）。
+    參數擺在 remark 之後、給預設值 None，是為了不動既有呼叫端的位置引數順序。
+    """
     try:
         item = (item or "").strip()
         if not item:
@@ -221,10 +227,10 @@ def add_item(db: Session, current_user_empno: str, item: str, display_name: Opti
 
         item_id = _next_item_id(db)
         db.add(Item(item_id=item_id, item=item, display_name=display_name or None,
-                     unit=unit or None, is_active=is_active))
+                     unit=unit or None, is_active=is_active, is_dual_bound=is_dual_bound))
         _tranlog(db, current_user_empno, "I", {},
                  {"item_id": item_id, "item": item, "display_name": display_name, "unit": unit,
-                  "is_active": is_active}, remark)
+                  "is_active": is_active, "is_dual_bound": is_dual_bound}, remark)
         db.commit()
     except ValueError:
         db.rollback()
@@ -237,7 +243,12 @@ def add_item(db: Session, current_user_empno: str, item: str, display_name: Opti
 
 def update_item(db: Session, current_user_empno: str, old_item: str, item: str,
                  display_name: Optional[str], unit: Optional[str], is_active: bool,
-                 remark: str = "") -> None:
+                 remark: str = "", is_dual_bound: Optional[bool] = None) -> None:
+    """修改項目。
+
+    ⚠️ is_dual_bound 採「整份覆寫」語意（傳 None 就是把規格型態設回未指定），與 display_name/
+    unit 一致——本頁的編輯表單一律把整列現值帶進表單再整份送回，不是 PATCH 式的部分更新。
+    """
     try:
         item = (item or "").strip()
         if not item:
@@ -248,7 +259,8 @@ def update_item(db: Session, current_user_empno: str, old_item: str, item: str,
             raise ValueError("找不到要修改的項目資料!")
 
         before = {"item_id": entry.item_id, "item": entry.item, "display_name": entry.display_name,
-                  "unit": entry.unit, "is_active": entry.is_active}
+                  "unit": entry.unit, "is_active": entry.is_active,
+                  "is_dual_bound": entry.is_dual_bound}
 
         if item != entry.item:
             if db.execute(select(Item).where(Item.item == item)).scalar_one_or_none():
@@ -264,10 +276,12 @@ def update_item(db: Session, current_user_empno: str, old_item: str, item: str,
         entry.display_name = display_name or None
         entry.unit = unit or None
         entry.is_active = is_active
+        entry.is_dual_bound = is_dual_bound
 
         _tranlog(db, current_user_empno, "M", before,
                  {"item_id": entry.item_id, "item": entry.item, "display_name": entry.display_name,
-                  "unit": entry.unit, "is_active": entry.is_active}, remark)
+                  "unit": entry.unit, "is_active": entry.is_active,
+                  "is_dual_bound": entry.is_dual_bound}, remark)
         db.commit()
     except ValueError:
         db.rollback()
@@ -292,7 +306,8 @@ def delete_item(db: Session, current_user_empno: str, item: str, remark: str = "
             )
 
         before = {"item_id": entry.item_id, "item": entry.item, "display_name": entry.display_name,
-                  "unit": entry.unit, "is_active": entry.is_active}
+                  "unit": entry.unit, "is_active": entry.is_active,
+                  "is_dual_bound": entry.is_dual_bound}
         db.delete(entry)
         _tranlog(db, current_user_empno, "D", before, {}, remark)
         db.commit()

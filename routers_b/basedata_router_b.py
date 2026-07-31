@@ -71,6 +71,9 @@ class ItemCreateReq(BaseModel):
     unit: str | None = None
     is_active: bool = True
     remark: str = ""
+    # 規格型態（models_b.Item.is_dual_bound）：true=雙邊（pH/溫度，門檻填「低-高」）、
+    # false=單邊、null=未指定（退回舊的名稱推測）。B 棧規格維護頁靠這欄決定驗證方式。
+    is_dual_bound: bool | None = None
 
 
 class ItemUpdateReq(ItemCreateReq):
@@ -191,6 +194,7 @@ def api_create_item_b(data: ItemCreateReq, db: Session = Depends(get_b_db)):
         basedata_service.add_item(
             db, current_user_empno=_user_no(), item=data.item, display_name=data.display_name,
             unit=data.unit, is_active=data.is_active, remark=data.remark,
+            is_dual_bound=data.is_dual_bound,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -203,7 +207,7 @@ def api_update_item_b(data: ItemUpdateReq, db: Session = Depends(get_b_db)):
         basedata_service.update_item(
             db, current_user_empno=_user_no(), old_item=data.old_item, item=data.item,
             display_name=data.display_name, unit=data.unit, is_active=data.is_active,
-            remark=data.remark,
+            remark=data.remark, is_dual_bound=data.is_dual_bound,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

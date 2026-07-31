@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pydantic import ValidationError
 from schemas.spec_schema import (
     SpecCreate, SpecApplyCreate, parse_spec_bound, check_ooc_alert_hierarchy,
+    guess_dual_bound_by_name,
 )
 from services.spec_service import (
     to_storage_item, to_display_item, ftype_label, FTYPE_LABELS,
@@ -61,52 +62,52 @@ def test_parse_spec_bound_double_sided_equal_bounds_rejected():
 # ── OOC / Alert 層遞防呆：check_ooc_alert_hierarchy 純函式 ───────────────────
 
 def test_check_ooc_alert_hierarchy_single_sided_ok():
-    check_ooc_alert_hierarchy([60.0], [50.0], is_ph=False)  # 不 raise 即通過
+    check_ooc_alert_hierarchy([60.0], [50.0], is_dual=False)  # 不 raise 即通過
 
 def test_check_ooc_alert_hierarchy_single_sided_violation():
     with pytest.raises(ValueError, match="OOC 上限值不可小於"):
-        check_ooc_alert_hierarchy([40.0], [50.0], is_ph=False)
+        check_ooc_alert_hierarchy([40.0], [50.0], is_dual=False)
 
 def test_check_ooc_alert_hierarchy_double_sided_ok():
     # OOC(5-10) 比 Alert(6-9) 寬：下限更低、上限更高
-    check_ooc_alert_hierarchy([5.0, 10.0], [6.0, 9.0], is_ph=True)
+    check_ooc_alert_hierarchy([5.0, 10.0], [6.0, 9.0], is_dual=True)
 
 def test_check_ooc_alert_hierarchy_double_sided_violation():
     with pytest.raises(ValueError, match="OOC 範圍不可比 Alert 範圍窄"):
-        check_ooc_alert_hierarchy([6.5, 8.5], [6.0, 9.0], is_ph=True)
+        check_ooc_alert_hierarchy([6.5, 8.5], [6.0, 9.0], is_dual=True)
 
 def test_check_ooc_alert_hierarchy_skips_when_either_missing():
-    check_ooc_alert_hierarchy(None, [50.0], is_ph=False)
-    check_ooc_alert_hierarchy([60.0], None, is_ph=False)
+    check_ooc_alert_hierarchy(None, [50.0], is_dual=False)
+    check_ooc_alert_hierarchy([60.0], None, is_dual=False)
 
 
 # ── 貼齊（Alert == OOC）為合法設定（2026-07-31 環工部確認：實際數值因廠區而異）──
 
 def test_check_ooc_alert_hierarchy_single_sided_equal_allowed():
     """ 單邊：部分廠區把 Alert 設得跟 OOC 完全相同（不留黃燈緩衝），應通過 """
-    check_ooc_alert_hierarchy([80.0], [80.0], is_ph=False)  # 不 raise 即通過
+    check_ooc_alert_hierarchy([80.0], [80.0], is_dual=False)  # 不 raise 即通過
 
 def test_check_ooc_alert_hierarchy_double_sided_equal_allowed():
     """ pH 雙邊：Alert 與 OOC 上下界完全相同，應通過 """
-    check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.5], is_ph=True)
+    check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.5], is_dual=True)
 
 def test_check_ooc_alert_hierarchy_double_sided_one_side_equal_allowed():
     """ pH 雙邊：只有下界貼齊（OOC 6.5-8.5 / Alert 6.5-8.2），另一側仍有間距，應通過 """
-    check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.2], is_ph=True)
+    check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.2], is_dual=True)
 
 def test_check_ooc_alert_hierarchy_double_sided_upper_side_equal_allowed():
     """ pH 雙邊：只有上界貼齊（OOC 6.5-8.5 / Alert 6.8-8.5），應通過 """
-    check_ooc_alert_hierarchy([6.5, 8.5], [6.8, 8.5], is_ph=True)
+    check_ooc_alert_hierarchy([6.5, 8.5], [6.8, 8.5], is_dual=True)
 
 def test_check_ooc_alert_hierarchy_double_sided_lower_inverted_still_rejected():
     """ 放寬成允許相等後，真正的反轉（OOC 下限高於 Alert 下限）仍必須擋下 """
     with pytest.raises(ValueError, match="OOC 範圍不可比 Alert 範圍窄"):
-        check_ooc_alert_hierarchy([6.5, 8.5], [6.2, 8.5], is_ph=True)
+        check_ooc_alert_hierarchy([6.5, 8.5], [6.2, 8.5], is_dual=True)
 
 def test_check_ooc_alert_hierarchy_double_sided_upper_inverted_still_rejected():
     """ 反轉（OOC 上限低於 Alert 上限）仍必須擋下 """
     with pytest.raises(ValueError, match="OOC 範圍不可比 Alert 範圍窄"):
-        check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.8], is_ph=True)
+        check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.8], is_dual=True)
 
 
 # ── SpecCreate（Pydantic）整合驗證 ───────────────────────────────────────────
@@ -167,6 +168,99 @@ def test_spec_validation_na_fields_skip_checks():
         source_id=1
     )
     assert spec.LAW == "N/A"
+
+
+# ── 雙邊規格判定改資料驅動（2026-07-31，見 models_b.Item.is_dual_bound）────────
+#
+# 規則：SpecBase.is_dual_bound 有傳值就以它為準；沒傳（None）才退回
+# guess_dual_bound_by_name() 名稱推測。A 棧前端不送這個欄位 → 一律走 fallback，行為凍結。
+
+def _spec_kwargs(**over):
+    """SpecCreate 的最小合法參數，測試只覆寫關心的欄位。"""
+    base = dict(plantno="K1", item="VOC", LAW="100", OOS="90", OOC="80", alert="70", source_id=1)
+    base.update(over)
+    return base
+
+
+def test_guess_dual_bound_by_name_frozen_a_stack_behavior():
+    """fallback 必須與 A 棧原本第 97 行 `item.lower()=='ph' or item=='pH1'` 完全相同。"""
+    assert guess_dual_bound_by_name("pH") is True
+    assert guess_dual_bound_by_name("ph") is True
+    assert guess_dual_bound_by_name("PH") is True
+    assert guess_dual_bound_by_name("pH1") is True
+    # ★ 刻意「猜不到」的三種：A 棧行為凍結，不可為了跟載入器的 ^ph\d*$ 統一而放寬
+    assert guess_dual_bound_by_name("pH2") is False
+    assert guess_dual_bound_by_name("溫度") is False
+    assert guess_dual_bound_by_name("COD") is False
+
+
+def test_dual_bound_true_allows_temperature_double_sided():
+    """★ 核心驗收：名稱是「溫度」、is_dual_bound=True、門檻填 20-35 → 必須通過。"""
+    spec = SpecCreate(**_spec_kwargs(
+        item="溫度", LAW="20-35", OOS="20-35", OOC="22-33", alert="23-32",
+        is_dual_bound=True,
+    ))
+    assert spec.effective_dual_bound() is True
+    assert spec.OOS == "20-35"
+
+
+def test_dual_bound_none_still_rejects_temperature_double_sided():
+    """★ 反證 fallback 沒被改壞：同一筆資料不帶 is_dual_bound 時，仍照舊被擋成「必須為單邊」。"""
+    with pytest.raises(ValidationError, match="溫度 必須為單邊規格"):
+        SpecCreate(**_spec_kwargs(
+            item="溫度", LAW="20-35", OOS="20-35", OOC="22-33", alert="23-32",
+        ))
+
+
+def test_dual_bound_true_allows_ph2_double_sided():
+    """pH2 的雙邊門檻：帶 is_dual_bound=True 就改得動（原本載入器灌得進、規格頁改不動）。"""
+    spec = SpecCreate(**_spec_kwargs(
+        item="pH2", LAW="6-9", OOS="6-9", OOC="6.5-8.5", alert="6.8-8.2",
+        is_dual_bound=True,
+    ))
+    assert spec.effective_dual_bound() is True
+
+
+def test_dual_bound_false_rejects_double_sided_even_for_ph_name():
+    """明確指定單邊時，即使名稱叫 pH 也要擋下雙邊門檻（資料勝過名稱推測）。"""
+    with pytest.raises(ValidationError, match="pH 必須為單邊規格"):
+        SpecCreate(**_spec_kwargs(
+            item="pH", LAW="6-9", OOS="6-9", OOC="6.5-8.5", alert="6.8-8.2",
+            is_dual_bound=False,
+        ))
+
+
+def test_dual_bound_false_allows_single_sided_for_ph_name():
+    """對照組：同樣指定單邊，填單邊值就通過。"""
+    spec = SpecCreate(**_spec_kwargs(item="pH", is_dual_bound=False))
+    assert spec.effective_dual_bound() is False
+
+
+def test_dual_bound_none_keeps_ph_fallback_working():
+    """不帶 is_dual_bound 時 pH 仍走名稱推測判成雙邊（A 棧既有行為原封不動）。"""
+    spec = SpecCreate(**_spec_kwargs(
+        item="pH", LAW="6-9", OOS="6-9", OOC="6.5-8.5", alert="6.8-8.2",
+    ))
+    assert spec.is_dual_bound is None
+    assert spec.effective_dual_bound() is True
+
+
+def test_dual_bound_true_hierarchy_uses_double_sided_rule():
+    """雙邊層遞防呆也要跟著 is_dual_bound 走（溫度的 Alert 超出 OOC 範圍要擋）。"""
+    with pytest.raises(ValidationError, match="OOC 範圍不可比 Alert 範圍窄"):
+        SpecCreate(**_spec_kwargs(
+            item="溫度", LAW="20-35", OOS="20-35", OOC="23-32", alert="22-33",
+            is_dual_bound=True,
+        ))
+
+
+def test_spec_apply_create_accepts_dual_bound_injection():
+    """送簽申請（SpecApplyCreate）繼承同一套注入機制。"""
+    apply = SpecApplyCreate(**_spec_kwargs(
+        item="溫度", LAW="20-35", OOS="20-35", OOC="22-33", alert="23-32",
+        is_dual_bound=True,
+    ), ftype="I")
+    assert apply.effective_dual_bound() is True
 
 
 # ── SpecApplyCreate（送簽申請）驗證 ──────────────────────────────────────────

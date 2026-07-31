@@ -88,6 +88,20 @@ class Item(BaseB):
         String(20),
         comment="項目類型：水質／空汙／雨水溝（2026-07-31 新增。現行程式是靠項目名稱字串比對判斷類型，新廠若有不叫 VOC 的空汙項目會被誤判成水質；本欄由基礎資料建置填入正確值，各處判斷邏輯改用本欄為後續待辦）",
     )
+    is_dual_bound: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
+        comment=(
+            "規格型態是否為雙邊（True=雙邊『低-高』如 pH 的 6-9、K21 溫度的 20-35；False=單邊如 COD 的 100；"
+            "NULL=未指定，退回舊的『項目名稱像不像 pH』推測）。"
+            "2026-07-31 新增，與 category 同一類問題的資料驅動解法："
+            "本欄取代原本散在各處的名稱字串比對——scripts/load_user_data.py 的 `^ph\\d*$` 正則與 "
+            "schemas/spec_schema.py 的 `item.lower()=='ph' or item=='pH1'`（兩處還互不一致），"
+            "導致 pH2 灌得進去卻改不動、K21 溫度的雙邊門檻根本建不起來。"
+            "填入時機／填入者：基礎資料建置時由環工部在主表『規格型態』欄填『單邊/雙邊』，"
+            "經 scripts/load_user_data.py 寫入；日後新廠上線亦可由基礎資料維護頁（/ui/basedata 項目分頁）維護。"
+            "★ 讀取端僅限 B 棧（routers_b/spec_router_b.py）；A 棧（routers/spec_router.py）行為凍結不動。"
+        ),
+    )
 
     __table_args__ = {"comment": "量測項目主檔（對應舊 VOC_item；display_name 收納舊程式硬編別名對照）"}
 
