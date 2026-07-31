@@ -64,7 +64,7 @@ def test_check_ooc_alert_hierarchy_single_sided_ok():
     check_ooc_alert_hierarchy([60.0], [50.0], is_ph=False)  # 不 raise 即通過
 
 def test_check_ooc_alert_hierarchy_single_sided_violation():
-    with pytest.raises(ValueError, match="OOC 上限值必須大於"):
+    with pytest.raises(ValueError, match="OOC 上限值不可小於"):
         check_ooc_alert_hierarchy([40.0], [50.0], is_ph=False)
 
 def test_check_ooc_alert_hierarchy_double_sided_ok():
@@ -72,12 +72,41 @@ def test_check_ooc_alert_hierarchy_double_sided_ok():
     check_ooc_alert_hierarchy([5.0, 10.0], [6.0, 9.0], is_ph=True)
 
 def test_check_ooc_alert_hierarchy_double_sided_violation():
-    with pytest.raises(ValueError, match="OOC 範圍必須比 Alert 範圍更寬"):
+    with pytest.raises(ValueError, match="OOC 範圍不可比 Alert 範圍窄"):
         check_ooc_alert_hierarchy([6.5, 8.5], [6.0, 9.0], is_ph=True)
 
 def test_check_ooc_alert_hierarchy_skips_when_either_missing():
     check_ooc_alert_hierarchy(None, [50.0], is_ph=False)
     check_ooc_alert_hierarchy([60.0], None, is_ph=False)
+
+
+# ── 貼齊（Alert == OOC）為合法設定（2026-07-31 環工部確認：實際數值因廠區而異）──
+
+def test_check_ooc_alert_hierarchy_single_sided_equal_allowed():
+    """ 單邊：部分廠區把 Alert 設得跟 OOC 完全相同（不留黃燈緩衝），應通過 """
+    check_ooc_alert_hierarchy([80.0], [80.0], is_ph=False)  # 不 raise 即通過
+
+def test_check_ooc_alert_hierarchy_double_sided_equal_allowed():
+    """ pH 雙邊：Alert 與 OOC 上下界完全相同，應通過 """
+    check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.5], is_ph=True)
+
+def test_check_ooc_alert_hierarchy_double_sided_one_side_equal_allowed():
+    """ pH 雙邊：只有下界貼齊（OOC 6.5-8.5 / Alert 6.5-8.2），另一側仍有間距，應通過 """
+    check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.2], is_ph=True)
+
+def test_check_ooc_alert_hierarchy_double_sided_upper_side_equal_allowed():
+    """ pH 雙邊：只有上界貼齊（OOC 6.5-8.5 / Alert 6.8-8.5），應通過 """
+    check_ooc_alert_hierarchy([6.5, 8.5], [6.8, 8.5], is_ph=True)
+
+def test_check_ooc_alert_hierarchy_double_sided_lower_inverted_still_rejected():
+    """ 放寬成允許相等後，真正的反轉（OOC 下限高於 Alert 下限）仍必須擋下 """
+    with pytest.raises(ValueError, match="OOC 範圍不可比 Alert 範圍窄"):
+        check_ooc_alert_hierarchy([6.5, 8.5], [6.2, 8.5], is_ph=True)
+
+def test_check_ooc_alert_hierarchy_double_sided_upper_inverted_still_rejected():
+    """ 反轉（OOC 上限低於 Alert 上限）仍必須擋下 """
+    with pytest.raises(ValueError, match="OOC 範圍不可比 Alert 範圍窄"):
+        check_ooc_alert_hierarchy([6.5, 8.5], [6.5, 8.8], is_ph=True)
 
 
 # ── SpecCreate（Pydantic）整合驗證 ───────────────────────────────────────────
@@ -119,7 +148,16 @@ def test_spec_validation_logic_hierarchical_limits():
             LAW="100", OOS="80", OOC="40", alert="50",  # OOC(40) 反而比 Alert(50) 小
             source_id=1
         )
-    assert "單邊規格中，OOC 上限值必須大於" in str(exc_info.value)
+    assert "單邊規格中，OOC 上限值不可小於" in str(exc_info.value)
+
+def test_spec_validation_allows_alert_equal_to_ooc():
+    """ 貼齊設定（Alert == OOC）走 Pydantic 整段驗證也要通過（2026-07-31 確認合法） """
+    spec = SpecCreate(
+        plantno="K1", item="VOC",
+        LAW="100", OOS="90", OOC="80", alert="80",   # Alert 與 OOC 貼齊
+        source_id=1
+    )
+    assert spec.alert == spec.OOC
 
 def test_spec_validation_na_fields_skip_checks():
     """ LAW/OOS 可填 N/A 代表未設定，不觸發格式檢查 """

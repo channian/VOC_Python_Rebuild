@@ -41,30 +41,40 @@ def parse_spec_bound(val: str, field_name: str, is_ph: bool, item_name: str) -> 
 
 def check_ooc_alert_hierarchy(ooc_vals: Optional[List[float]], alert_vals: Optional[List[float]], is_ph: bool) -> None:
     """
-    OOC 與 Alert 的層遞防呆：OOC 必須比 Alert 寬鬆（更容易觸發）。
-    對應 legacy __OOC_TextChanged / __alert_TextChanged 的交叉比對區塊，兩處邏輯彼此對稱一致。
+    OOC 與 Alert 的層遞防呆（**2026-07-31 經使用者向環工部確認後定案**）。
 
-    ⚠️ 與 legacy 原始碼的刻意差異（僅雙邊 / pH 情境）：
-    legacy 原始碼要求 `OOC[0] > Alert[0]`（下限），但這與「OOC 應比 Alert 寬」的一般認知相反
-    （直覺應該是 OOC 下限 < Alert 下限，OOC 在低端更極端才對；legacy 對上限的方向 `OOC[1] > Alert[1]`
-    倒是符合直覺）。這段 pH 雙邊送簽驗證在 legacy 從未真正上線過──EditSPEC.aspx.cs 三個按鈕呼叫
-    SPEC送簽() 的程式碼整段被註解掉（見 legacy/EditSPEC.aspx.cs InsertButton_Click 等），
-    SPEC送簽() 本身的 INSERT 語法也有漏逗號的錯誤（見 legacy/dbVOC.cs:2474），
-    ProcSignSPEC() 核准套用時甚至會對新增案例丟例外──種種跡象顯示這整條路徑是從未執行過的死碼，
-    研判 legacy 這段方向判斷本身就是 bug。這裡採用「OOC 範圍需比 Alert 範圍更寬」的直覺方向
-    （下限更低、上限更高）做驗證，待業務確認正確方向後再調整。
+    業務規則（已確認）：
+      門檻由窄到寬為 Alert（黃燈）→ OOC（橙燈）→ OOS（紅燈），
+      **Alert 的觸發範圍必須包含在 OOC 之內**（Alert ⊆ OOC），亦即 Alert 最先觸發。
+
+    ★ 允許「貼齊」（Alert == OOC）：
+      Alert 與 OOC 的實際數值**因廠區而異**——有些廠區的內控標準會把 Alert 設得跟 OOC
+      完全相同（不留緩衝，直接橙燈），有些廠區則會留一段間距先亮黃燈。兩種都是合法設定，
+      因此本函式採「大於等於／小於等於」而非嚴格不等式。
+      （讀值同時碰到 Alert 與 OOC 時以 OOC 的橙燈優先，該行為由
+      `services/dashboard_service._calculate_light()` 保證，並由
+      `tests/test_light_ooc_priority.py` 鎖住，這裡不重複實作。）
+
+    ★ 仍然擋下「反轉」（OOC 比 Alert 窄）：
+      這不是保守而是資料錯誤——`_calculate_light()` 的 Alert 分支條件是
+      `alert < rvalue < ooc`，一旦 OOC 比 Alert 窄，該區間就是空集合，
+      **Alert 這層門檻永遠不會觸發**，等於使用者填了一個永遠無效的值，必須擋在輸入端。
+
+    本版取代 2026-07-31 之前的嚴格版本（當時的 docstring 記載「legacy 這段是死碼、
+    方向研判為 bug、待業務確認」——該疑慮已由使用者確認結案：方向正確、且應放寬到允許相等）。
+    對應 legacy __OOC_TextChanged / __alert_TextChanged 的交叉比對區塊。
     """
     if not (ooc_vals and alert_vals):
         return
     if is_ph:
-        if ooc_vals[0] >= alert_vals[0] or ooc_vals[1] <= alert_vals[1]:
+        if ooc_vals[0] > alert_vals[0] or ooc_vals[1] < alert_vals[1]:
             raise ValueError(
-                "對於 pH 雙邊規格：OOC 範圍必須比 Alert 範圍更寬（OOC 下限需小於 Alert 下限、"
-                "OOC 上限需大於 Alert 上限）！"
+                "對於 pH 雙邊規格：OOC 範圍不可比 Alert 範圍窄（OOC 下限不可高於 Alert 下限、"
+                "OOC 上限不可低於 Alert 上限；可相等）！"
             )
     else:
-        if ooc_vals[0] <= alert_vals[0]:
-            raise ValueError("單邊規格中，OOC 上限值必須大於 Alert！")
+        if ooc_vals[0] < alert_vals[0]:
+            raise ValueError("單邊規格中，OOC 上限值不可小於 Alert（可相等）！")
 
 
 class SpecBase(BaseModel):

@@ -30,6 +30,10 @@ scripts/load_user_data.py — 基礎資料一鍵載入器（環工部主表 → 
   6. 逐列錯誤報告：任一列有問題時印出「第 N 列 [欄位]：原因」，不中斷整批——全部檢查完
      一次報告，最後彙總「成功 X 列、失敗 Y 列」。同一列若有多個欄位出錯，全部列出，
      該列所有異動（含連動的 tag_mapping）都不會寫入。
+  6-1. 逐列**警告**（「⚠ 警告」前綴，獨立一段輸出，--dry-run 也照印）：門檻階梯不完整
+     （填了 OOC 卻沒填 OOS、填了 Alert 卻沒填 OOC）時提醒該門檻不會生效。警告**不是錯誤**、
+     不影響載入也不影響離開碼——「建置中」項目整排留空是合法的，只有「填一半」才可疑。
+     詳見 check_threshold_ladder()。
   7. 支援 .csv（UTF-8，含 BOM 也讀得動）與 .xlsx（openpyxl）。
 
 用法：
@@ -116,6 +120,23 @@ class RowError:
 
 
 @dataclass
+class RowWarning:
+    """逐列警告：格式與 RowError 平行，但**不會**讓該列失敗、也不影響離開碼。
+
+    輸出刻意加「⚠ 警告」前綴並在 CLI 獨立成一段，避免與「第 N 列 [欄位]：原因」的錯誤混淆。
+    """
+    row: int
+    plant_no: Optional[str]
+    item: Optional[str]
+    field: str
+    message: str
+
+    def __str__(self) -> str:
+        where = f"{self.plant_no or '?'}／{self.item or '?'}"
+        return f"⚠ 警告 第 {self.row} 列 [{where}]（{self.field}）：{self.message}"
+
+
+@dataclass
 class ParsedRow:
     row: int
     plant_no: str
@@ -192,6 +213,38 @@ def _bound_triplet(raw: Any, field_name: str, is_ph: bool, item_name: str) -> Tu
     return Decimal(str(vals[0])), Decimal(str(vals[1])), "valid"
 
 
+def check_threshold_ladder(row_no: int, plant_no: Optional[str], item: Optional[str],
+                            oos_status: str, ooc_status: str, alert_status: str) -> List[RowWarning]:
+    """門檻階梯完整性檢查 → 回傳警告清單（**不是錯誤**，不會擋下該列）。
+
+    背景（2026-07-31 主控查證）：`services/dashboard_service._calculate_light()` 的判定式是
+        橙燈：`ooc is not None and oos is not None and ooc <= rvalue < oos`
+        黃燈：`alert is not None and ooc is not None and alert < rvalue < ooc`
+    也就是說**上一層門檻缺席時，這一層永遠不會亮**：
+      - 填了 OOC 但 OOS 留空 → 橙燈永遠不會亮（區間的上界不存在）
+      - 填了 Alert 但 OOC 留空 → 黃燈（Alert 那條）永遠不會亮
+    使用者填了值卻完全不生效，是最難察覺的那種設定錯誤，因此在載入時就提醒。
+
+    為什麼是警告不是錯誤：「尚未建置」的項目本來就整排門檻留空（合法，畫面顯示建置中），
+    只有「填一半」才可疑；而且部分項目確實可能只想要某一層門檻。硬擋會讓合法資料載不進來，
+    所以一律放行、只提醒，離開碼也不受影響。
+    """
+    warnings: List[RowWarning] = []
+    if ooc_status == "valid" and oos_status != "valid":
+        warnings.append(RowWarning(
+            row_no, plant_no, item, f"{COL_OOC}/{COL_OOS}",
+            f"已填 {COL_OOC} 但 {COL_OOS} 未填有效數值 → 這個 {COL_OOC} 永遠不會亮橙燈"
+            f"（橙燈條件是「{COL_OOC} ≦ 讀值 < {COL_OOS}」，缺 {COL_OOS} 整條件就不成立）。"
+            f"若此項目尚在建置中可忽略，否則請補上 {COL_OOS}。"))
+    if alert_status == "valid" and ooc_status != "valid":
+        warnings.append(RowWarning(
+            row_no, plant_no, item, f"{COL_ALERT}/{COL_OOC}",
+            f"已填 {COL_ALERT} 但 {COL_OOC} 未填有效數值 → 這個 {COL_ALERT} 永遠不會亮黃燈"
+            f"（黃燈條件是「{COL_ALERT} < 讀值 < {COL_OOC}」，缺 {COL_OOC} 整條件就不成立）。"
+            f"若此項目尚在建置中可忽略，否則請補上 {COL_OOC}。"))
+    return warnings
+
+
 def _parse_int(raw: Optional[str]) -> int:
     """'5'/'5.0' 皆可轉整數（xlsx 數字儲存格常帶浮點）；其餘丟 ValueError。"""
     return int(float(raw))
@@ -250,13 +303,17 @@ def read_main_and_config(file_path: str) -> Tuple[List[Dict[str, Any]], List[Dic
 # 驗證 + 解析（純邏輯，不連 DB）
 # ══════════════════════════════════════════════════════════════════════════
 
-def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow], List[RowError]]:
+def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow], List[RowError], List[RowWarning]]:
     """逐列驗證主表。任一列有錯就整列排除（其他列不受影響，全部驗完才回傳）。
+
+    回傳 (通過的列, 錯誤清單, 警告清單)。警告只針對**通過驗證的列**產生
+    （沒通過的列本來就不會寫入，再報警告只是噪音；使用者修好錯誤後重跑自然會看到）。
 
     表頭列＝Excel 第 1 列，故第一筆資料列的 row 編號＝2，與使用者在 Excel 看到的列號一致。
     """
     parsed: List[ParsedRow] = []
     errors: List[RowError] = []
+    warnings: List[RowWarning] = []
 
     # 同一 item 在不同列的 顯示名/單位 必須一致（item 是全域主檔，非逐廠區各自一份）；
     # 以「該 item 第一次出現的非空值」為基準，之後出現不同的非空值即視為衝突。
@@ -373,13 +430,17 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
             errors.extend(row_errors)
             continue
 
+        # 門檻階梯完整性提醒（警告，不擋列）：填了 OOC 沒填 OOS、填了 Alert 沒填 OOC
+        warnings.extend(check_threshold_ladder(
+            row_no, plant_no, item, oos[2], ooc[2], alert[2]))
+
         parsed.append(ParsedRow(
             row=row_no, plant_no=plant_no, item=item, display_name=display_name, unit=unit,
             law_text=law_text, oos=oos, ooc=ooc, alert=alert, recv=recv,
             source_id=source_id, tagname=tagname, seqno=seqno, category=item_type,
         ))
 
-    return parsed, errors
+    return parsed, errors, warnings
 
 
 def validate_plant_config(conf_rows: List[Dict[str, Any]]) -> Tuple[Dict[str, Dict[str, Any]], List[RowError]]:
@@ -607,7 +668,7 @@ def main() -> None:
     print(f"[load_user_data] 主表共 {len(main_rows)} 列資料"
           + (f"、廠區設定表 {len(conf_rows)} 列" if conf_rows else "（未提供廠區設定表，將依主表首次出現順序排序、一律顯示）"))
 
-    parsed, row_errors = validate_main_rows(main_rows)
+    parsed, row_errors, row_warnings = validate_main_rows(main_rows)
     plant_config, conf_errors = validate_plant_config(conf_rows)
     all_errors = row_errors + conf_errors
 
@@ -616,10 +677,18 @@ def main() -> None:
         for err in all_errors:
             print(f"  {err}")
 
+    # 警告獨立成一段（--dry-run 也照印）：不影響載入、不影響離開碼，但填了不生效的設定
+    # 不該靜靜通過，見 check_threshold_ladder()。
+    if row_warnings:
+        print(f"\n[警告] 共 {len(row_warnings)} 筆（不影響載入，資料仍會寫入，但請確認是否為預期設定）：")
+        for warn in row_warnings:
+            print(f"  {warn}")
+
     ok_count = len(parsed)
     fail_rows = {e.row for e in row_errors}
     fail_count = len(fail_rows)
-    print(f"\n[驗證結果] 成功 {ok_count} 列、失敗 {fail_count} 列（主表共 {len(main_rows)} 列）")
+    print(f"\n[驗證結果] 成功 {ok_count} 列、失敗 {fail_count} 列、警告 {len(row_warnings)} 筆"
+          f"（主表共 {len(main_rows)} 列）")
 
     if not parsed:
         print("[load_user_data] 沒有任何一列通過驗證，沒有可寫入的資料，結束。")

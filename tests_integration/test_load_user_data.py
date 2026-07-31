@@ -78,7 +78,7 @@ def test_normal_load_creates_plant_item_spec_tagmapping(b_db):
         _row("ZZ1", "pH1", display="pH", unit="pH", law="6-9", oos="6-9", ooc="6.5-8.5",
              alert="6.8-8.2", recv="6.5-8.5", tag="ZZ1.PH1.PV", seq="2"),
     ]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
     assert errors == []
     assert len(parsed) == 2
 
@@ -124,7 +124,7 @@ def test_normal_load_creates_plant_item_spec_tagmapping(b_db):
 def test_dry_run_via_apply_then_rollback_writes_nothing(b_db):
     """模擬 CLI --dry-run 的作法：apply_load 後 rollback，確認完全沒有落地。"""
     rows = [_row("YY1", "CODY", unit="mg/L", oos="100", tag="YY1.COD.PV")]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
     assert errors == []
 
     apply_load(b_db, parsed, {}, "kepware_sim")
@@ -148,7 +148,7 @@ def test_plant_id_allocation_reuses_existing_and_increments_for_new(b_db):
         _row("NEWPLANT1", "NEWITEM1", unit="mg/L", oos="10"),      # 全新廠區+全新項目
         _row("NEWPLANT2", "NEWITEM2", unit="mg/L", oos="10"),      # 另一個全新廠區
     ]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
     assert errors == []
 
     summary = apply_load(b_db, parsed, {}, "kepware_sim")
@@ -172,7 +172,7 @@ def test_tag_mapping_only_for_scada_with_tagname(b_db):
         _row("TT1", "ITEM_NOTAG", source="SCADA", tag=""),             # SCADA 但沒填 Tag，不建
         _row("TT1", "ITEM_OK", source="SCADA", tag="TT1.OK.PV"),       # SCADA + 有 Tag，才建
     ]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
     assert errors == []
 
     summary = apply_load(b_db, parsed, {}, "kepware_sim")
@@ -189,7 +189,7 @@ def test_tag_mapping_only_for_scada_with_tagname(b_db):
 
 def test_idempotent_rerun_no_duplicates(b_db):
     rows = [_row("II1", "ITEMI", unit="mg/L", oos="100", tag="II1.I.PV", seq="1")]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
     assert errors == []
 
     apply_load(b_db, parsed, {}, "kepware_sim")
@@ -219,7 +219,7 @@ def test_ph_single_sided_rejected_row_by_row_not_blocking_others():
         _row("K7", "CODZ", unit="mg/L", oos="100", ooc="80", alert="60", recv="80"),   # 正常
         _row("K7", "pH1", unit="pH", oos="9", ooc="8.5", alert="8.2", recv="8.5"),      # pH 單邊 → 應報錯
     ]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
 
     assert len(parsed) == 1
     assert parsed[0].item == "CODZ"
@@ -237,7 +237,7 @@ def test_missing_required_field_reported():
         _row("K7", "ITEMY", type_="", oos="1"),       # 類型空白
         _row("K7", "ITEMZ", source="", oos="1"),      # 資料來源空白
     ]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
 
     assert parsed == []
     assert len(errors) == 4
@@ -253,7 +253,7 @@ def test_invalid_type_and_source_enum_rejected():
         _row("K7", "ITEMA", type_="奇怪類型", oos="1"),
         _row("K7", "ITEMB", source="EXCEL", oos="1"),
     ]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
 
     assert parsed == []
     assert len(errors) == 2
@@ -268,7 +268,7 @@ def test_item_display_name_conflict_across_rows_rejected():
         _row("K7", "SHARED", display="顯示A", unit="mg/L", oos="1"),
         _row("K9", "SHARED", display="顯示B", unit="mg/L", oos="1"),  # 顯示名與第一次出現不一致
     ]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
 
     assert len(parsed) == 1
     assert parsed[0].plant_no == "K7"
@@ -280,7 +280,7 @@ def test_item_display_name_conflict_across_rows_rejected():
 
 def test_building_status_parsed_for_all_bound_fields():
     rows = [_row("K7", "ITEMC", law="建置中", oos="建置中", ooc="建置中", alert="建置中", recv="建置中")]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
 
     assert errors == []
     row = parsed[0]
@@ -292,7 +292,7 @@ def test_building_status_parsed_for_all_bound_fields():
 
 def test_blank_bound_status_na():
     rows = [_row("K9", "雨水溝1", type_="雨水溝")]  # OOS/OOC/Alert/允收值 全空
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
 
     assert errors == []
     row = parsed[0]
@@ -300,9 +300,50 @@ def test_blank_bound_status_na():
     assert row.recv == (None, None, "na")
 
 
+# ── 門檻階梯完整性警告（2026-07-31）：填了卻不會生效的門檻要提醒，但不擋載入 ──────
+
+def test_threshold_ladder_warning_ooc_without_oos():
+    """填了 OOC 卻沒填 OOS → 橙燈永遠不會亮，應出警告但該列仍要載入成功。"""
+    rows = [_row("K7", "ITEM_W1", unit="mg/L", ooc="80", alert="60")]
+    parsed, errors, warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert errors == []
+    assert len(parsed) == 1          # 警告不影響載入
+    assert len(warnings) == 1
+    w = warnings[0]
+    assert (w.row, w.plant_no, w.item) == (2, "K7", "ITEM_W1")
+    assert "OOS" in w.message and "橙燈" in w.message
+    assert str(w).startswith("⚠ 警告 第 2 列")
+
+
+def test_threshold_ladder_warning_alert_without_ooc():
+    """填了 Alert 卻沒填 OOC → 黃燈永遠不會亮，應出警告。"""
+    rows = [_row("K7", "ITEM_W2", unit="mg/L", oos="100", alert="60")]
+    parsed, errors, warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert errors == []
+    assert len(parsed) == 1
+    assert len(warnings) == 1
+    assert "Alert" in warnings[0].field and "黃燈" in warnings[0].message
+
+
+def test_threshold_ladder_no_warning_when_all_blank_or_building():
+    """「建置中」項目整排留空或整排填建置中都是合法設定，不可誤報警告。"""
+    rows = [
+        _row("K9", "ITEM_W3", type_="雨水溝"),                                        # 全空
+        _row("K12", "ITEM_W4", oos="建置中", ooc="建置中", alert="建置中"),            # 全建置中
+        _row("K7", "ITEM_W5", unit="mg/L", oos="100", ooc="80", alert="80"),          # 完整（Alert 貼齊 OOC）
+    ]
+    parsed, errors, warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+
+    assert errors == []
+    assert len(parsed) == 3
+    assert warnings == []
+
+
 def test_seqno_optional_int_validation():
     rows = [_row("K7", "ITEMD", oos="1", seq="abc")]
-    parsed, errors = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
+    parsed, errors, _warnings = validate_main_rows([dict(zip(MAIN_HEADERS, r)) for r in rows])
 
     assert parsed == []
     assert len(errors) == 1
@@ -463,6 +504,19 @@ def test_cli_row_errors_do_not_block_valid_rows(b_db, tmp_path):
         assert bad_spec is None
     finally:
         fresh.close()
+
+
+def test_cli_dry_run_prints_threshold_ladder_warning(b_db, tmp_path):
+    """--dry-run 也要印出門檻階梯警告，且獨立成一段、不影響離開碼。"""
+    path = tmp_path / "主表.csv"
+    _write_csv(path, [_row("CLI5", "CLIITEM5", unit="mg/L", ooc="80", alert="60")])
+
+    result = _run_cli(path, ["--dry-run"])
+    assert result.returncode == 0            # 警告不改變離開碼
+    assert "[警告] 共 1 筆" in result.stdout
+    assert "⚠ 警告 第 2 列 [CLI5／CLIITEM5]" in result.stdout
+    assert "警告 1 筆" in result.stdout
+    assert "DRY-RUN" in result.stdout
 
 
 def test_cli_missing_file_reports_error():
