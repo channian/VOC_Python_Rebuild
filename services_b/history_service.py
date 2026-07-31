@@ -10,7 +10,7 @@ B 版資料層差異（schema_B_設計提案.md D 項決策）：
     mt=False 對應 A 版 msg2 篩選，直接 filter is_maintenance=False 即可）。
   - reason/rdatetime/empno 回覆欄位：A 版與 msg/msg1 同一列（VOC_MAIL_Log 一列涵蓋多項目，
     一封信只能回覆一次、分不清是回覆哪個項目）。
-    **2026-07-12 C8 使用者確認變更**：B 版回覆欄位改掛在 mail_log_item（逐項目回覆），
+    **2026-07-31 C8 使用者確認變更**：B 版回覆欄位改掛在 mail_log_item（逐項目回覆），
     不再共用 mail_log 一組回覆——同一封信底下的每個異常項目可以各自獨立回覆。
     改排水記錄（change='Y'）因為本來就沒有 mail_log_item 明細（非監測項目通知），
     這條路徑目前無法附掛逐項目回覆，reason/rdatetime/emp 固定回空字串（見
@@ -201,7 +201,7 @@ def _list_change_water_log(db: Session, plant: str, sdate: str, edate: str, stim
 
 
 def update_reason(db: Session, item_id: str, reason: str, current_user_empno: str) -> None:
-    """儲存異常原因回覆（逐項目，2026-07-12 C8）。
+    """儲存異常原因回覆（逐項目，2026-07-31 C8）。
 
     對應 A 版 update_reason()，但 B 版改成以 mail_log_item 複合主鍵
     (mail_log_id, item, condition_code) 為單位回覆，不再是整封信共用一組回覆。

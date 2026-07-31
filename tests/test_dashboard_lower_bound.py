@@ -1,7 +1,7 @@
 """
 test_dashboard_lower_bound.py — C1：雙邊規格(pH/溫度)下界示警測試
 
-背景（2026-07-12 使用者確認）：
+背景（2026-07-31 使用者確認）：
   現行 `_calculate_light()` 對雙邊規格（pH '6-9'、溫度）只比對上界，數值過低不示警
   （忠實還原舊系統）。使用者確認新系統（B 棧）要改成上下界都示警，但 A 棧
   （services/dashboard_service.py，main.py 公司平行測試中）不可受影響，因此新增

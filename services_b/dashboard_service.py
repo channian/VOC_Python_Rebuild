@@ -161,7 +161,7 @@ def get_dashboard_rows(db: Session, isolation_checker: Optional[IsolationChecker
         else:
             scada_oos_str = scada_ooc_str = scada_alert_str = cwms_oos_str = cwms_ooc_str = "-"
 
-        # check_lower_bound=True：2026-07-12 使用者確認 B 棧（新系統）雙邊規格
+        # check_lower_bound=True：2026-07-31 使用者確認 B 棧（新系統）雙邊規格
         # （pH/溫度等）數值過低也要示警，不再像 A 棧只比對上界。A 棧
         # （services/dashboard_service.get_dashboard_data，main.py 公司平行測試中）
         # 呼叫 _calculate_light 時未傳此參數，預設 False，行為完全不變。

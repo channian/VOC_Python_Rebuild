@@ -13,7 +13,7 @@
      logs   : list[dict]  {no, plantno, cdatetime, msg, emp, reason, rdatetime, logid, item_id, ...}
      error  : str（日期倒置等查詢錯誤，頂部錯誤區呈現）
 
-   2026-07-12 C8（使用者確認的行為變更）：異常回覆從「信件層級」改成「逐項目層級」。
+   2026-07-31 C8（使用者確認的行為變更）：異常回覆從「信件層級」改成「逐項目層級」。
    舊系統一封信只有一組回覆，分不清是回覆信裡的哪個項目；新版每個異常項目（每一列）
    都有自己的回覆按鈕/欄位，`r.item_id` 是該列在 mail_log_item 的複合鍵字串
    （history_service._make_item_id()），前端回覆時原樣送回 /history/reply 即可，不用

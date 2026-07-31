@@ -65,7 +65,7 @@ def test_list_voclog_filters_by_plant_item_date_and_mt(b_db):
 
 
 def test_update_reason_writes_reply_fields(b_db):
-    """2026-07-12 C8：回覆改為逐項目，update_reason 改吃 item_id 複合鍵（非 logid）。"""
+    """2026-07-31 C8：回覆改為逐項目，update_reason 改吃 item_id 複合鍵（非 logid）。"""
     d1 = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
     logid = _make_log(b_db, TEST_PLANT_NO, d1, "Cu 超標通知", [("Cu", "OOS", False)])
 

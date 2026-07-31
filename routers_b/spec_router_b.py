@@ -31,7 +31,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 def _user_no() -> str:
-    """目前操作者工號：session 登入身分（2026-07-12 AD 串接後；未登入且 AUTH_MOCK=True 回退
+    """目前操作者工號：session 登入身分（2026-07-31 AD 串接後；未登入且 AUTH_MOCK=True 回退
     MOCK 身分，見 services_b/session_auth.get_current_user）。"""
     from services_b.session_auth import get_current_user
     return get_current_user()[0]
@@ -244,7 +244,7 @@ def qa_update_b(data: QAUpdate, db: Session = Depends(get_b_db)):
 @router.get("/ui/reason")
 def render_reason_modal_b(request: Request, plant: str = "", item: str = "", sdate: str = "",
                           edate: str = "", mt: bool = False, db: Session = Depends(get_b_db)):
-    """2026-07-12 C8：logs 每一列改帶 item_id（逐項目複合鍵字串，見
+    """2026-07-31 C8：logs 每一列改帶 item_id（逐項目複合鍵字串，見
     history_service._make_item_id），模板行內回覆改用 item_id 呼叫 /history/reply。"""
     if not sdate or not edate:
         sdate, edate = history_service.default_date_range()

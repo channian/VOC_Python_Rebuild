@@ -70,7 +70,7 @@ def test_migration_loads_and_transforms(empty_db):
     # 2 簽核 × 1 廠 ×（2 隔離 + 1 水質異常 + 14 派報 rpttype）= 34
     assert report.counts["mail_list"] == 34
     assert report.counts["acl_user_role"] == 2
-    # 5 = staleness/sync/dispatch 間隔 + mail_paused + control_time_max_hours(C5，2026-07-12 新增)
+    # 5 = staleness/sync/dispatch 間隔 + mail_paused + control_time_max_hours(C5，2026-07-31 新增)
     assert report.counts["system_config"] == 5
 
     # ── 門檻拆解：pH1 雙邊 '6-9' → low/high ──

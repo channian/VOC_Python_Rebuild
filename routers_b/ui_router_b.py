@@ -47,7 +47,7 @@ templates = Jinja2Templates(directory="templates")
 
 def _user_no() -> str:
     """目前操作者工號（session 登入身分；AUTH_MOCK=True 未登入時回退 MOCK 身分）。
-    2026-07-12 AD 串接：本檔原本寫死 "admin" 的操作者參數全部改走這裡。"""
+    2026-07-31 AD 串接：本檔原本寫死 "admin" 的操作者參數全部改走這裡。"""
     from services_b.session_auth import get_current_user
     return get_current_user()[0]
 
@@ -185,7 +185,7 @@ def api_toggle_mail_b(enable: bool, db: Session = Depends(get_b_db)):
 # ══════════════════════════════════════════════════════════════════════════
 
 class ReasonUpdateReq(BaseModel):
-    """2026-07-12 C8：回覆改成逐項目層級，item_id 是 history_service._make_item_id()
+    """2026-07-31 C8：回覆改成逐項目層級，item_id 是 history_service._make_item_id()
     組出的複合鍵字串（對應 mail_log_item 的 (mail_log_id, item, condition_code) 複合主鍵），
     由 /history/logs、/ui/history、/ui/reason 回傳的每一列帶出，前端原樣送回即可。"""
     item_id: str

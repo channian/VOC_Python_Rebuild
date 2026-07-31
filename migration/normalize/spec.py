@@ -51,7 +51,7 @@ def normalize_spec(rows: List[Dict[str, Any]]) -> List[Spec]:
     """A VOC_SPEC{plantno, item, LAW, OOS, OOC, alert, recv, source, status, tagname, seqno}
     → Spec(plant_no, item, law_text, oos_*, ooc_*, alert_*, recv_*, source_id, seqno)。
 
-    ⚠️ 2026-07-12 tagname 收斂：spec 表已移除 tagname 欄位（同步 JOB 一律以 tag_mapping
+    ⚠️ 2026-07-31 tagname 收斂：spec 表已移除 tagname 欄位（同步 JOB 一律以 tag_mapping
     為唯一權威，spec.tagname 在 B 棧從未被任何邏輯讀取，留著只會誤導維護者以為改它有效）。
     舊 VOC_SPEC.tagname 的既有知識並未遺失——它仍在 export/VOC_SPEC.json 原始資料裡，
     Phase C 正式搬遷時應據以產生 tag_mapping 的初始列（待該階段連同真實 source_table 一併定案）。

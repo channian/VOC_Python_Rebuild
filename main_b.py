@@ -64,7 +64,7 @@ app = FastAPI(
 # 靜態資源（CSS / JS / 圖片）— 與 A 棧共用同一份 static/ 目錄，不用重複維護
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ── Session／登入（2026-07-12 AD 串接）────────────────────────────────────
+# ── Session／登入（2026-07-31 AD 串接）────────────────────────────────────
 # add_middleware 是洋蔥「後加先跑」：SessionAuthMiddleware 先 add（後執行），
 # SessionMiddleware 後 add（先執行）——SessionAuth 讀 request.session 前 session 必須就緒。
 # AUTH_MOCK=True（開發/沙盒）不強制登入（MOCK 身分 fallback，登入頁可切測試身分）；
@@ -84,7 +84,7 @@ app.include_router(spec_router_b.router)
 #   新儀表板在 ui_router_b 的 /home（舊版保留於 /home/classic 供對照）
 app.include_router(auth_router_b.router)
 app.include_router(trend_router_b.router)
-# 基礎資料維護（2026-07-12）：/ui/basedata、/basedata/*——廠區/項目/Tag 對應三分頁，
+# 基礎資料維護（2026-07-31）：/ui/basedata、/basedata/*——廠區/項目/Tag 對應三分頁，
 # 讓環工部自行新增新廠棟與監測項目，不必每次找工程師動資料庫。
 app.include_router(basedata_router_b.router)
 

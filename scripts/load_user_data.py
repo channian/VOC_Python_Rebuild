@@ -37,7 +37,7 @@ scripts/load_user_data.py — 基礎資料一鍵載入器（環工部主表 → 
   python scripts/load_user_data.py --file 基礎資料主表.csv --dry-run
   python scripts/load_user_data.py --file 基礎資料主表.csv --source-table kepware_sim
 
-★ 「類型」欄（水質/空汙/雨水溝）驗證後寫入 item.category（2026-07-12 新增的欄位）。
+★ 「類型」欄（水質/空汙/雨水溝）驗證後寫入 item.category（2026-07-31 新增的欄位）。
   背景：現有程式碼判斷項目類別是用名稱字串比對（services/dispatch_service.py 的
   "VOC" in item、"雨水溝" in item，services/flow_service.py 的簽核 rtype 也是），
   新廠若有不叫 VOC 的空汙項目會被誤判成水質，連帶找錯簽核人、派報分錯類。
@@ -332,7 +332,7 @@ def validate_main_rows(main_rows: List[Dict[str, Any]]) -> Tuple[List[ParsedRow]
                 else:
                     recv = triplet
 
-            # OOC/Alert 層遞驗證（2026-07-12 主控補上）：Alert 範圍必須包在 OOC 內
+            # OOC/Alert 層遞驗證（2026-07-31 主控補上）：Alert 範圍必須包在 OOC 內
             # ——Alert 最先觸發（範圍最窄）、OOC 次之、OOS 最嚴重，此方向已由使用者於
             # C6 確認正確（見 docs/標準化與待調整清單.md），故此處套用 spec_schema 的
             # check_ooc_alert_hierarchy()。需求文件已向環工部承諾「填錯會擋下並指出哪一列」，

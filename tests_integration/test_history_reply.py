@@ -1,7 +1,7 @@
 """
 tests_integration/test_history_reply.py — 真 PG 整合測試：異常回覆改成「逐項目層級」（C8）
 
-2026-07-12 使用者確認的行為變更：舊系統（A 版）一封派報信（mail_log）只有一組回覆欄位，
+2026-07-31 使用者確認的行為變更：舊系統（A 版）一封派報信（mail_log）只有一組回覆欄位，
 一封信可能包含多個異常項目（mail_log_item 多筆），使用者回覆一次分不清是在回覆哪個項目。
 新版把回覆三欄（reply_empno/reply_reason/reply_at）從 mail_log 搬到 mail_log_item，
 改成每個異常項目各自回覆。

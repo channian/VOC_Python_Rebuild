@@ -86,7 +86,7 @@ class Item(BaseB):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="是否啟用中")
     category: Mapped[Optional[str]] = mapped_column(
         String(20),
-        comment="項目類型：水質／空汙／雨水溝（2026-07-12 新增。現行程式是靠項目名稱字串比對判斷類型，新廠若有不叫 VOC 的空汙項目會被誤判成水質；本欄由基礎資料建置填入正確值，各處判斷邏輯改用本欄為後續待辦）",
+        comment="項目類型：水質／空汙／雨水溝（2026-07-31 新增。現行程式是靠項目名稱字串比對判斷類型，新廠若有不叫 VOC 的空汙項目會被誤判成水質；本欄由基礎資料建置填入正確值，各處判斷邏輯改用本欄為後續待辦）",
     )
 
     __table_args__ = {"comment": "量測項目主檔（對應舊 VOC_item；display_name 收納舊程式硬編別名對照）"}
@@ -247,7 +247,7 @@ class MailLog(BaseB):
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="寄送時間（舊 cdatetime，對齊 5 分）")  # cdatetime（對齊 5 分）
     subject: Mapped[Optional[str]] = mapped_column(String(200), comment="信件主旨")
     body_note: Mapped[Optional[str]] = mapped_column(Text, comment="信件全文備註（舊 msg，人讀全文，回覆頁顯示用）")  # 原 msg（人讀全文，回覆頁顯示用）
-    # 2026-07-12 C8 使用者確認：異常回覆改成「逐項目」層級（原本一封信只有一組回覆，
+    # 2026-07-31 C8 使用者確認：異常回覆改成「逐項目」層級（原本一封信只有一組回覆，
     # 分不清是在回覆信裡的哪個異常項目）。回覆三欄搬到 MailLogItem，此處不再保留。
 
     __table_args__ = {"comment": "派報信件層級紀錄（對應舊 VOC_MAIL_Log，一封信一列；明細拆到 mail_log_item）"}
@@ -264,10 +264,10 @@ class MailLogItem(BaseB):
     detail: Mapped[Optional[str]] = mapped_column(Text, comment="原條件敘述（信件顯示用）")
     escalation_stage: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, comment="派報升級階段：0/1/2（對應舊 0/15/30 分再發）")  # 0/1/2（原 0/15/30 分）
     is_maintenance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="是否保養中項目（true=舊系統僅入 msg1 不入 msg2）")
-    # 2026-07-12 C8：異常回覆從「信件層級」改成「逐項目層級」，回覆三欄從 MailLog 搬過來
+    # 2026-07-31 C8：異常回覆從「信件層級」改成「逐項目層級」，回覆三欄從 MailLog 搬過來
     # （使用者確認：舊系統一封信只有一組回覆，分不清是回覆信裡的哪個項目；新版改成每個
     # 項目各自回覆）。語意不變，只是掛的位置從 mail_log 改成 mail_log_item。
-    reply_empno: Mapped[Optional[str]] = mapped_column(String(50), comment="原因回覆人工號（2026-07-12 起改為逐項目回覆，原掛在 mail_log）")
+    reply_empno: Mapped[Optional[str]] = mapped_column(String(50), comment="原因回覆人工號（2026-07-31 起改為逐項目回覆，原掛在 mail_log）")
     reply_reason: Mapped[Optional[str]] = mapped_column(Text, comment="異常原因回覆內容（逐項目）")
     reply_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), comment="原因回覆回填時間（逐項目）")
 

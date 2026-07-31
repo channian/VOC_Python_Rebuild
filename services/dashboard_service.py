@@ -104,7 +104,7 @@ def _calculate_light(row: dict, check_lower_bound: bool = False) -> tuple[str, b
       - 比對順序 R → O(範圍) → O(不一致) → Y → G，對齊舊 Home.aspx.cs
         last-wins 的等效優先序（紅 > 橙 > 黃）。
 
-    check_lower_bound（2026-07-12 使用者確認新增）：
+    check_lower_bound（2026-07-31 使用者確認新增）：
       - 舊系統（沿用至今的 A 棧預設行為）雙邊規格（pH/溫度 '6-9'）只比對上界，
         數值過低不示警——本參數 **預設 False**，維持這個舊行為完全不變，
         確保 A 棧（main.py，公司平行測試中）不受影響。
@@ -154,7 +154,7 @@ def _calculate_light(row: dict, check_lower_bound: bool = False) -> tuple[str, b
         return "G"
 
     # ── 下界判定（check_lower_bound=True 時才啟用，僅對雙邊規格 low != high 生效）──
-    # 2026-07-12 使用者確認：pH/溫度等雙邊規格數值過低也要示警，鏡射上界的
+    # 2026-07-31 使用者確認：pH/溫度等雙邊規格數值過低也要示警，鏡射上界的
     # R/O/Y 規則改用「<=」/「<」比對下界；單邊規格 low==high，_lo 一律為 None
     # （沒有獨立下界可比），因此對單邊項目完全不影響。
     def _lower_verdict() -> str:
