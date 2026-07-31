@@ -103,7 +103,7 @@ def list_specs(db: Session, plant_no: str = "", item: str = "") -> List[dict]:
             "alert_low": spec.alert_low, "alert_high": spec.alert_high, "alert_status": spec.alert_status,
             "recv_low": spec.recv_low, "recv_high": spec.recv_high, "recv_status": spec.recv_status,
             "source_id": spec.source_id, "source_name": source_name,
-            "tagname": spec.tagname, "seqno": spec.seqno,
+            "seqno": spec.seqno,
         })
     return result
 
@@ -134,7 +134,7 @@ def _spec_snapshot_dict(spec: Optional[Spec]) -> Optional[dict]:
         "ooc_low": _num(spec.ooc_low), "ooc_high": _num(spec.ooc_high), "ooc_status": spec.ooc_status,
         "alert_low": _num(spec.alert_low), "alert_high": _num(spec.alert_high), "alert_status": spec.alert_status,
         "recv_low": _num(spec.recv_low), "recv_high": _num(spec.recv_high), "recv_status": spec.recv_status,
-        "source_id": spec.source_id, "tagname": spec.tagname, "seqno": spec.seqno,
+        "source_id": spec.source_id, "seqno": spec.seqno,
     }
 
 
@@ -155,7 +155,7 @@ _SPEC_EDITABLE_FIELDS = (
     "ooc_low", "ooc_high", "ooc_status",
     "alert_low", "alert_high", "alert_status",
     "recv_low", "recv_high", "recv_status",
-    "source_id", "tagname", "seqno",
+    "source_id", "seqno",
 )
 
 
@@ -177,7 +177,6 @@ def create_spec(db: Session, current_user_empno: str, plant_no: str, item: str,
         spec = Spec(
             plant_no=plant_no, item=item,
             source_id=fields.get("source_id", 1),
-            tagname=fields.get("tagname") or f"{plant_no}_{item}",
             seqno=fields.get("seqno", 0),
             updated_at=datetime.now(timezone.utc),
         )
@@ -379,7 +378,6 @@ def apply_spec_from_form(db: Session, spec_apply_id: int, current_user_empno: st
         spec = Spec(
             plant_no=plant_no, item=item,
             source_id=payload.get("source_id", 1),
-            tagname=payload.get("tagname") or f"{plant_no}_{item}",
             seqno=payload.get("seqno", 0),
             updated_at=datetime.now(timezone.utc),
         )

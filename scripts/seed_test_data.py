@@ -172,7 +172,7 @@ def _seed_plant_item_spec(session) -> None:
             ooc_low=Decimal("6.5"), ooc_high=Decimal("8.5"), ooc_status="valid",
             alert_low=Decimal("6.8"), alert_high=Decimal("8.2"), alert_status="valid",
             recv_low=Decimal("6.5"), recv_high=Decimal("8.5"), recv_status="valid",
-            source_id=1, tagname="TEST.PH1.PV", seqno=1,
+            source_id=1, seqno=1,
             updated_at=now,
         )
     )
@@ -186,7 +186,7 @@ def _seed_plant_item_spec(session) -> None:
             ooc_high=Decimal("2.5"), ooc_status="valid",
             alert_high=Decimal("2.0"), alert_status="valid",
             recv_high=Decimal("2.5"), recv_status="valid",
-            source_id=1, tagname="TEST.CU1.PV", seqno=2,
+            source_id=1, seqno=2,
             updated_at=now,
         )
     )
@@ -200,7 +200,7 @@ def _seed_plant_item_spec(session) -> None:
             ooc_high=Decimal("40"), ooc_status="valid",
             alert_high=Decimal("30"), alert_status="valid",
             recv_high=Decimal("40"), recv_status="valid",
-            source_id=1, tagname="TEST.VOC1.PV", seqno=3,
+            source_id=1, seqno=3,
             updated_at=now,
         )
     )

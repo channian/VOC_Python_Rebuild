@@ -60,7 +60,7 @@ def _load_binding() -> PersonnelBinding:
     )
 
 
-def _spec(plant_no, item, law, oos, ooc, alert, recv, source_id=1, tag=None, seq=0, low=None):
+def _spec(plant_no, item, law, oos, ooc, alert, recv, source_id=1, seq=0, low=None):
     """單邊規格 helper；low=(oos_l,ooc_l,alert_l,recv_l) 時為雙邊。值為 None 的門檻標 na。"""
     def _s(v):
         return "valid" if v is not None else "na"
@@ -71,7 +71,7 @@ def _spec(plant_no, item, law, oos, ooc, alert, recv, source_id=1, tag=None, seq
         ooc_low=lows[1], ooc_high=ooc, ooc_status=_s(ooc),
         alert_low=lows[2], alert_high=alert, alert_status=_s(alert),
         recv_low=lows[3], recv_high=recv, recv_status=_s(recv),
-        source_id=source_id, tagname=tag, seqno=seq,
+        source_id=source_id, seqno=seq,
         updated_at=datetime.now(timezone.utc),
     )
 
@@ -107,10 +107,9 @@ def _seed_k71(session) -> None:
 
     session.add_all([
         # pH 雙邊 6-9 → 讀值 7.2 綠
-        _spec("K71", "pH1", "6-9", D("9"), D("8.5"), D("8.2"), D("8.5"),
-              tag="K71.PH1.PV", seq=1, low=(D("6"), D("6.5"), D("6.8"), D("6.5"))),
+        _spec("K71", "pH1", "6-9", D("9"), D("8.5"), D("8.2"), D("8.5"), seq=1, low=(D("6"), D("6.5"), D("6.8"), D("6.5"))),
         # COD → 讀值 120 超 OOS 100 → 紅（派報【首發】素材）
-        _spec("K71", "COD", "100", D("100"), D("80"), D("60"), D("80"), tag="K71.COD.PV", seq=2),
+        _spec("K71", "COD", "100", D("100"), D("80"), D("60"), D("80"), seq=2),
         # SS → 讀值 35：Alert30 < 35 < OOC40 → 黃
         _spec("K71", "SS", "50", D("50"), D("40"), D("30"), D("40"), seq=3),
         # Cu → 讀值 1.0 本身綠，但 SCADA OOC(2.4)≠SPEC OOC(2.5) → 橙（設定不同步）
@@ -181,7 +180,7 @@ def _seed_k72(session) -> None:
         ("VOC1", D("50"), D("40"), D("30")), ("VOC2", D("50"), D("40"), D("30")),
         ("VOC3", D("5"), D("4"), D("3")), ("VOC4", D("5"), D("4"), D("3")),
     ], start=1):
-        session.add(_spec("K72", item, str(oos), oos, ooc, alert, ooc, seq=i, tag=f"K72.{item}.PV"))
+        session.add(_spec("K72", item, str(oos), oos, ooc, alert, ooc, seq=i))
     session.flush()
     session.add_all([
         _reading("K72", "VOC1", D("10.0"),

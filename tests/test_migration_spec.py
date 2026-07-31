@@ -81,7 +81,6 @@ def test_full_row_all_four_thresholds():
     assert spec.item == "pH"
     assert spec.law_text == "放流水標準"
     assert spec.source_id == 2
-    assert spec.tagname == "TAG.K3.PH"
     assert spec.seqno == 5
 
     assert (spec.oos_low, spec.oos_high, spec.oos_status) == (Decimal("6"), Decimal("9"), "valid")

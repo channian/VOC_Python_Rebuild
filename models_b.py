@@ -132,7 +132,6 @@ class Spec(BaseB):
     recv_status: Mapped[Optional[str]] = mapped_column(String(20), comment="允收值狀態：valid／na／building")
 
     source_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("source.source_id"), nullable=False, comment="資料來源（FK→source.source_id）：1=SCADA／2=CWMS／3=QA")
-    tagname: Mapped[Optional[str]] = mapped_column(String(100), comment="對應 SCADA/CWMS 的 tag 名稱")
     seqno: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="同廠區內顯示排序")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), comment="最後更新時間"
