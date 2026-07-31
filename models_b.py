@@ -84,6 +84,10 @@ class Item(BaseB):
     display_name: Mapped[Optional[str]] = mapped_column(String(50), comment="顯示名稱（例 'pH'，吸收舊程式硬編的 pH1→pH/COD2→COD 別名對照）")  # 'pH'
     unit: Mapped[Optional[str]] = mapped_column(String(50), comment="量測單位（例 mg/L）")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="是否啟用中")
+    category: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        comment="項目類型：水質／空汙／雨水溝（2026-07-12 新增。現行程式是靠項目名稱字串比對判斷類型，新廠若有不叫 VOC 的空汙項目會被誤判成水質；本欄由基礎資料建置填入正確值，各處判斷邏輯改用本欄為後續待辦）",
+    )
 
     __table_args__ = {"comment": "量測項目主檔（對應舊 VOC_item；display_name 收納舊程式硬編別名對照）"}
 
