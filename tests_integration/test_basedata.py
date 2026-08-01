@@ -233,6 +233,131 @@ def test_basedata_page_renders_spec_kind_column(b_db):
     assert 'id="bdv2-i-dual"' in html
 
 
+# ── 項目類型 category（2026-08-01）：取代「靠項目名稱字串猜類型」的資料來源 ──────
+# 網頁是新廠上線後的常態維護路徑，這裡不接通的話 category 永遠是 NULL，
+# 後續「改讀 category」的工作會直接踩空。
+
+def test_item_category_defaults_to_null(b_db):
+    """不帶 category 建項目 → NULL（未指定，與既有資料相容）。"""
+    client = _make_client(b_db)
+    res = client.post("/basedata/item/create", json={"item": "CATDEF", "is_active": True})
+    assert res.status_code == 200, res.text
+    row = next(r for r in client.get("/basedata/items").json()["rows"] if r["item"] == "CATDEF")
+    assert row["category"] is None
+
+
+def test_item_create_with_category(b_db):
+    """★ 新增項目時可直接設定類型（例如新廠不叫 VOC 的空汙項目）。"""
+    client = _make_client(b_db)
+    res = client.post("/basedata/item/create", json={
+        "item": "TVOC-A", "display_name": "總碳氫", "unit": "ppm",
+        "is_active": True, "category": "空汙",
+    })
+    assert res.status_code == 200, res.text
+    row = next(r for r in client.get("/basedata/items").json()["rows"] if r["item"] == "TVOC-A")
+    assert row["category"] == "空汙"
+
+
+def test_item_update_can_switch_category(b_db):
+    """既有項目可改類型：未指定 → 空汙 → 水質 → 雨水溝 → 回未指定（整份覆寫語意）。"""
+    client = _make_client(b_db)
+    client.post("/basedata/item/create", json={"item": "CATUPD", "is_active": True})
+
+    def _set(value):
+        res = client.post("/basedata/item/update", json={
+            "old_item": "CATUPD", "item": "CATUPD", "is_active": True, "category": value,
+        })
+        assert res.status_code == 200, res.text
+        rows = client.get("/basedata/items").json()["rows"]
+        return next(r for r in rows if r["item"] == "CATUPD")["category"]
+
+    assert _set("空汙") == "空汙"
+    assert _set("水質") == "水質"
+    assert _set("雨水溝") == "雨水溝"
+    assert _set(None) is None
+
+
+@pytest.mark.parametrize("bad", ["空氣污染", "廢水", "VOC"])
+def test_item_create_with_invalid_category_rejected(b_db, bad):
+    """非法類型要擋下（400 + 中文訊息列出合法值），且不可留下半筆資料。"""
+    client = _make_client(b_db)
+    res = client.post("/basedata/item/create", json={
+        "item": "CATBAD", "is_active": True, "category": bad,
+    })
+    assert res.status_code == 400, res.text
+    detail = res.json()["detail"]
+    assert "項目類型錯誤" in detail
+    assert "水質/空汙/雨水溝" in detail
+    rows = client.get("/basedata/items").json()["rows"]
+    assert not any(r["item"] == "CATBAD" for r in rows)
+
+
+def test_item_update_with_invalid_category_rejected(b_db):
+    """改成非法類型要被擋，且原值不可被動到。"""
+    client = _make_client(b_db)
+    client.post("/basedata/item/create", json={
+        "item": "CATBADUPD", "is_active": True, "category": "水質",
+    })
+    res = client.post("/basedata/item/update", json={
+        "old_item": "CATBADUPD", "item": "CATBADUPD", "is_active": True, "category": "污水",
+    })
+    assert res.status_code == 400, res.text
+    assert "項目類型錯誤" in res.json()["detail"]
+    row = next(r for r in client.get("/basedata/items").json()["rows"] if r["item"] == "CATBADUPD")
+    assert row["category"] == "水質"
+
+
+def test_item_category_blank_string_treated_as_unspecified(b_db):
+    """前端若送空字串（而非 null）也視為未指定，不要寫入 '' 這種髒值。"""
+    client = _make_client(b_db)
+    res = client.post("/basedata/item/create", json={
+        "item": "CATBLANK", "is_active": True, "category": "  ",
+    })
+    assert res.status_code == 200, res.text
+    row = next(r for r in client.get("/basedata/items").json()["rows"] if r["item"] == "CATBLANK")
+    assert row["category"] is None
+
+
+def test_item_category_written_to_tranlog(b_db):
+    """類型異動要留稽核（比照其他欄位，data_before/data_after 都含 category）。"""
+    from models_b import Tranlog
+    from sqlalchemy import select
+
+    client = _make_client(b_db)
+    client.post("/basedata/item/create", json={
+        "item": "CATLOG", "is_active": True, "category": "水質",
+    })
+    client.post("/basedata/item/update", json={
+        "old_item": "CATLOG", "item": "CATLOG", "is_active": True, "category": "空汙",
+    })
+    logs = b_db.execute(select(Tranlog).order_by(Tranlog.id)).scalars().all()
+    ins = [l for l in logs if l.data_after.get("item") == "CATLOG" and l.log_type == "I"]
+    upd = [l for l in logs if l.data_after.get("item") == "CATLOG" and l.log_type == "M"]
+    assert ins and ins[-1].data_after["category"] == "水質"
+    assert upd and upd[-1].data_before["category"] == "水質"
+    assert upd[-1].data_after["category"] == "空汙"
+
+
+def test_basedata_page_renders_category_column(b_db):
+    """項目分頁要看得到「類型」欄、下拉選單與三個合法選項。"""
+    client = _make_client(b_db)
+    html = client.get("/ui/basedata").text
+    assert 'id="bdv2-i-category"' in html
+    assert "類型:未指定" in html
+    for c in ("水質", "空汙", "雨水溝"):
+        assert c in html
+
+
+def test_basedata_page_shows_existing_category_value(b_db):
+    """清單要顯示現值，編輯時也要能帶回表單（靠 data-category）。"""
+    client = _make_client(b_db)
+    client.post("/basedata/item/create", json={
+        "item": "CATSHOW", "is_active": True, "category": "雨水溝",
+    })
+    html = client.get("/ui/basedata").text
+    assert 'data-category="雨水溝"' in html
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Tag 對應 TAG MAPPING
 # ══════════════════════════════════════════════════════════════════════════

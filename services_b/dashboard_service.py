@@ -165,6 +165,10 @@ def get_dashboard_rows(db: Session, isolation_checker: Optional[IsolationChecker
         # （pH/溫度等）數值過低也要示警，不再像 A 棧只比對上界。A 棧
         # （services/dashboard_service.get_dashboard_data，main.py 公司平行測試中）
         # 呼叫 _calculate_light 時未傳此參數，預設 False，行為完全不變。
+        #
+        # category=item_row.category（2026-08-01 D7）：VOC 例外（SCADA 比 SPEC 嚴不算
+        # 不一致）改由 item.category 資料驅動判斷，不再靠項目名稱有沒有 'VOC' 字樣。
+        # category 為 NULL（舊資料尚未回填）時傳 None，純函式內部自動退回名稱比對。
         light, is_anomaly = _calculate_light(dict(
             item=spec.item,
             rvalue_raw=rvalue_raw,
@@ -172,7 +176,7 @@ def get_dashboard_rows(db: Session, isolation_checker: Optional[IsolationChecker
             scada_oos=scada_oos_str, scada_ooc=scada_ooc_str, scada_alert=scada_alert_str,
             cwms_oos=cwms_oos_str, cwms_ooc=cwms_ooc_str,
             broken=broken,
-        ), check_lower_bound=True)
+        ), check_lower_bound=True, category=item_row.category)
 
         # G 項決策：pH1/COD2 顯示用 item.display_name，取代程式硬編 to_display_item() 字串替換
         display_item = item_row.display_name or spec.item

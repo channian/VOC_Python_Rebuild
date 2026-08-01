@@ -33,12 +33,24 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from models_b import Plant, Item, TagMapping, Spec, Tranlog
+from services.category_util import VALID_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
 # ── 常數 ──────────────────────────────────────────────────────────────────
 
 PLANT_KIND_CHOICES = ["normal", "virtual_group", "all"]
+
+# item.category 合法值：項目類型（水質／空汙／雨水溝）。
+# 用途見 models_b.Item.category：現行程式靠項目名稱字串比對判類型（`"VOC" in item` 當空汙、
+# `"雨水溝" in item`），新廠若有不叫 VOC 的空汙項目會被誤判成水質，連帶找錯簽核人、派報分錯類；
+# 本欄是那件事的資料驅動解法，網頁維護（本檔＝寫入端）與一次性載入器都要能寫。
+# ★ 合法值一律沿用 services/category_util.py（讀取端的單一真相來源）的 VALID_CATEGORIES，
+#   不在此另抄一份字面值——CLAUDE.md：B 棧純邏輯一律 import services/ 重用，兩棧同源。
+#   （scripts/load_user_data.py 的 ITEM_TYPES 是同一組值，那是離線載入器不便被 runtime 反向
+#    import；三者是否同步已用純邏輯測試 tests/test_basedata_category.py 鎖住。）
+# 這裡轉成 list 只是為了給 Jinja2 下拉選單迭代時順序穩定、型別與 PLANT_KIND_CHOICES 一致。
+ITEM_CATEGORY_CHOICES = list(VALID_CATEGORIES)
 
 # tag_mapping.target_field 合法值：'value'（讀值本身）或六種 SCADA 自設管制值欄位之一
 # （見 services_b/sync_service.py 開頭註解、models_b.py TagMapping/ReadingCurrent）。
@@ -52,6 +64,25 @@ TARGET_FIELD_CHOICES = [
     ("scada_alert_high", "SCADA Alert 上界"),
 ]
 TARGET_FIELD_VALUES = [v for v, _ in TARGET_FIELD_CHOICES]
+
+
+def normalize_item_category(category: Optional[str]) -> Optional[str]:
+    """項目類型欄位的驗證/正規化（純邏輯，不碰 DB，方便單元測試）。
+
+    None／空白字串 → None（＝未指定，與 category 欄位加入前的既有資料相容，不強迫使用者填）；
+    合法值前後空白會被去掉；非法值一律 raise ValueError 由 router 轉成 HTTP 400 中文訊息。
+    """
+    if category is None:
+        return None
+    category = category.strip()
+    if not category:
+        return None
+    if category not in ITEM_CATEGORY_CHOICES:
+        raise ValueError(
+            f"項目類型錯誤，須為 {'/'.join(ITEM_CATEGORY_CHOICES)} 其一（或留空表示未指定），"
+            f"實際為「{category}」!"
+        )
+    return category
 
 
 def _tranlog(db: Session, emp_no: str, log_type: str, before: dict, after: dict, remark: str = "") -> None:
@@ -189,7 +220,8 @@ def list_items(db: Session) -> list[dict]:
     rows = db.execute(select(Item).order_by(Item.item_id)).scalars().all()
     return [
         {"item_id": r.item_id, "item": r.item, "display_name": r.display_name,
-         "unit": r.unit, "is_active": r.is_active, "is_dual_bound": r.is_dual_bound}
+         "unit": r.unit, "is_active": r.is_active, "is_dual_bound": r.is_dual_bound,
+         "category": r.category}
         for r in rows
     ]
 
@@ -211,26 +243,30 @@ def _item_reference_counts(db: Session, item: str) -> tuple[int, int]:
 
 def add_item(db: Session, current_user_empno: str, item: str, display_name: Optional[str],
              unit: Optional[str], is_active: bool, remark: str = "",
-             is_dual_bound: Optional[bool] = None) -> None:
+             is_dual_bound: Optional[bool] = None, category: Optional[str] = None) -> None:
     """新增項目。
 
     is_dual_bound＝規格型態（True=雙邊『低-高』如 pH/溫度、False=單邊、None=未指定）。
-    參數擺在 remark 之後、給預設值 None，是為了不動既有呼叫端的位置引數順序。
+    category＝項目類型（水質／空汙／雨水溝，None=未指定，見 ITEM_CATEGORY_CHOICES）。
+    兩者都擺在 remark 之後、給預設值 None，是為了不動既有呼叫端的位置引數順序。
     """
     try:
         item = (item or "").strip()
         if not item:
             raise ValueError("項目原名不可空白!")
+        category = normalize_item_category(category)
 
         if db.execute(select(Item).where(Item.item == item)).scalar_one_or_none():
             raise ValueError(f"項目 {item} 已存在!")
 
         item_id = _next_item_id(db)
         db.add(Item(item_id=item_id, item=item, display_name=display_name or None,
-                     unit=unit or None, is_active=is_active, is_dual_bound=is_dual_bound))
+                     unit=unit or None, is_active=is_active, is_dual_bound=is_dual_bound,
+                     category=category))
         _tranlog(db, current_user_empno, "I", {},
                  {"item_id": item_id, "item": item, "display_name": display_name, "unit": unit,
-                  "is_active": is_active, "is_dual_bound": is_dual_bound}, remark)
+                  "is_active": is_active, "is_dual_bound": is_dual_bound,
+                  "category": category}, remark)
         db.commit()
     except ValueError:
         db.rollback()
@@ -243,16 +279,18 @@ def add_item(db: Session, current_user_empno: str, item: str, display_name: Opti
 
 def update_item(db: Session, current_user_empno: str, old_item: str, item: str,
                  display_name: Optional[str], unit: Optional[str], is_active: bool,
-                 remark: str = "", is_dual_bound: Optional[bool] = None) -> None:
+                 remark: str = "", is_dual_bound: Optional[bool] = None,
+                 category: Optional[str] = None) -> None:
     """修改項目。
 
-    ⚠️ is_dual_bound 採「整份覆寫」語意（傳 None 就是把規格型態設回未指定），與 display_name/
+    ⚠️ is_dual_bound / category 皆採「整份覆寫」語意（傳 None 就是設回未指定），與 display_name/
     unit 一致——本頁的編輯表單一律把整列現值帶進表單再整份送回，不是 PATCH 式的部分更新。
     """
     try:
         item = (item or "").strip()
         if not item:
             raise ValueError("項目原名不可空白!")
+        category = normalize_item_category(category)
 
         entry = db.execute(select(Item).where(Item.item == old_item)).scalar_one_or_none()
         if not entry:
@@ -260,7 +298,7 @@ def update_item(db: Session, current_user_empno: str, old_item: str, item: str,
 
         before = {"item_id": entry.item_id, "item": entry.item, "display_name": entry.display_name,
                   "unit": entry.unit, "is_active": entry.is_active,
-                  "is_dual_bound": entry.is_dual_bound}
+                  "is_dual_bound": entry.is_dual_bound, "category": entry.category}
 
         if item != entry.item:
             if db.execute(select(Item).where(Item.item == item)).scalar_one_or_none():
@@ -277,11 +315,12 @@ def update_item(db: Session, current_user_empno: str, old_item: str, item: str,
         entry.unit = unit or None
         entry.is_active = is_active
         entry.is_dual_bound = is_dual_bound
+        entry.category = category
 
         _tranlog(db, current_user_empno, "M", before,
                  {"item_id": entry.item_id, "item": entry.item, "display_name": entry.display_name,
                   "unit": entry.unit, "is_active": entry.is_active,
-                  "is_dual_bound": entry.is_dual_bound}, remark)
+                  "is_dual_bound": entry.is_dual_bound, "category": entry.category}, remark)
         db.commit()
     except ValueError:
         db.rollback()
@@ -307,7 +346,7 @@ def delete_item(db: Session, current_user_empno: str, item: str, remark: str = "
 
         before = {"item_id": entry.item_id, "item": entry.item, "display_name": entry.display_name,
                   "unit": entry.unit, "is_active": entry.is_active,
-                  "is_dual_bound": entry.is_dual_bound}
+                  "is_dual_bound": entry.is_dual_bound, "category": entry.category}
         db.delete(entry)
         _tranlog(db, current_user_empno, "D", before, {}, remark)
         db.commit()

@@ -30,6 +30,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from services.category_util import is_air_item, is_raingutter_item, is_water_item
 from services.dashboard_service import _parse_bounds, _safe_float
 from services.maillist_service import get_mail_recipients
 from services.notify_service import send_email_sync
@@ -90,7 +91,8 @@ def _scada_status(raw) -> tuple[str, object]:
 
 # ── evaluate_row：GetDataRed 純函式版本 ───────────────────────────────────
 
-def evaluate_row(row: dict, prev_mail: dict | None, now: datetime) -> DispatchResult:
+def evaluate_row(row: dict, prev_mail: dict | None, now: datetime,
+                 category: str | None = None) -> DispatchResult:
     """
     對應 Job.dbVOC.GetDataRed(DataRow row, DateTime dt2)。
 
@@ -102,6 +104,13 @@ def evaluate_row(row: dict, prev_mail: dict | None, now: datetime) -> DispatchRe
 
     prev_mail：Get前筆派報資料(plantno, item) 的結果，
         {'cdatetime': datetime, 'msg1': str} 或 None（查無記錄）。
+
+    category（2026-08-01 D7 新增，比照 _calculate_light 的 check_lower_bound 保護模式）：
+        項目類型（'水質'/'空汙'/'雨水溝'，來源 models_b.Item.category），決定
+        ① 派報代碼前綴 sType（'空'/'水'）② VOC 例外（SCADA 比 SPEC 嚴不算不一致）。
+        **預設 None → 完全退回原本的 `"VOC" in item` 名稱字串比對**，A 棧（run_dispatch）
+        不傳此參數，行為一個字元都不變；B 棧（run_dispatch_b）傳入 item.category 真實值，
+        NULL 時傳 None 一樣退回名稱比對。
 
     回傳 DispatchResult。若 codes 為空代表這筆不用派報（無異常，或雖有異常但被
     4 小時/15 分鐘節流閘擋下——見函式最後一段）。
@@ -118,9 +127,15 @@ def evaluate_row(row: dict, prev_mail: dict | None, now: datetime) -> DispatchRe
     """
     plantno = str(row.get("plantno", ""))
     item = str(row.get("item", ""))
-    sType = "空" if "VOC" in item else "水"
-    is_voc = "VOC" in item
-    is_water = any(k in item for k in ("pH", "Cu", "Ni", "SS", "COD"))
+    # category=None（A 棧）→ is_air_item() 內部退回舊的 `"VOC" in item` 字串比對
+    is_voc = is_air_item(item, category)
+    sType = "空" if is_voc else "水"
+    # 同理改為資料驅動：category=None（A 棧）→ 退回舊的五個關鍵字比對，行為不變。
+    # ⚠️ 2026-08-01 主控驗收 D7 時實測發現：舊的關鍵字比對只認得 pH/Cu/Ni/SS/COD，
+    #    像「氨氮」這種水質項目讀值超過 OOS 亮紅燈時 can_escalate 會是 False、
+    #    codes 空的、**完全不發異常派報信**。空汙側已由 is_air_item 修好，水質側
+    #    若不一起改就只修一半，而水質項目才是絕大多數。
+    is_water = is_water_item(item, category)
     can_escalate = is_water or is_voc  # OOC/OOS escalation 只有水質相關 + VOC 項目才會產生代碼
 
     rvalue_raw = str(row.get("rvalue_raw", "") or "")
@@ -535,12 +550,19 @@ def list_isolated_items(db: Session) -> list[dict]:
         return []
 
 
-def mark_isolated_item(db: Session, plantno: str, item: str, source: str) -> None:
+def mark_isolated_item(db: Session, plantno: str, item: str, source: str,
+                        category: str | None = None) -> None:
     """
     對應 Update隔離廠區項目：把隔離中項目的 rvalue 標記為「保養中」、broken=2，
     同步更新 VOC_SCADA_WEB 與 VOC_SCADA_HIST（15 分鐘對齊的當期歷史列）。
+
+    category（2026-08-01 D7 新增）：項目類型（來源 models_b.Item.category），用來判斷
+    是否為雨水溝項目（雨水溝不覆寫管制值欄位）。**預設 None → 退回原本的
+    `"雨水溝" in item` 名稱字串比對**，A 棧 apply_isolation 不傳此參數，行為不變。
+    （B 棧不使用本函式——C 項決策：B 版隔離不落地竄改 reading_current，
+      改由 isolation_checker 即時 JOIN 推導，見 services_b/dashboard_service.py。）
     """
-    is_raingutter = "雨水溝" in item
+    is_raingutter = is_raingutter_item(item, category)
     set_extra = ""
     if not is_raingutter:
         if source == "SCADA":

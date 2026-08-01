@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 from schemas.dashboard_schema import DashboardRow
+from services.category_util import is_air_item
 
 # ── 無效門檻值：SCADA 尚未建點或無法讀取，不納入比對 ──────────────────
 # 注意：數值 "0" 不在此清單中（與舊系統 Home.aspx.cs 一致）——
@@ -85,7 +86,8 @@ def _bounds_mismatch(scada_val, spec_val, voc_exception: bool = False) -> bool:
     return round(sb[0], 2) != round(pb[0], 2) or round(sb[1], 2) != round(pb[1], 2)
 
 
-def _calculate_light(row: dict, check_lower_bound: bool = False) -> tuple[str, bool]:
+def _calculate_light(row: dict, check_lower_bound: bool = False,
+                     category: Optional[str] = None) -> tuple[str, bool]:
     """
     計算燈號與是否異常旗標。
 
@@ -113,6 +115,15 @@ def _calculate_light(row: dict, check_lower_bound: bool = False) -> tuple[str, b
       - 為 True 時，僅對「雙邊規格」（_parse_bounds 回傳 low != high）額外用下界
         比對 R/O/Y，取「上界判定」與「下界判定」中較嚴重者；單邊規格（low==high）
         不受影響，因為沒有獨立的下界可比。
+
+    category（2026-08-01 D7 新增，比照 check_lower_bound 的 A 棧保護模式）：
+      - 項目類型（'水質'/'空汙'/'雨水溝'，來源 models_b.Item.category），只用於決定
+        「VOC 例外」（SCADA 管制值比 SPEC 嚴時不算不一致）要不要套用。
+      - **預設 None → 完全退回原本的名稱字串比對 `"VOC" in item`**，A 棧
+        （services/dashboard_service.get_dashboard_data，main.py 公司平行測試中）
+        呼叫時不傳此參數，行為一個字元都不變。
+      - B 棧呼叫端（services_b/dashboard_service.get_dashboard_rows）傳入
+        item.category 真實值；查無值（NULL）時傳 None，一樣退回名稱比對。
     """
     rvalue_raw: str = str(row.get("rvalue_raw") or "").strip()
     broken: int     = int(row.get("broken") or 0)
@@ -139,7 +150,8 @@ def _calculate_light(row: dict, check_lower_bound: bool = False) -> tuple[str, b
     recv = recv_b[1] if recv_b else None
 
     # VOC 項目：SCADA 管制值比 SPEC 嚴（更低）時不算不一致
-    is_voc = "VOC" in item
+    # category=None（A 棧）→ is_air_item() 內部退回舊的 `"VOC" in item` 字串比對
+    is_voc = is_air_item(item, category)
 
     # ── 上界判定（既有邏輯，R → O(範圍) → Y(alert) → Y(recv) → G，不含不一致）──
     def _upper_verdict() -> str:

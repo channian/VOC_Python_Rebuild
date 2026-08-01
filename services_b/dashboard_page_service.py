@@ -29,8 +29,9 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from models_b import ReadingCurrent
+from models_b import Item, ReadingCurrent
 from schemas.dashboard_schema import DashboardRow
+from services.category_util import is_air_item, is_raingutter_item
 from services.dashboard_service import _bounds_mismatch, _parse_bounds, _safe_float
 from services_b.dashboard_service import IsolationChecker, get_dashboard_rows
 
@@ -44,12 +45,16 @@ _PILL_LABEL: Dict[str, str] = {"R": "R", "O": "O", "O2": "O≠", "Y": "Y", "B": 
 _COUNT_KEYS: List[str] = ["R", "O", "O2", "Y", "B", "M"]
 
 
-def _classify_o(row: DashboardRow) -> str:
+def _classify_o(row: DashboardRow, category: Optional[str] = None) -> str:
     """
     light_status=='O' 時，分辨是「數值超標」(O) 還是「管制值不同步」(O2)。
 
     對齊 `services/dashboard_service._calculate_light()` 的判斷順序：先比對讀值是否落在
     OOC~OOS 之間（數值超標），若不是，橙燈必然是由管制值不一致觸發（不然不會亮橙燈）。
+
+    category（D7，2026-08-01）：項目類型（來源 item.category），決定 VOC 例外要不要套用，
+    與 `_calculate_light()` 收到的 category 同源，兩邊判斷必須一致才不會分類錯。
+    傳 None（或 NULL 未回填）時退回原本的 `"VOC" in item` 名稱字串比對。
     """
     rvalue = _safe_float(row.rvalue_raw)
     oos_b = _parse_bounds(row.oos)
@@ -61,7 +66,7 @@ def _classify_o(row: DashboardRow) -> str:
 
     # 保險起見，仍實際重跑一次管制值不一致比對（而非單純假設「不是數值超標就一定是 O2」），
     # 讓這裡的判斷邏輯可獨立驗證，不依賴呼叫端保證只有 O 燈才會呼叫本函式。
-    is_voc = "VOC" in row.item
+    is_voc = is_air_item(row.item, category)
     if (
         _bounds_mismatch(row.scada_oos, row.oos, voc_exception=is_voc)
         or _bounds_mismatch(row.scada_ooc, row.ooc, voc_exception=is_voc)
@@ -76,7 +81,7 @@ def _classify_o(row: DashboardRow) -> str:
     return "O2"
 
 
-def _classify_status(row: DashboardRow) -> str:
+def _classify_status(row: DashboardRow, category: Optional[str] = None) -> str:
     """把 DashboardRow 的 (broken, light_status) 轉成本頁面用的 7 種顯示狀態 key。"""
     if row.broken == 1:
         return "B"
@@ -85,7 +90,7 @@ def _classify_status(row: DashboardRow) -> str:
     if row.light_status == "R":
         return "R"
     if row.light_status == "O":
-        return _classify_o(row)
+        return _classify_o(row, category)
     if row.light_status == "Y":
         return "Y"
     if row.light_status == "G":
@@ -107,9 +112,15 @@ def _row_to_dict(row: DashboardRow, key: str, is_rain: bool, rain_24h: str) -> d
 def build_dashboard_context(
     rows: List[DashboardRow],
     rain_map: Optional[Dict[Tuple[str, str], str]] = None,
+    categories: Optional[Dict[str, Optional[str]]] = None,
 ) -> dict:
     """
     純轉換函式（不碰 DB）：DashboardRow 列表 → `templates/b/dashboard.html` 渲染用 context。
+
+    categories（D7，2026-08-01）：{項目名稱: 類型} 對照表（類型來源 item.category：
+    '水質'/'空汙'/'雨水溝'），取代原本的 `"VOC" in item`／`"雨水溝" in item` 名稱字串比對。
+    未傳、或該項目查不到／為 NULL 時，逐項自動退回名稱字串比對（舊資料不會壞掉）。
+    key 用 DashboardRow.item（即 item.display_name or item.item，見 get_dashboard_page_data）。
 
     回傳形狀：
       {
@@ -123,6 +134,7 @@ def build_dashboard_context(
       }
     """
     rain_map = rain_map or {}
+    categories = categories or {}
 
     plant_order: List[str] = []
     plant_rows: Dict[str, List[dict]] = {}
@@ -131,8 +143,9 @@ def build_dashboard_context(
     active_anomalies: List[dict] = []
 
     for row in rows:
-        key = _classify_status(row)
-        is_rain = "雨水溝" in row.item
+        category = categories.get(row.item)
+        key = _classify_status(row, category)
+        is_rain = is_raingutter_item(row.item, category)
         rain_24h = ""
         if is_rain:
             rain_24h = row.rain_24h or rain_map.get((row.plantno, row.item), "") or ""
@@ -189,10 +202,31 @@ def build_dashboard_context(
     return {"plants": plants, "stats": stats, "active_anomalies": active_anomalies}
 
 
+def get_item_categories(db: Session) -> Dict[str, Optional[str]]:
+    """
+    查 item 主檔組出 {項目名稱: 類型} 對照表，供 `build_dashboard_context()` 判斷
+    空汙／雨水溝，取代名稱字串比對（D7，2026-08-01）。
+
+    key 同時放 item.item（資料鍵）與 item.display_name（顯示名，pH1→pH），因為
+    DashboardRow.item 存的是 display_name or item，兩種都可能對得上。
+    category 為 NULL 的項目不放進 dict，讓呼叫端自動退回名稱字串比對。
+    """
+    rows = db.execute(select(Item.item, Item.display_name, Item.category)).all()
+    categories: Dict[str, Optional[str]] = {}
+    for item_key, display_name, category in rows:
+        if category is None:
+            continue
+        categories[item_key] = category
+        if display_name:
+            categories.setdefault(display_name, category)
+    return categories
+
+
 def get_dashboard_page_data(db: Session, isolation_checker: Optional[IsolationChecker] = None) -> dict:
     """
-    薄 DB 入口：查 B 棧儀表板資料列 + reading_current.rain_24h 組雨量對照表，交給
-    `build_dashboard_context()` 做純轉換。main_b 正式接線時呼叫本函式即可。
+    薄 DB 入口：查 B 棧儀表板資料列 + reading_current.rain_24h 組雨量對照表
+    + item.category 組項目類型對照表，交給 `build_dashboard_context()` 做純轉換。
+    main_b 正式接線時呼叫本函式即可。
     """
     rows = get_dashboard_rows(db, isolation_checker=isolation_checker)
 
@@ -203,4 +237,4 @@ def get_dashboard_page_data(db: Session, isolation_checker: Optional[IsolationCh
         (plant_no, item): str(rain_24h) for plant_no, item, rain_24h in db.execute(rain_stmt).all()
     }
 
-    return build_dashboard_context(rows, rain_map)
+    return build_dashboard_context(rows, rain_map, get_item_categories(db))

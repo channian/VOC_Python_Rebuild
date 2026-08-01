@@ -32,7 +32,9 @@ from typing import Callable, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from models_b import Isolation, IsolationItem, IsolationHistory, SystemConfig, Tranlog, Plant, AclUserRole
+from models_b import (
+    Isolation, IsolationItem, IsolationHistory, SystemConfig, Tranlog, Plant, AclUserRole, Item,
+)
 from schemas.control_schema import ControlCreate, ControlModify, ControlTimeUpdate
 from services.control_service import next_ccno, RIGHTSID_CONTROL_TIME  # noqa: F401（供呼叫端引用）
 from services.flow_service import FlowStatus, Ttype, Utype, build_rtype_list
@@ -66,6 +68,38 @@ def _get_control_time_max_hours(db: Session) -> Optional[float]:
     if hours <= 0:
         return None
     return hours
+
+
+# ── 項目類型對照（D7：簽核 rtype 改讀 item.category，取代項目名稱字串比對）──────────
+
+def _get_item_categories(db: Session, item_names: List[str]) -> dict:
+    """
+    查 item.category，組成 build_rtype_list(categories=...) 需要的 {項目名稱: 類型} 對照表。
+
+    D7（2026-08-01）：簽核人是靠 rpttype「水保養中／空保養中」找的，舊做法用
+    `"VOC" in item` 猜類型，新廠若有不叫 VOC 的空汙項目會找錯簽核人。改讀 item.category。
+
+    key 同時涵蓋 item.item（資料鍵，isolation_item.item 存的就是這個）與 item.display_name
+    （顯示名，pH1→pH；呼叫端若傳的是顯示名也對得上），避免兩種命名對不上而漏查。
+    category 為 NULL 的項目**不放進 dict**，讓 build_rtype_list 自動退回名稱字串比對
+    （未回填 category 的舊資料行為不變）。
+    """
+    if not item_names:
+        return {}
+    names = list({n for n in item_names if n})
+    rows = db.execute(
+        select(Item.item, Item.display_name, Item.category).where(
+            (Item.item.in_(names)) | (Item.display_name.in_(names))
+        )
+    ).all()
+    categories: dict = {}
+    for item_key, display_name, category in rows:
+        if category is None:
+            continue
+        categories[item_key] = category
+        if display_name:
+            categories.setdefault(display_name, category)
+    return categories
 
 
 # ── ccno 流水號（DB 查詢，純邏輯沿用 services.control_service.next_ccno）───────────
@@ -213,7 +247,8 @@ def create_isolation(
         _insert_isolation_history(db, new_iso, Utype.新增, current_user_empno, current_user_name)
 
         if is_commit:
-            rtype_list = build_rtype_list([itm.item for itm in data.items])
+            item_names = [itm.item for itm in data.items]
+            rtype_list = build_rtype_list(item_names, _get_item_categories(db, item_names))
             # 沿用 A 棧既有行為：plantno 取 items 迴圈最後一筆值（legacy 遺留行為，見 services/control_service.py 註解）
             plantno = data.items[-1].plantno
 
@@ -268,7 +303,8 @@ def submit_isolation(
         if not items:
             raise ValueError("此隔離申請單尚無項目明細!")
 
-        rtype_list = build_rtype_list([it.item for it in items])
+        item_names = [it.item for it in items]
+        rtype_list = build_rtype_list(item_names, _get_item_categories(db, item_names))
         plantno = items[-1].plant_no  # 沿用 A 棧既有行為
 
         def _adapt(fid, plant_no, signer_empnos, flow_id):
@@ -358,7 +394,8 @@ def modify_isolation(
         _insert_isolation_history(db, new_iso, Utype.新增, current_user_empno, current_user_name)
 
         if is_commit:
-            rtype_list = build_rtype_list([itm.item for itm in data.items])
+            item_names = [itm.item for itm in data.items]
+            rtype_list = build_rtype_list(item_names, _get_item_categories(db, item_names))
             plantno = data.items[-1].plantno
 
             def _adapt(fid, plant_no, signer_empnos, flow_id):

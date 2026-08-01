@@ -2,7 +2,8 @@
 services_b/dispatch_service.py — 異常 Email 派報（Schema B 資料層版本，WP5 核心）
 
 對應 services/dispatch_service.py（A/MSSQL 版：Job.dbVOC.GetDataRed + Job.SendMail）。
-evaluate_row()（GetDataRed 的純函式版本）**零修改重用**，本檔只做兩件事：
+evaluate_row()（GetDataRed 的純函式版本）**同源重用**（2026-08-01 D7 起多傳一個
+optional `category` 參數；A 棧不傳、行為不變），本檔只做兩件事：
 
   1. get_data_b()：把 B 新形狀（spec 數值欄 + reading_current value/status）轉成
      evaluate_row() 期待的舊字串形狀（oos/ooc/alert_spec/recv/scada_*/cwms_* 字串門檻、
@@ -175,6 +176,12 @@ def get_data_b(db: Session, isolation_checker: Optional[IsolationChecker] = None
             "rvalue_raw": rvalue_raw,
             "rvalue": _rvalue_numeric_string(rvalue_raw),
             "broken": broken,
+            # D7（2026-08-01）：項目類型改讀 item.category，取代 evaluate_row 內的
+            # `"VOC" in item` 名稱字串比對。NULL（舊資料未回填）時為 None，
+            # evaluate_row 收到 None 會自動退回名稱比對，不會壞掉。
+            # 注意：本 key 只給 run_dispatch_b 取出後以 category= 參數傳入 evaluate_row，
+            # 不影響 _row_to_html_dict（它只取自己需要的顯示欄位）。
+            "category": item_row.category,
         })
     return result
 
@@ -232,7 +239,9 @@ def run_dispatch_b(db: Session, isolation_checker: Optional[IsolationChecker] = 
 
     for row in data:
         prev = get_prev_mail(db, row["plantno"], row["item"])
-        result = evaluate_row(row, prev, now)
+        # category（D7）：B 棧一律傳入 item.category，讓派報代碼前綴（空/水）與 VOC 例外
+        # 改用資料驅動判斷；A 棧 run_dispatch 不傳此參數，維持名稱字串比對的舊行為。
+        result = evaluate_row(row, prev, now, category=row.get("category"))
         plant_rows[row["plantno"]].append(row)
         plant_results[row["plantno"]].append(result)
 

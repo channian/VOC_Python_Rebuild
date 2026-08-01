@@ -74,6 +74,10 @@ class ItemCreateReq(BaseModel):
     # 規格型態（models_b.Item.is_dual_bound）：true=雙邊（pH/溫度，門檻填「低-高」）、
     # false=單邊、null=未指定（退回舊的名稱推測）。B 棧規格維護頁靠這欄決定驗證方式。
     is_dual_bound: bool | None = None
+    # 項目類型（models_b.Item.category）：水質／空汙／雨水溝，null 或空字串＝未指定。
+    # 合法值驗證在 services_b.basedata_service.normalize_item_category（ValueError → HTTP 400），
+    # 不在此用 Literal 擋，是為了讓錯誤訊息與其他欄位一樣是中文 detail 字串而非 422 驗證陣列。
+    category: str | None = None
 
 
 class ItemUpdateReq(ItemCreateReq):
@@ -123,6 +127,7 @@ def render_basedata_modal_b(request: Request, db: Session = Depends(get_b_db)):
             "plants": plants, "items": items, "tags": tags, "error": error,
             "plant_kind_choices": basedata_service.PLANT_KIND_CHOICES,
             "target_field_choices": basedata_service.TARGET_FIELD_CHOICES,
+            "item_category_choices": basedata_service.ITEM_CATEGORY_CHOICES,
         },
     )
 
@@ -194,7 +199,7 @@ def api_create_item_b(data: ItemCreateReq, db: Session = Depends(get_b_db)):
         basedata_service.add_item(
             db, current_user_empno=_user_no(), item=data.item, display_name=data.display_name,
             unit=data.unit, is_active=data.is_active, remark=data.remark,
-            is_dual_bound=data.is_dual_bound,
+            is_dual_bound=data.is_dual_bound, category=data.category,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -207,7 +212,7 @@ def api_update_item_b(data: ItemUpdateReq, db: Session = Depends(get_b_db)):
         basedata_service.update_item(
             db, current_user_empno=_user_no(), old_item=data.old_item, item=data.item,
             display_name=data.display_name, unit=data.unit, is_active=data.is_active,
-            remark=data.remark, is_dual_bound=data.is_dual_bound,
+            remark=data.remark, is_dual_bound=data.is_dual_bound, category=data.category,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -18,7 +18,7 @@ legacy/MTFlowBase.cs + legacy/dbSignFlow.cs 確認）。
 import logging
 from enum import IntEnum
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text, bindparam
@@ -27,6 +27,7 @@ from models.control_model import VocCloseCtl
 from models.acl_model import VocTranlog
 from schemas.control_schema import ApplyListResponse
 from schemas.flow_schema import SignAction
+from services.category_util import is_air_item
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,8 @@ FRULEID_ISOLATION = 8
 
 # ── 純邏輯函式（不依賴 DB，可單獨測試）────────────────────────────────────────
 
-def build_rtype_list(items: List[str]) -> List[str]:
+def build_rtype_list(items: List[str],
+                     categories: Optional[Dict[str, Optional[str]]] = None) -> List[str]:
     """
     依隔離項目組出簽核用的 rpttype 清單（VOC_Mail_List.rpttype）。
     對應舊系統 dbVOC.cs：
@@ -78,10 +80,19 @@ def build_rtype_list(items: List[str]) -> List[str]:
     含 "VOC" 字樣的項目歸類為「空保養中」，其餘一律「水保養中」，依出現順序去重。
     舊碼是直接把 rtype 字串拼進 SQL IN 子句（injection 風險），這裡改成清單，
     交給 get_signers() 用 SQLAlchemy expanding bindparam 參數化。
+
+    categories（2026-08-01 D7 新增，比照 _calculate_light 的 check_lower_bound 保護模式）：
+      {項目名稱: 類型}（類型來源 models_b.Item.category：'水質'/'空汙'/'雨水溝'）。
+      **預設 None → 每個項目都完全退回原本的 `"VOC" in item` 名稱字串比對**，
+      A 棧（services/control_service.py）不傳此參數，行為一個字元都不變；
+      B 棧（services_b/control_service.py）傳入真實對照表，查不到的項目（dict 內沒有這個
+      key，或值為 NULL）一樣退回名稱比對，未回填 category 的舊資料不會壞掉。
+      用 dict 而非平行 list，避免長度／順序對不上造成的錯配。
     """
+    cats = categories or {}
     rtypes: List[str] = []
     for item in items:
-        stype = ("空" if "VOC" in item else "水") + "保養中"
+        stype = ("空" if is_air_item(item, cats.get(item)) else "水") + "保養中"
         if stype not in rtypes:
             rtypes.append(stype)
     return rtypes
