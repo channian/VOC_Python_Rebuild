@@ -180,11 +180,17 @@ function histCancelReply(rowkey) {
   if (editRow) { editRow.style.display = 'none'; }
 }
 
+// Pydantic 422 的 msg 會有 'Value error, ' 前綴，這裡剝掉只留中文訊息（2026-08-01 D5）
+function histCleanMsg(s) { return String(s == null ? '' : s).replace(/^Value error,\s*/, ''); }
+
 function histSaveReply(rowkey) {
   var ta = document.getElementById('hist-ta-' + rowkey);
   var btn = document.getElementById('hist-btn-' + rowkey);
   var reason = ta ? ta.value : '';
   var itemId = btn ? btn.getAttribute('data-item-id') : '';
+  // 後端（schemas.history_schema.ReasonUpdateB）要求原因說明不可空白，前端先擋一次少一趟往返
+  if (!reason.trim()) { histToast('原因說明不可為空白！', { type: 'error' }); return; }
+  if (!itemId) { histToast('這筆紀錄沒有可回覆的派報項目（改排水記錄不支援逐項目回覆）', { type: 'error' }); return; }
   fetch('/history/reply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -197,7 +203,9 @@ function histSaveReply(rowkey) {
         histCancelReply(rowkey);
         histToast(res.data.message || '已儲存原因說明', {});
       } else {
-        var msg = Array.isArray(res.data.detail) ? res.data.detail.map(function (e) { return e.msg; }).join('；') : (res.data.detail || '儲存失敗');
+        var msg = Array.isArray(res.data.detail)
+          ? res.data.detail.map(function (e) { return histCleanMsg(e.msg); }).join('；')
+          : histCleanMsg(res.data.detail || '儲存失敗');
         histToast(msg, { type: 'error' });
       }
     })

@@ -10,7 +10,7 @@
         （全區/水/空）；真實 API 要吃角色數字 id（/acl/roles 回傳）與 stype 代碼
         '1'(空)/'2'(水)/'3'(全區)，本檔改成動態載入＋代碼對應，视觉排列不變。
      2. 設計稿沒有編輯互動（buildACL 只有 onDelete），本檔同步只做新增＋刪除。
-     3. AclCreateReq 不吃 empname/notesid（純供畫面預覽用），故新增表單沿用設計稿版面，
+     3. AclUserCreateB（schemas/acl_schema.py）不吃 empname/notesid（純供畫面預覽用），故新增表單沿用設計稿版面，
         不額外插入姓名/NotesID 預覽欄位。
 ══════════════════════════════════════════════════════════════════════════ #}
 <div class="aclv2-root">
@@ -97,9 +97,11 @@
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+  // Pydantic 422 的 msg 會有 'Value error, ' 前綴，這裡剝掉只留中文訊息（2026-08-01 D5）
+  function cleanMsg(s) { return String(s == null ? '' : s).replace(/^Value error,\s*/, ''); }
   function extractErrorMsg(data) {
-    if (data && Array.isArray(data.detail)) return data.detail.map(e => (typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
-    if (data && typeof data.detail === 'string') return data.detail;
+    if (data && Array.isArray(data.detail)) return data.detail.map(e => cleanMsg(typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
+    if (data && typeof data.detail === 'string') return cleanMsg(data.detail);
     return '操作失敗，請重試';
   }
   async function parseResponse(res) {
@@ -183,6 +185,9 @@
   window.aclv2Delete = async function (row) {
     const plantno = row.dataset.plantno, roletype = row.dataset.roletype, empno = row.dataset.empno;
     const roleId = roleIdByName(roletype);
+    // 角色下拉載入失敗時 roleIdByName 會回 null，送出去只會拿到「欄位型別錯誤」的英文 422，
+    // 這裡先擋下並給明確中文提示（2026-08-01 D5）。
+    if (!roleId) { toast('角色資訊尚未載入完成，請重新開啟本頁後再試', true); return; }
     if (!confirm('確定刪除 ' + plantno + ' / ' + roletype + ' / ' + empno + ' 這筆權限？')) return;
     try {
       const { ok, data } = await parseResponse(await fetch('/acl/delete', {

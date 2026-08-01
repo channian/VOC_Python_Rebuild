@@ -137,9 +137,11 @@
     if (window.vbToast) { window.vbToast(msg, { type: isErr ? 'error' : 'success' }); }
     else { alert(msg); }
   }
+  // Pydantic 422 的 msg 會有 'Value error, ' 前綴，這裡剝掉只留中文訊息（2026-08-01 D5）
+  function cleanMsg(s) { return String(s == null ? '' : s).replace(/^Value error,\s*/, ''); }
   function extractErrorMsg(data) {
-    if (data && Array.isArray(data.detail)) return data.detail.map(e => (typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
-    if (data && typeof data.detail === 'string') return data.detail;
+    if (data && Array.isArray(data.detail)) return data.detail.map(e => cleanMsg(typeof e === 'string' ? e : (e && e.msg) || JSON.stringify(e))).join('\n');
+    if (data && typeof data.detail === 'string') return cleanMsg(data.detail);
     return '操作失敗，請重試';
   }
   async function parseResponse(res) {
@@ -176,7 +178,7 @@
   };
   renderPauseBox();
 
-  // ── 工號自動帶出姓名／NotesID（MailListAddReq 需要實際值才能存檔顯示正確） ──
+  // ── 工號自動帶出姓名／NotesID（schemas.maillist_schema.MailListAddB 需要實際值才能存檔顯示正確） ──
   let mlv2AutoEmpname = '', mlv2AutoNotesid = '';
   window.mlv2LookupEmp = async function () {
     const empno = document.getElementById('mlv2-f-empno').value.trim();
