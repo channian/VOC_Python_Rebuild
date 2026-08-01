@@ -15,6 +15,23 @@ routers_b/spec_router_b.py — B 棧「規格維護/規格簽核＋QA＋異常�
   驗證規則因此仍與 A 棧同源（同一個 SpecBase.validate_limits），只是判「單邊/雙邊」的依據
   由「猜名稱」換成「查資料」；item 查無或該欄為 NULL 時自動退回名稱推測，現況不受影響。
   A 棧（routers/spec_router.py）完全不動，仍直接以 SpecCreate 解析 → 一律走名稱推測。
+
+★ 2026-08-01「儲存鍵 item_key 全程原樣往返」（本次修正的核心，見下方 _resolve_storage_item）：
+  問題（使用者實測：規格維護頁按「修改」回「找不到資料!」）——
+    B 棧列表把 `spec.item`（儲存鍵，如 'pH1'）換成 `item.display_name`（顯示名 'pH'）丟給前端，
+    前端原樣送回，後端再用 A 棧的 `to_storage_item(plantno, item)` 想把顯示名換回儲存鍵。
+    但這兩個方向**不是互逆函式**：`to_display_item()` 不分廠區（'pH1'→'pH' 一律換），
+    `to_storage_item()` 卻只認硬編的 K14B/K22/九號放流口 三個廠區。只要廠區不在那份清單內
+    （例如測試廠 TEST1 存了一個叫 'pH1' 的項目），顯示名就再也換不回儲存鍵，
+    `update_spec()` 查無資料 → 「找不到資料!」。這不是個案：基礎資料建置
+    （scripts/load_user_data.py）讓環工部自由命名項目，只要 display_name 有填就會踩到。
+  解法（不擴充硬編清單、也不用 display_name 反查——display_name 不唯一，反查會靜默改到別筆）：
+    **顯示歸顯示、識別歸識別**。後端輸出每一列時多帶一個 `item_key`＝真正的 `spec.item`
+    儲存鍵，前端原樣帶回，後端拿到就直接用，中間不做任何轉換（無損往返）。
+    `to_storage_item()` 只留作「前端沒帶 item_key」時的相容退路（A 棧形狀的呼叫端、
+    送簽頁手打新項目），行為與改版前完全相同。
+  連帶修正：`_resolve_dual_bound()` 也是用同一把鑰匙查 `Item.is_dual_bound`，
+    別名項目過去查不到只能退回名稱推測，現在查得到了（雙邊判定才真的是資料驅動）。
 """
 
 import logging
@@ -66,19 +83,22 @@ def _bound_fields(prefix: str, raw: str, is_dual: bool, item_name: str) -> dict:
     return {f"{prefix}_low": low, f"{prefix}_high": high, f"{prefix}_status": "valid"}
 
 
-def _fields_from_schema(data: SpecBase) -> tuple[str, dict]:
-    """SpecBase（A 形狀）→ (B 儲存用 item 名, B numeric 欄位 dict)。
+def _fields_from_schema(data: SpecBase) -> dict:
+    """SpecBase（A 形狀）→ B numeric 欄位 dict。
 
     ★ 雙邊判定改用 `data.effective_dual_bound()`（＝router 先查 item.is_dual_bound 注入的值，
       未指定時才退回名稱推測），取代原本這裡自己寫的第三套字串比對 `"pH" in data.item`——
       那套連 schemas 與載入器的兩套都對不齊，溫度更是永遠猜不到。
+
+    ★ 2026-08-01：本函式不再回傳儲存用 item 名——儲存鍵改由 `_resolve_storage_item(raw)`
+      在「還沒進 Pydantic」的階段就決定好（見檔頭 ★ 說明），兩件事分開才不會互相污染。
+      這裡只負責門檻字串→numeric 欄位的轉換，用到的 `data.item` 純粹是錯誤訊息的措辭。
     """
-    storage_item = to_storage_item(data.plantno, data.item)
     is_dual = data.effective_dual_bound()
     fields: dict = {"law_text": data.LAW or "", "source_id": data.source_id}
     for prefix, raw in (("oos", data.OOS), ("ooc", data.OOC), ("alert", data.alert)):
         fields.update(_bound_fields(prefix, raw, is_dual, data.item))
-    return storage_item, fields
+    return fields
 
 
 # ── 寬鬆輸入模型 + 資料驅動的雙邊判定（見檔頭 ★ 說明）──────────────────────────
@@ -88,9 +108,15 @@ class SpecInputB(BaseModel):
 
     目的是把「門檻格式驗證」延後到 router 內部（查得到 item.is_dual_bound 之後）再做，
     而不是在 FastAPI 解析 body 的當下就用名稱推測驗完（那會讓溫度這種雙邊項目永遠 422）。
+
+    ★ `item_key`（2026-08-01 新增，見檔頭 ★）：真正的儲存鍵（＝`spec.item`／`item.item`）。
+      由後端在列表輸出時一併給前端，前端原樣帶回，後端直接拿來定位資料**不做任何轉換**。
+      `item` 則維持「顯示名」語意，只用於錯誤訊息措辭與回應文字。
+      沒帶（None／空字串）時退回 `to_storage_item(plantno, item)` 的舊行為，向後相容。
     """
     plantno: str
     item: str
+    item_key: Optional[str] = None
     LAW: str
     OOS: str
     OOC: str
@@ -102,6 +128,23 @@ class SpecInputB(BaseModel):
 class SpecApplyInputB(SpecInputB):
     """送簽版寬鬆輸入模型（多一個 ftype；ftype 合法值由嚴格 model SpecApplyCreate 驗）。"""
     ftype: str
+
+
+def _resolve_storage_item(plantno: str, item: str, item_key: Optional[str] = None) -> str:
+    """決定這筆請求要對哪一個**儲存鍵**（`spec.item`）操作。
+
+    優先序（見檔頭 ★）：
+      1. 呼叫端明確帶了 `item_key` → 直接用，**不做任何轉換**（無損往返；本次修正的重點）。
+      2. 沒帶 → 退回 A 棧硬編別名表 `to_storage_item(plantno, item)`（舊行為原封不動），
+         給「A 棧形狀的呼叫端」與「送簽頁手打一個尚未建立的新項目」用。
+
+    ⚠️ 刻意**不做**「拿 display_name 反查儲存鍵」的模糊 fallback：`item.display_name` 不唯一
+      （pH1／pH2 都顯示成 pH），反查會靜默挑到別筆資料改下去，比誠實報「找不到資料!」更糟。
+    """
+    key = (item_key or "").strip()
+    if key:
+        return key
+    return to_storage_item(plantno, item)
 
 
 def _resolve_dual_bound(db: Session, storage_item: str) -> Optional[bool]:
@@ -116,16 +159,20 @@ def _resolve_dual_bound(db: Session, storage_item: str) -> Optional[bool]:
     ).scalar_one_or_none()
 
 
-def _validate_b(model_cls, raw: SpecInputB, db: Session) -> SpecBase:
-    """寬鬆輸入 → 查 item.is_dual_bound → 建構嚴格 model 完成驗證。
+def _validate_b(model_cls, raw: SpecInputB, db: Session, storage_item: str) -> SpecBase:
+    """寬鬆輸入 → 用**儲存鍵**查 item.is_dual_bound → 建構嚴格 model 完成驗證。
 
     驗證失敗時轉成 422，且 detail 形狀比照 FastAPI 自己產生的 RequestValidationError
     （`[{"loc": [...], "msg": ..., "type": ...}]`），前端 `extractErrors()` 不必改就能顯示
     原因（例：「Value error, OOS 值錯誤, 溫度 必須為雙邊規格 (如: 6-9)!」）。
+
+    `storage_item` 由呼叫端先以 `_resolve_storage_item()` 算好再傳進來——同一次請求裡
+    「查 is_dual_bound」與「寫哪一列」必須是同一把鑰匙，分開各算一次遲早會不一致。
+    `item_key` 不進嚴格 model（`schemas/spec_schema.py` 是兩棧共用、不得修改的檔案）。
     """
-    is_dual = _resolve_dual_bound(db, to_storage_item(raw.plantno, raw.item))
+    is_dual = _resolve_dual_bound(db, storage_item)
     try:
-        return model_cls(**raw.model_dump(), is_dual_bound=is_dual)
+        return model_cls(**raw.model_dump(exclude={"item_key"}), is_dual_bound=is_dual)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=[
             {
@@ -138,9 +185,14 @@ def _validate_b(model_cls, raw: SpecInputB, db: Session) -> SpecBase:
 
 
 def _spec_row_for_template(r: dict) -> dict:
-    """services_b.list_specs 的 B 形狀 → 模板/A API 期待的形狀（LAW/OOS/OOC/alert 字串）。"""
+    """services_b.list_specs 的 B 形狀 → 模板/A API 期待的形狀（LAW/OOS/OOC/alert 字串）。
+
+    ★ 2026-08-01：多回一個 `item_key`＝`spec.item` 儲存鍵（見檔頭 ★）。`item` 仍是顯示名，
+      給人看；`item_key` 給程式定位資料用，前端寫入時原樣帶回，全程不轉換。
+    """
     return {
         "plantno": r["plant_no"], "item": r.get("display_name") or r["item"],
+        "item_key": r["item"],
         "LAW": r.get("law_text") or "",
         "OOS": _bounds_to_str(r["oos_low"], r["oos_high"], r["oos_status"]),
         "OOC": _bounds_to_str(r["ooc_low"], r["ooc_high"], r["ooc_status"]),
@@ -191,9 +243,10 @@ def spec_list_b(plantno: str = "", item: str = "", db: Session = Depends(get_b_d
 def spec_create_b(raw: SpecInputB, db: Session = Depends(get_b_db)):
     # 驗證刻意放在 try 之外：_validate_b 失敗會丟 HTTPException(422)，
     # 若放進 try 會被下面的 `except Exception` 吃掉、變成語焉不詳的 500。
-    data = _validate_b(SpecCreate, raw, db)
+    storage_item = _resolve_storage_item(raw.plantno, raw.item, raw.item_key)
+    data = _validate_b(SpecCreate, raw, db, storage_item)
     try:
-        storage_item, fields = _fields_from_schema(data)
+        fields = _fields_from_schema(data)
         spec_service.create_spec(db, _user_no(), data.plantno, storage_item, remark=data.remark or "", **fields)
         return {"status": "success", "message": f"{data.plantno}/{data.item} 規格已新增"}
     except ValueError as ve:
@@ -205,9 +258,10 @@ def spec_create_b(raw: SpecInputB, db: Session = Depends(get_b_db)):
 
 @router.post("/spec/update")
 def spec_update_b(raw: SpecInputB, db: Session = Depends(get_b_db)):
-    data = _validate_b(SpecUpdate, raw, db)  # 同 spec_create_b：驗證放 try 之外
+    storage_item = _resolve_storage_item(raw.plantno, raw.item, raw.item_key)
+    data = _validate_b(SpecUpdate, raw, db, storage_item)  # 同 spec_create_b：驗證放 try 之外
     try:
-        storage_item, fields = _fields_from_schema(data)
+        fields = _fields_from_schema(data)
         spec_service.update_spec(db, _user_no(), data.plantno, storage_item, remark=data.remark or "", **fields)
         return {"status": "success", "message": f"{data.plantno}/{data.item} 規格已更新"}
     except ValueError as ve:
@@ -218,9 +272,13 @@ def spec_update_b(raw: SpecInputB, db: Session = Depends(get_b_db)):
 
 
 @router.delete("/spec/delete")
-def spec_delete_b(plantno: str, item: str, remark: str = "", db: Session = Depends(get_b_db)):
+def spec_delete_b(plantno: str, item: str, item_key: str = "", remark: str = "",
+                  db: Session = Depends(get_b_db)):
+    """刪除規格。`item_key`（選填）＝列表回傳的儲存鍵，有帶就直接用（見檔頭 ★）。"""
     try:
-        spec_service.delete_spec(db, _user_no(), plantno, to_storage_item(plantno, item), remark)
+        spec_service.delete_spec(
+            db, _user_no(), plantno, _resolve_storage_item(plantno, item, item_key), remark,
+        )
         return {"status": "success", "message": f"{plantno}/{item} 規格已刪除"}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -233,9 +291,10 @@ def spec_delete_b(plantno: str, item: str, remark: str = "", db: Session = Depen
 
 @router.post("/spec/apply")
 def spec_apply_b(raw: SpecApplyInputB, db: Session = Depends(get_b_db)):
-    data = _validate_b(SpecApplyCreate, raw, db)  # 同 spec_create_b：驗證放 try 之外
+    storage_item = _resolve_storage_item(raw.plantno, raw.item, raw.item_key)
+    data = _validate_b(SpecApplyCreate, raw, db, storage_item)  # 同 spec_create_b：驗證放 try 之外
     try:
-        storage_item, fields = _fields_from_schema(data)
+        fields = _fields_from_schema(data)
         sa = spec_service.create_spec_apply(
             db, _user_no(), data.plantno, storage_item, data.ftype, payload=fields, remark=data.remark or "",
         )

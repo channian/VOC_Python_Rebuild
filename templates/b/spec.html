@@ -288,7 +288,8 @@
             </div>
             <div>
               <div class="spec-field-label">項目 item *</div>
-              <input id="apply-item" list="apply-item-list" class="spec-field-input" placeholder="例：pH、COD">
+              {# 候選清單給的是儲存鍵（pH1/COD2…），括號內才是顯示名；修改/刪除申請請從清單挑。 #}
+              <input id="apply-item" list="apply-item-list" class="spec-field-input" placeholder="從清單挑，例：pH1、COD2">
               <datalist id="apply-item-list"></datalist>
             </div>
             <div>
@@ -346,9 +347,16 @@
 
 <script>
 /* ── 後端 context（與 /ui/spec 現行 render 形狀相同）───────────────────────
-   specs 列形狀：{plantno, item, LAW, OOS, OOC, alert, source, sourceid, seqno}
+   specs 列形狀：{plantno, item, item_key, LAW, OOS, OOC, alert, source, sourceid, seqno}
    sources 形狀：[{sourceid, source}]
-   CLAUDE.md 決策 #6：JSON body 端點一律 fetch + Content-Type: application/json，禁 hx-vals。 */
+   CLAUDE.md 決策 #6：JSON body 端點一律 fetch + Content-Type: application/json，禁 hx-vals。
+
+   ★ 2026-08-01「item 顯示名 / item_key 儲存鍵」分離（見 routers_b/spec_router_b.py 檔頭 ★）：
+     `item` 只給人看（可能是 item.display_name，例 'pH'），**不可用來定位資料**；
+     `item_key` 才是真正的儲存鍵（spec.item，例 'pH1'）——列 key、篩選、寫入 payload
+     一律用 item_key 原樣往返，中間不做任何轉換。
+     先前前端把顯示名當識別碼送回後端，後端再硬猜回儲存鍵（只認 K14B/K22/九號放流口），
+     其他廠區的別名項目一律「找不到資料!」，這就是本次修掉的 bug。 */
 const SPEC_SOURCES = {{ sources | tojson }};
 const INITIAL_SPECS = {{ specs | tojson }};
 const DEFAULT_TAB = 'list';
@@ -429,15 +437,24 @@ let editingKey = null;
 let editDrafts = {};   // key -> { source, law, oos, ooc, alert }
 let rowErrors = {};    // key -> string[]
 
-function rowKey(r) { return r.plantno + '|' + r.item; }
+/* 列 key 一律用儲存鍵：顯示名不唯一（pH1/pH2 都顯示成 pH），
+   拿顯示名當 key 會讓同一廠區的兩列互相蓋掉編輯狀態。 */
+function itemKeyOf(r) { return r.item_key || r.item; }
+function rowKey(r) { return r.plantno + '|' + itemKeyOf(r); }
+
+/* 篩選下拉：value 送儲存鍵（後端 /spec/list 是拿它比對 spec.item），
+   文字顯示給人看的顯示名；兩者不同時把儲存鍵一併標出來，避免使用者看到兩個「pH」。 */
+function itemOptionLabel(key, display) { return (!display || display === key) ? key : `${display}（${key}）`; }
 
 function populateFilterOptions() {
   const plants = [...new Set(masterSpecs.map((s) => s.plantno))].sort();
-  const items = [...new Set(masterSpecs.map((s) => s.item))].sort();
+  const itemLabels = new Map();
+  masterSpecs.forEach((s) => { if (!itemLabels.has(itemKeyOf(s))) itemLabels.set(itemKeyOf(s), s.item); });
   const plantSel = document.getElementById('filter-plantno');
   const itemSel = document.getElementById('filter-item');
   plantSel.innerHTML = '<option value="">全部廠區</option>' + plants.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
-  itemSel.innerHTML = '<option value="">全部項目</option>' + items.map((i) => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
+  itemSel.innerHTML = '<option value="">全部項目</option>' + [...itemLabels.keys()].sort()
+    .map((k) => `<option value="${esc(k)}">${esc(itemOptionLabel(k, itemLabels.get(k)))}</option>`).join('');
 }
 
 async function reloadDisplayedSpecs() {
@@ -449,11 +466,11 @@ async function reloadDisplayedSpecs() {
     if (res.ok) {
       displayedSpecs = await res.json();
     } else {
-      // API 失敗時退回前端篩選現有資料，避免清單整個消失
-      displayedSpecs = masterSpecs.filter((r) => (!filterPlantno || r.plantno === filterPlantno) && (!filterItem || r.item === filterItem));
+      // API 失敗時退回前端篩選現有資料，避免清單整個消失（比對一律用儲存鍵，與後端同一把鑰匙）
+      displayedSpecs = masterSpecs.filter((r) => (!filterPlantno || r.plantno === filterPlantno) && (!filterItem || itemKeyOf(r) === filterItem));
     }
   } catch (e) {
-    displayedSpecs = masterSpecs.filter((r) => (!filterPlantno || r.plantno === filterPlantno) && (!filterItem || r.item === filterItem));
+    displayedSpecs = masterSpecs.filter((r) => (!filterPlantno || r.plantno === filterPlantno) && (!filterItem || itemKeyOf(r) === filterItem));
   }
   renderList();
 }
@@ -562,7 +579,8 @@ async function saveRow(r) {
   const key = rowKey(r);
   const draft = editDrafts[key];
   const body = {
-    plantno: r.plantno, item: r.item,
+    /* item 是顯示名（只影響後端錯誤訊息措辭）；item_key 才是後端用來定位資料的儲存鍵。 */
+    plantno: r.plantno, item: r.item, item_key: itemKeyOf(r),
     LAW: draft.law || '', OOS: draft.oos || '', OOC: draft.ooc || '', alert: draft.alert || '',
     source_id: Number(draft.source), remark: r.remark || '',
   };
@@ -597,13 +615,20 @@ async function saveRow(r) {
 // ══════════════════════════════════════════════════════════════════════
 // 頁籤 2：送簽申請
 // ══════════════════════════════════════════════════════════════════════
+/* 送簽頁「項目」候選：value 一律給**儲存鍵**（如 pH1），label 補上顯示名，
+   使用者從清單挑就會挑到正確的鍵；手打新項目（新增申請）仍可自由輸入。 */
+let KNOWN_ITEM_KEYS = new Set();
+
 function populateApplyOptions() {
   const sel = document.getElementById('apply-source');
   sel.innerHTML = SPEC_SOURCES.map((s) => `<option value="${s.sourceid}">${esc(s.source)}</option>`).join('');
   const plants = [...new Set(masterSpecs.map((s) => s.plantno))].sort();
-  const items = [...new Set(masterSpecs.map((s) => s.item))].sort();
+  const itemLabels = new Map();
+  masterSpecs.forEach((s) => { if (!itemLabels.has(itemKeyOf(s))) itemLabels.set(itemKeyOf(s), s.item); });
+  KNOWN_ITEM_KEYS = new Set(itemLabels.keys());
   document.getElementById('apply-plantno-list').innerHTML = plants.map((p) => `<option value="${esc(p)}">`).join('');
-  document.getElementById('apply-item-list').innerHTML = items.map((i) => `<option value="${esc(i)}">`).join('');
+  document.getElementById('apply-item-list').innerHTML = [...itemLabels.keys()].sort()
+    .map((k) => `<option value="${esc(k)}">${esc(itemOptionLabel(k, itemLabels.get(k)))}</option>`).join('');
 }
 
 function showApplyErrors(errors) {
@@ -625,6 +650,9 @@ document.getElementById('apply-submit-btn').addEventListener('click', async () =
   const body = {
     ftype: document.getElementById('apply-ftype').value,
     plantno, item,
+    /* 使用者從候選清單挑的就是儲存鍵，直接原樣帶回後端定位資料；
+       手打的新項目名不在清單內時**不帶 item_key**，讓後端沿用舊的別名推測（行為不變）。 */
+    ...(KNOWN_ITEM_KEYS.has(item) ? { item_key: item } : {}),
     LAW: document.getElementById('apply-law').value.trim(),
     OOS: document.getElementById('apply-oos').value.trim(),
     OOC: document.getElementById('apply-ooc').value.trim(),
