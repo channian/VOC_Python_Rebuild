@@ -96,5 +96,11 @@ async def read_root():
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run("main_b:app", host="0.0.0.0", port=8000, reload=True)
+    # port 可用環境變數 VOC_B_PORT 覆寫（預設仍是 8000，行為不變）。
+    # 用途：A 棧 main.py 也是 8000，要「舊服務與 B 棧並存對照」時兩支會搶同一個 port，
+    # 後啟動的那支直接 address already in use。設 VOC_B_PORT=8001 即可並存，
+    # 不必每次改用 uvicorn 指令帶參數（2026-08-02 實測需求）。A 棧 main.py 不動。
+    uvicorn.run("main_b:app", host="0.0.0.0",
+                port=int(os.environ.get("VOC_B_PORT", "8000")), reload=True)

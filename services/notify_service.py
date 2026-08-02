@@ -17,6 +17,7 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 SMTP_SERVER = "10.12.10.31"  # mapped from SmtpMessage.cs
+SMTP_TIMEOUT_SECONDS = 30    # 連線/讀寫逾時；None（smtplib 預設）會無限等待，見 send_email()
 
 
 def send_email_sync(subject: str, body: str, to_addresses: list[str], cc_addresses: list[str] = None):
@@ -54,7 +55,11 @@ def send_email_sync(subject: str, body: str, to_addresses: list[str], cc_address
             msg['Cc'] = ",".join(cc_addresses)
         msg.attach(MIMEText(body, 'html', 'utf-8'))
 
-        with smtplib.SMTP(SMTP_SERVER) as server:
+        # timeout 不可省略：smtplib 預設是「無限等待」，SMTP 主機不可達時（例如在公司網路外
+        # 測試、或防火牆擋掉）會卡在 socket.create_connection 永遠不返回，連 Ctrl+C 都難中斷，
+        # 派報 worker 等於整個停擺且看不出原因（2026-08-02 實測確認）。
+        # 30 秒對正常內網 SMTP 綽綽有餘，逾時會走下面的 except 記錄錯誤後繼續，不影響其他收件者。
+        with smtplib.SMTP(SMTP_SERVER, timeout=SMTP_TIMEOUT_SECONDS) as server:
             server.send_message(msg)
         logger.info(f"Email sent successfully to {to_addresses} (cc={cc_addresses})")
     except Exception as e:

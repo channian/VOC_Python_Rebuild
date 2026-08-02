@@ -92,17 +92,39 @@ def export_table(conn, table: str, filter_col, plant_nos, out_dir: str) -> int:
     return len(data)
 
 
+def _default_db_url() -> str:
+    """
+    A 棧連線字串的預設值。
+
+    2026-08-02 修正：原本只讀 `os.environ.get("VOC_DB_URL")`，但專案 `.env` 與 `config.py`
+    用的鍵名是 **`DB_VOC_URL`**（名稱不同），而且 pydantic-settings 讀 `.env` **不會**把值
+    寫進 `os.environ`——結果是使用者照文件設好 .env、不加 --db 執行，必定看到
+    「未提供資料庫連線字串」而卡在搬遷第一步。
+
+    改為優先讀 config.settings.DB_VOC_URL（與 A 棧 database.py 同源），
+    再退回舊的 VOC_DB_URL 環境變數（保留相容，不影響原本這樣用的人）。
+    config 匯入失敗（例如缺 .env）時不讓整支腳本掛掉，仍可用 --db 明確指定。
+    """
+    try:
+        from config import settings
+        if getattr(settings, "DB_VOC_URL", ""):
+            return settings.DB_VOC_URL
+    except Exception:
+        pass
+    return os.environ.get("VOC_DB_URL", "")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="匯出 A 棧 MSSQL 表成 JSON，供 B 棧搬遷載入")
-    parser.add_argument("--db", default=os.environ.get("VOC_DB_URL"),
-                        help="A 棧 MSSQL 連線字串（預設讀環境變數 VOC_DB_URL）")
+    parser.add_argument("--db", default=_default_db_url(),
+                        help="A 棧 MSSQL 連線字串（預設讀 .env 的 DB_VOC_URL，或環境變數 VOC_DB_URL）")
     parser.add_argument("--out", default="export", help="輸出資料夾（預設 export/）")
     parser.add_argument("--plants", default="",
                         help="只匯出這些廠區（逗號分隔 plantno，例 K7,K8）；留空=全廠")
     args = parser.parse_args()
 
     if not args.db:
-        parser.error("未提供資料庫連線字串（--db 或環境變數 VOC_DB_URL）")
+        parser.error("未提供資料庫連線字串：請在 .env 設 DB_VOC_URL，或用 --db 明確指定")
 
     plant_nos = [p.strip() for p in args.plants.split(",") if p.strip()]
     os.makedirs(args.out, exist_ok=True)

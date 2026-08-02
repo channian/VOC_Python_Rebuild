@@ -19,3 +19,6 @@ htmlcov/
 # IDEs
 .vscode/
 .idea/
+
+# 搬遷用的人員綁定檔（含同事真實姓名/信箱，不可進版控；範本見 .example）
+scripts/migration_personnel.json
