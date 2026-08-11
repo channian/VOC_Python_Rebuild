@@ -159,6 +159,99 @@ Python 移植時要注意這不是單純的「4 小時內不重發」。
 
 ---
 
+## SCADA Tag 對應機制完整還原（2026-08-11，由使用者提供的 `Program.cs`／`ContSQLServer.cs`／`Job.dbVOC`
+`ListSCADATags`/`UpdateVOCData` 完整原始碼確認）
+
+> 背景：使用者維護舊系統時發現「資料庫裡一個門檻值（如 OOS 6.5-8.5）看起來是兩個 tag 拼出來的，
+> 但有些 tag 又完全沒有資料」，且「廠區申請改 tag 後，改完就一片異常」，只能用觀察＋猜測去推規則。
+> 逐行讀完 JOB 原始碼後，確認這不是誤會，而是舊系統真實（且脆弱）的設計，詳細機制與根因如下。
+
+### 1. 中央對照表 `VOC_SCADA_TagList`
+
+```sql
+SELECT [Name],[plantno],[item],[TableItem],[CurrentValue],[TableName]
+FROM [VOC].[dbo].[VOC_SCADA_TagList]
+WHERE iHSelector=@type AND IsActive=1 AND Type='VOC'
+```
+（`Job.dbVOC.ListSCADATags(type)`，**無 ORDER BY**——見第 3 節，這是關鍵地雷之一）
+
+一列＝一個 tag 扮演的「一個角色」，關鍵欄位：
+
+| 欄位 | 意義 |
+|---|---|
+| `Name` | 對應 Historian/Kepware 端**實際 tag 名稱**，須與該端逐字相同 |
+| `plantno` / `item` | 這個 tag 屬於哪個廠區/項目 |
+| `TableItem` | 這個 tag 的值要寫進 `VOC_SCADA_WEB` 的哪個欄位：`rvalue`(讀值)／`OOS_HH`／`OOC_H`／`alert`（三者皆「上限」）／`OOS_LL`／`OOC_L`／`alert_L`（三者皆「下限」，僅雙邊規格項目才有） |
+| `iHSelector` | 屬於哪一台 Historian（IH/IH2/…IH18），決定去哪台主機撈 |
+| `IsActive` | =0 時 `ListSCADATags` 撈不到，等同停用這個 tag |
+| `Type` | 篩 `='VOC'`，同一張表也給其他系統（N2/EnMS/…）共用不同 Type |
+
+### 2. 雙邊規格（pH／K21溫度）：兩個 tag 真的會被拼成一個字串
+
+`Job.dbVOC.UpdateVOCData()` 判斷式：
+```csharp
+if ((item.Contains("pH") || (item == "溫度" && plantno == "K21")) && ...)
+```
+**只有 pH 系列（pH/pH1/pH2/預警pH）跟「K21 的溫度」會進入雙邊組裝分支**——其他廠區的溫度是單邊，
+比 `CLAUDE.md` 目前「待確認」條目記錄的還要精確一級。
+
+進入分支後往後看最多 7 列 `iHDT`，用角色陣列（一般廠區 `CL={"OOC_H","OOS_HH","OOC_L","OOS_LL","rvalue","alert","alert_L"}`，
+K25 用 `CL1`、K15 用 `CL2`、K24「預警pH」用 `CL3`——各廠 Historian 裡 tag 排列順序不同才需要換陣列）比對
+`TagsDT.TableItem` 找出 7 個角色，組成：
+```
+OOS_HH = "{OOS_LL的值}-{OOS_HH的值}"
+OOC_H  = "{OOC_L的值}-{OOC_H的值}"
+alert  = "{alert_L的值}-{alert的值}"
+rvalue = 讀值本身
+```
+**一次寫進 3 個欄位**（不是寫進 6 個獨立欄位）。所以資料庫裡看到「OOS 欄位是 `6.5-8.5`」，
+背後就是兩個各自獨立的 `VOC_SCADA_TagList` 列（`TableItem='OOS_HH'` 一列、`TableItem='OOS_LL'` 一列，
+`plantno`/`item` 相同、`Name` 是兩個不同的 Historian tag），JOB 把兩者的值黏成一個字串。
+
+單邊規格項目（絕大多數水質項目）只需要 `TableItem='OOS_HH'` 這一列，**沒有 `OOS_LL` 列是正常設計**——
+系統本來就只比對上限（`CLAUDE.md`「取上界比對」規則），下限沒 tag 不是漏設。
+
+### 3. 根因：改 tag 就整片炸掉的機制
+
+```csharp
+int iCount = 0;
+for (int r = 0; r < iHDT.Rows.Count; r++)
+{
+    while (TagsDT.Rows[iCount]["Name"].ToStringTrim() != iHDT.Rows[r]["tagname"].ToStringTrim())
+        iCount++;
+    ...
+}
+```
+
+這不是查表比對，是一個**只會往前走、永遠不會回頭的游標**，靠「`ListSCADATags` 撈出的清單（無 ORDER BY，
+順序由 SQL Server 自行決定）」跟「Historian 回傳的清單」剛好同順序，逐一往前比對名稱把兩邊「兜」起來。
+
+**只要 Historian 回傳的某個 `tagname`，在 `TagsDT.Name` 裡找不到逐字相同的值**（廠區把 tag 改名，
+但 `VOC_SCADA_TagList.Name` 沒同步更新；或反過來），`while` 迴圈就會一路往後找、永遠找不到，
+最後撞到陣列邊界丟出 `IndexOutOfRangeException`。而這整支方法外層是：
+```csharp
+catch (Exception ex) { return -1; }
+```
+**例外被整個吞掉，不告訴你是哪個 tag 出問題**，而且因為是在 `for` 迴圈中間丟例外直接 `return`，
+**這一輪呼叫（同一台 Historian 底下的所有 tag）裡，排在出問題 tag 後面的所有 tag，這一輪全部不會被更新**，
+維持舊值不動、每 15 分鐘重複發生，直到名稱改回一致為止不會自己好。這就是「改一個 tag，
+結果一堆看似不相關的項目跟著跳橙燈/斷訊」的根因——那些項目不是真的異常，是**卡在舊值沒更新**，
+跟 SPEC 設定值兜不起來被誤判。且 `Program.cs` 的 `switch(cmd)` 對 `SCADA_VOC` 這個 case 沒有針對
+`errorlevel < 0` 額外寄送失敗通知，這個特定失敗**不會觸發任何告警信**，只能靠人工發現。
+
+### 4. 給後續維護／新系統設計的啟示
+
+- **改 tag SOP**：改名時 `VOC_SCADA_TagList.Name` 必須跟 Historian/Kepware 端逐字一致（大小寫、底線、空白都算）；
+  新增雙邊規格 tag 要**同時新增兩列**（角色分開），`TableItem` 字串要跟 `CL`/`CL1`/`CL2`/`CL3` 陣列定義一致。
+- **排查方法**：`SELECT * FROM VOC_SCADA_TagList WHERE iHSelector='該IH' AND IsActive=1`，逐筆跟 Historian
+  tag browser 核對 `Name`，找出哪一筆兜不上——該筆及其後所有列都是這輪沒更新到的。
+- **B 棧（`tag_mapping` 表，`models_b.py:570`）已經修正這個地雷**：改用 `(source_table, tagname)` 唯一鍵
+  明確驅動同步（`services_b/sync_service.py`），一筆一筆獨立比對，不共用游標、不會連坐，找不到只會計入
+  `SyncResult.skipped/errors`，不會有「靜默漏同步一整批」的問題。這也印證了 B 棧當初這個決策是對的方向。
+- 白話版說明（給非工程背景的環工部同仁看）另見 `docs/給環工部_Tag異動須知.md`。
+
+---
+
 ## 一、完整 DB schema（已確認）
 
 資料庫主要 `[VOC].[dbo]`，跨庫到 `[SignFlow].[dbo]`、`[UTIDB].[dbo]`。
