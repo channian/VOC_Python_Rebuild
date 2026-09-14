@@ -101,8 +101,16 @@ python main.py                    # 本地啟動 → http://localhost:8000/home
   4. 隔離重複防呆：新版「區間重疊」擋 vs 舊系統「完全相等」才擋
   5. 規格簽核 RPTTYPE_SPEC="規格維護" 為新設常數（legacy 該段是死碼無從考證）
   6. ControlTime 無 1 小時上限且不走簽核（舊系統後門通道，上線前應評估）
+  7. **派報項目白名單**（2026-09-14 實例發現）：超過 OOC/OOS 時，只有 item 名稱含
+     `pH`/`Cu`/`Ni`/`SS`/`COD`/`VOC` 的項目才會派報，其他項目（氨氣、導電度、流量…）
+     **只亮燈不發信**。判斷依名稱字串、**不讀資料庫的分類欄位**（氨氣已歸類為「水」仍無效）。
+     A 棧 `dispatch_service.py:122-124` 已忠實移植（`can_escalate = is_water or is_voc`）。
+     待環工部決策是否改成「預設全發、少數例外排除」。詳見 `docs/legacy_source_analysis.md`
+     「Historian 撈值排序機制」第 4 節。
 - **第二階段**：資料流與 JOB 重寫——Kepware(A，既有) → 新 VOC 資料庫(B，schema 未定案)
   轉拋 JOB 由本專案撰寫，見 `docs/JOB確認清單.md` 第六節。
+  ⚠️ 設計前必讀 `channian/ASEJOBS` repo（JOB 完整原始碼 + 7 份前人盤點文件），
+  尤其 `IH_DB_CONNECTION_SPEC.md`／`PYTHON_IH_INTEGRATION_PLAN.md`。
 
 ## Git
 - 工作分支：`claude/wizardly-clarke-NRLEK`（push 用 `git push -u origin <branch>`）。

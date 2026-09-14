@@ -241,14 +241,160 @@ catch (Exception ex) { return -1; }
 
 ### 4. 給後續維護／新系統設計的啟示
 
-- **改 tag SOP**：改名時 `VOC_SCADA_TagList.Name` 必須跟 Historian/Kepware 端逐字一致（大小寫、底線、空白都算）；
-  新增雙邊規格 tag 要**同時新增兩列**（角色分開），`TableItem` 字串要跟 `CL`/`CL1`/`CL2`/`CL3` 陣列定義一致。
+> ⚠️ **本節的「改 tag SOP」在 2026-09-14 取得 `ContIHServer.cs` 後已被修正**——
+> 「名稱逐字一致」是必要條件但**不是充分條件**，完整結論見下一章「Historian 撈值排序機制」。
+
 - **排查方法**：`SELECT * FROM VOC_SCADA_TagList WHERE iHSelector='該IH' AND IsActive=1`，逐筆跟 Historian
   tag browser 核對 `Name`，找出哪一筆兜不上——該筆及其後所有列都是這輪沒更新到的。
 - **B 棧（`tag_mapping` 表，`models_b.py:570`）已經修正這個地雷**：改用 `(source_table, tagname)` 唯一鍵
   明確驅動同步（`services_b/sync_service.py`），一筆一筆獨立比對，不共用游標、不會連坐，找不到只會計入
   `SyncResult.skipped/errors`，不會有「靜默漏同步一整批」的問題。這也印證了 B 棧當初這個決策是對的方向。
 - 白話版說明（給非工程背景的環工部同仁看）另見 `docs/給環工部_Tag異動須知.md`。
+
+---
+
+## Historian 撈值排序機制 — 改 tag 爆炸的真正根因（2026-09-14）
+
+> 來源：`channian/ASEJOBS` repo（JOB 專案完整原始碼），補上先前唯一缺的 `ContIHServer.cs`。
+> **這一節推翻了上一章第 4 節「只要名稱一致就安全」的結論。**
+
+### 1. `SelectIH` 系列的 SQL（`jobs/ContIHServer.cs`）
+
+```sql
+SET samplingmode=Interpolated,intervalmilliseconds={intervalMS};
+SELECT tagname,value,Quality FROM iHRawData
+WHERE (tagname='TAG1' or tagname='TAG2' or ...)
+  and timestamp >= {起} and timestamp < {迄}
+order by tagname, timestamp        ← 關鍵
+```
+
+**10 台主機的排序規則並不一致**（已用腳本逐支解析全檔確認）：
+
+| 方法 | 廠區（對照 `Program.cs` SCADA_VOC） | samplingmode | TOP | 排序 |
+|---|---|---|---|---|
+| `SelectIH` | K11（iHSelector=IH） | Interpolated | — | **tagname**, timestamp |
+| `SelectIH2` | K22（IH2） | Interpolated | — | **tagname**, timestamp |
+| `SelectIH3` | K21（IH3） | **RawByTime** | ✔ | **timestamp**, tagname ⚠️ |
+| `SelectIH4` | K12（IH4/IH5/IH6/IH9/IH12/IH13/IH14 皆走此支） | Interpolated | — | **tagname**, timestamp |
+| `SelectIH5` | K24（IH7） | Interpolated | — | **tagname**, timestamp |
+| `SelectIH6` | K26（IH8） | **RawByTime** | ✔ | **timestamp**, tagname ⚠️ |
+| `SelectIH7` | K25（IH10） | Interpolated | — | **timestamp**, tagname ⚠️ |
+| `SelectIH8` | K16（IH11） | Interpolated | — | **timestamp**, tagname ⚠️ |
+| `SelectIH9` | K27（IH15） | Interpolated | — | **timestamp**, tagname ⚠️ |
+| `SelectIH10` | K18（IH18） | Interpolated | — | **timestamp**, tagname ⚠️ |
+
+### 2. 為什麼這是根因
+
+`UpdateVOCData` 的「只進不退游標」要求 `TagsDT` 與 `iHDT` **順序一致**，但：
+
+- `iHDT`（Historian）＝ 按 **tag 名稱字母排序**（6 個廠更糟：按**時間戳**排序）
+- `TagsDT`（`ListSCADATags`）＝ **沒有 ORDER BY**，由 SQL Server 自行決定的實體儲存順序
+
+兩邊的排序依據**從來就不是同一個東西**，能正常運作純粹是因為 TagList 的自然順序碰巧接近字母序。因此：
+
+> **就算 `VOC_SCADA_TagList.Name` 跟 Historian 兩邊名稱完全同步，只要新 tag 名稱的「字母排序位置」跟舊名稱不同，
+> Historian 回傳順序就會改變，而 TagList 的實體位置不變 → 游標對位錯開 → 該來源後續所有 tag 一起錯位。**
+
+例：`K12_PH_LL` → `K12_PH_LOW`，字母序中 `LOW` 排在 `LL` 之後，位置就變了。這解釋了「明明名字改對了還是爆」。
+
+K21／K26 另有 `samplingmode=RawByTime`（不做內插，各 tag 時間戳不對齊）+ `SELECT Top {tag數}`，
+搭配 `order by timestamp` 等於完全打散名稱順序，且可能某些 tag 出現多筆、某些一筆都沒有——
+**這 6 個按時間戳排序的廠區，長期是靠運氣在運作。**
+
+### 3. `ToDecimal` 的靜默歸零，讓畸形字串變成永久誤報
+
+`MTL/MTDBbase.cs:108`：
+```csharp
+public static decimal ToDecimal(object obj, decimal refval = 0m)
+{
+    if (obj == null || obj is DBNull) return refval;
+    else if (!decimal.TryParse(obj.ToString(), out val0)) return refval;  // 解析失敗 → 靜默回 0
+    else return val0;
+}
+```
+
+接上前一章「雙邊門檻拼字串」的缺角問題，後果是**數值層面的永久誤報**，不只是顯示難看：
+
+| 實際存進 `OOS_HH` 的字串 | 成因 | `ToDecimal` 結果 | 後果 |
+|---|---|---|---|
+| `-6.5` | 低限角色沒找到（`iCL[x]==-1`）→ 空字串 + `-` + 高限 | **負 6.5**（解析成功！） | 與 SPEC 的 6.5 永遠不等 → **永久橙燈 + 永久派報「管制值不一致」** |
+| `-1-8.5` | 低限本身是負數（PLC 用 `-1` 表示未設定） | **0**（解析失敗靜默歸零） | 同上，永久誤報 |
+
+雙邊分支走的是 `CheckData(string[])`：`"-1-8.5".Split('-')` → `["", "1", "8.5"]` 長度 3，
+不符合 `if (V.Length == 2)` → 落到 `else return V[0]` → 回傳**空字串**，一樣必然判定不一致。
+
+⚠️ **`-1` / `0` 不在特殊值白名單內**。程式只認 `-`、`N/A`、`建置中`、`異常`、`斷訊`、`保養中` 這 6 種字串為
+「無效值」；PLC 端若用 `-1`/`0` 表示「未設定」，程式會當成真實門檻值處理。**兩套慣例不相容。**
+
+### 4. 派報觸發有一道隱藏白名單，且不讀分類欄位
+
+`GetDataRed()` 裡：
+```csharp
+bool bWater = (sItem.IndexOf("pH") > -1 || sItem.IndexOf("Cu") > -1 || sItem.IndexOf("Ni") > -1 ||
+               sItem.IndexOf("SS") > -1 || sItem.IndexOf("COD") > -1);
+bool bVOC   = (sItem.IndexOf("VOC") > -1);
+```
+在「超過 OOC」「超過 OOS」兩個條件裡：
+```csharp
+if (bWater == true || bVOC == true) { /* 加進 sRed（派報）、設 light */ }
+else light = 4;   // ← 只改燈號，不派報
+```
+
+**燈號一定會算、會寫；但要不要派報，只看 item 名稱字串是否含上述 6 個關鍵字。**
+
+2026-09-14 實例驗證：某廠**氨氣**超過 OOC，Web 正常亮紅燈，但完全沒有派報信。使用者確認該項目在資料庫裡
+**已歸類為「水」**——但 `bWater` **不讀任何分類欄位**，只做名稱字串比對，「氨氣」不含那 5 個關鍵字，
+因此 `bWater=false`、`bVOC=false`，走 `else` 分支：**燈號變紅、但永遠不派報**。
+
+> **設計缺陷本質**：分類資料在資料庫裡明明存在（`VOC_item` / `VOC_SPEC` 有來源與分類欄位），
+> 程式卻不使用，改用寫死在 C# 裡的名稱關鍵字清單。新增任何不含這 6 個關鍵字的監測項目，
+> 都會自動落入「有燈號、無派報」的狀態，而且**沒有任何地方會提示**。
+>
+> A 棧 Python 版 `services/dispatch_service.py:122-124` 已**忠實移植**此限制
+> （`can_escalate = is_water or is_voc`），行為與舊系統一致——這是有意識的移植，不是移植缺陷。
+> 是否要改成「預設全部派報、少數例外排除」的反向邏輯，**需業務端決策**（見 CLAUDE.md 待業務確認清單）。
+
+### 5. `VOC_SPEC` 的 `SendMail` 欄位是死欄位（排除誤導線索）
+
+使用者發現氨氣該列 `VOC_SPEC.SendMail = 0`，懷疑是派報開關。**已排除**：
+
+- JOB 端（`ASEJOBS` repo 全庫掃描）：`sendmail` 欄位只出現在 `dbPLC.cs`／`dbCCTV.cs`／`dbPowerSys.cs`／
+  `dbAffectManage.cs`（PLC、CCTV、電力、異常管理等**不相關系統**的表），`jobs/dbVOC.cs` 全檔**零引用**。
+- 網頁端（`legacy/` 32 支 `.cs`）：同樣**零引用**。
+- `GetData()`（派報撈值 SQL）未 SELECT 此欄位，`EditSPEC` 的 INSERT／UPDATE 也未寫入此欄位。
+
+**結論**：此欄位不參與任何派報判斷，與氨氣不派報只是時間上的巧合，真正原因是第 4 點的名稱白名單。
+
+### 6. 其他已確認的連帶問題
+
+- **重複 tag 名稱會造成跳位**：`SelectIH` 用 `tagname='A' or tagname='A'` 拼 WHERE，SQL 的 OR 重複條件
+  **不會讓結果重複**，Historian 只回一筆。若 `VOC_SCADA_TagList` 有兩列填相同 `Name`（例如「預警pH」與「pH」
+  的 OOC 角色填成同一個 tag），第二列將**永遠配不到資料、被游標跳過**，並使其後所有列錯位一格。
+  （先前分析列為「情況 A / 情況 B」兩種可能，現已確認為**情況 A**。）
+- **`alert` 欄位反灰（顯示 `-`）**：品質不良分支的 SQL 是 `[alert] = IIF(alert='-','-',@alert)`，
+  **欄位現值若已是 `-` 就永遠保留 `-`**，不會被改寫成「斷訊」。新建立或從未成功寫入過的 tag，
+  一旦連線品質不良就會卡在反灰，直到收到一筆品質正常的讀值為止。
+  排查：看 `VOC_SCADA_WEB.cdatetime` 有沒有在跳——沒跳＝游標根本沒走到它（名稱／排序對不上）；
+  有跳但值仍是 `-`＝單純品質不良 + 底值是 `-`。
+- **讀值來源與管制值來源不卡控**：`ListSCADATags` 按 `iHSelector` 分批查、`UpdateVOCData` 分批寫，
+  寫入目標只用 `plantno+item` 當 key。同一個 item 的 `rvalue` 與 `OOS_HH` 可以來自**不同 Historian 主機**，
+  系統不驗證、不告警，也不保證兩者時間對齊。
+- **例外被完全吞掉**：`UpdateVOCData`／`UpdateVOCData1`／`UpdateVOCData回收水` 的 `catch` 區塊內
+  `Program.error = ex.Message;` **被整行註解掉**，只剩 `return -1`。`Program.cs` 的 `SCADA_VOC` case
+  也沒有針對 `errorlevel < 0` 寄送失敗通知 → **這類失敗不會產生任何告警**。
+  （`ASEJOBS/ANOMALY_NOTIFICATION_GAPS.md` 已將此列為 P0「功能已經壞掉」。）
+
+### 7. 與 ASEJOBS repo 既有分析文件的關係
+
+該 repo 內含 7 份前人盤點文件，與本節**互補**：
+
+- `IH_DB_CONNECTION_SPEC.md`：已記載 K21/K26 的 `RawByTime` 與排序差異，但**未與 `UpdateVOCData` 的
+  游標比對連結**，因此未發現這是會造成資料錯位的 bug；另**漏記** `SelectIH7`～`SelectIH10`
+  （K25/K16/K27/K18）雖為 Interpolated，排序同樣是 `timestamp` 優先。
+- `ANOMALY_NOTIFICATION_GAPS.md`：已將 `UpdateVOCData` 的 catch 黑洞列為 P0，印證第 6 點。
+- 其餘（`JOB_INVENTORY.md`／`MTLIBRARY_AUDIT.md`／`REFACTOR_CANDIDATES.md`／
+  `PYTHON_IH_INTEGRATION_PLAN.md`／`ANOMALY_NOTIFICATION_AUDIT_HANDOFF.md`）為 JOB 全域盤點與
+  Python 改寫規劃，第二階段轉拋 JOB 設計時應優先參考。
 
 ---
 
