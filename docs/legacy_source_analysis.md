@@ -226,16 +226,27 @@ for (int r = 0; r < iHDT.Rows.Count; r++)
 這不是查表比對，是一個**只會往前走、永遠不會回頭的游標**，靠「`ListSCADATags` 撈出的清單（無 ORDER BY，
 順序由 SQL Server 自行決定）」跟「Historian 回傳的清單」剛好同順序，逐一往前比對名稱把兩邊「兜」起來。
 
-**只要 Historian 回傳的某個 `tagname`，在 `TagsDT.Name` 裡找不到逐字相同的值**（廠區把 tag 改名，
-但 `VOC_SCADA_TagList.Name` 沒同步更新；或反過來），`while` 迴圈就會一路往後找、永遠找不到，
-最後撞到陣列邊界丟出 `IndexOutOfRangeException`。而這整支方法外層是：
+**觸發條件（2026-10-04 更正）**：`iHDT` 的查詢條件是由 `TagsDT` 的 `Name` 逐一組出來的
+（`SelectIH` 的 `tagname='A' or tagname='B' ...`），所以 Historian 回傳的 tagname 在 `TagsDT` 裡**理論上一定找得到**。
+因此『名稱沒同步』本身**不會**讓游標找不到對象——登記了 Historian 上不存在的 tag，只是該列沒有對應回傳列、
+被游標跳過，該欄位維持舊值。（先前版本寫成『找不到逐字相同的值就會整批爆』，這個因果鏈是錯的，已更正。）
+
+真正會讓 `while` 一路往後找、撞到陣列邊界丟出 `IndexOutOfRangeException` 的，是下列情形：
+
+1. **順序反轉**：某個 `iHDT` 列對應的 `TagsDT` 列，位置已落在游標**之前**（游標只進不退）。
+2. **大小寫不一致**：Historian 回傳的 tagname 與 `TagsDT.Name` 只差大小寫（SQL 端比對通常不分大小寫，
+   C# 的 `!=` 分大小寫）。
+
+（以上依程式邏輯推導，未見實際環境資料；驗證方法見『待驗證事項』章。）
+
+而這整支方法外層是：
 ```csharp
 catch (Exception ex) { return -1; }
 ```
 **例外被整個吞掉，不告訴你是哪個 tag 出問題**，而且因為是在 `for` 迴圈中間丟例外直接 `return`，
-**這一輪呼叫（同一台 Historian 底下的所有 tag）裡，排在出問題 tag 後面的所有 tag，這一輪全部不會被更新**，
-維持舊值不動、每 15 分鐘重複發生，直到名稱改回一致為止不會自己好。這就是「改一個 tag，
-結果一堆看似不相關的項目跟著跳橙燈/斷訊」的根因——那些項目不是真的異常，是**卡在舊值沒更新**，
+**這一輪呼叫（同一台 Historian 底下的所有 tag）裡，排在出問題 tag 後面的所有 tag，這一輪全部不會被更新**
+（例外之前已寫入的列不會回滾），維持舊值不動、每 15 分鐘重複發生，直到順序／大小寫問題排除為止不會自己好。
+這就是「一堆看似不相關的項目同時跳橙燈/斷訊」的成因——那些項目不是真的異常，是**卡在舊值沒更新**，
 跟 SPEC 設定值兜不起來被誤判。且 `Program.cs` 的 `switch(cmd)` 對 `SCADA_VOC` 這個 case 沒有針對
 `errorlevel < 0` 額外寄送失敗通知，這個特定失敗**不會觸發任何告警信**，只能靠人工發現。
 
@@ -288,14 +299,21 @@ order by tagname, timestamp        ← 關鍵
 `UpdateVOCData` 的「只進不退游標」要求 `TagsDT` 與 `iHDT` **順序一致**，但：
 
 - `iHDT`（Historian）＝ 按 **tag 名稱字母排序**（6 個廠更糟：按**時間戳**排序）
-- `TagsDT`（`ListSCADATags`）＝ **沒有 ORDER BY**，由 SQL Server 自行決定的實體儲存順序
+- `TagsDT`（`ListSCADATags`）＝ **沒有 ORDER BY**，順序由 SQL Server 決定。依該表有無叢集索引而定：
+  有索引通常按索引鍵順序回傳，無索引則大致為寫入順序——**我們沒有該表 DDL，無法確認是哪一種**。
 
-兩邊的排序依據**從來就不是同一個東西**，能正常運作純粹是因為 TagList 的自然順序碰巧接近字母序。因此：
+兩邊的排序依據**沒有任何程式碼層級的保證是同一個東西**。
 
-> **就算 `VOC_SCADA_TagList.Name` 跟 Historian 兩邊名稱完全同步，只要新 tag 名稱的「字母排序位置」跟舊名稱不同，
-> Historian 回傳順序就會改變，而 TagList 的實體位置不變 → 游標對位錯開 → 該來源後續所有 tag 一起錯位。**
+> ⚠️ **2026-10-04 更正**：先前版本寫成『TagList 實體位置不變，所以改名後字母序變動必定錯位』，這是**過度推論**。
+> - 若 `Name` 是叢集索引鍵，`TagsDT` 會跟 `iHDT` 一樣按名稱序回傳，改名後兩邊同步移動，不一定錯位
+>   （這也能解釋為什麼這套寫法長年「大致正常」）。
+> - 若 TagList 是寫入順序（無叢集索引），新增／改名的 tag 才會與 Historian 的字母序脫鉤。
+> - 即使 `Name` 是索引鍵，SQL Server 與 iHistorian 對底線、大小寫、數字的**排序規則可能不同**，仍可能反轉。
+>
+> **哪一種成立必須實測**（見『待驗證事項』章），在驗證前，環工部說明與老闆簡報中『改名必定導致錯位』的說法應視為待確認。
 
-例：`K12_PH_LL` → `K12_PH_LOW`，字母序中 `LOW` 排在 `LL` 之後，位置就變了。這解釋了「明明名字改對了還是爆」。
+仍然成立的結論：游標比對**要求兩邊順序一致**，而程式沒有任何地方確保這一點；一旦不一致就會丟例外並中斷整批。
+例：`K12_PH_LL` → `K12_PH_LOW`，在字母序中位置會移動——是否造成問題，取決於 `TagsDT` 是否同步移動。
 
 K21／K26 另有 `samplingmode=RawByTime`（不做內插，各 tag 時間戳不對齊）+ `SELECT Top {tag數}`，
 搭配 `order by timestamp` 等於完全打散名稱順序，且可能某些 tag 出現多筆、某些一筆都沒有——
@@ -367,10 +385,20 @@ else light = 4;   // ← 只改燈號，不派報
 
 ### 6. 其他已確認的連帶問題
 
-- **重複 tag 名稱會造成跳位**：`SelectIH` 用 `tagname='A' or tagname='A'` 拼 WHERE，SQL 的 OR 重複條件
-  **不會讓結果重複**，Historian 只回一筆。若 `VOC_SCADA_TagList` 有兩列填相同 `Name`（例如「預警pH」與「pH」
-  的 OOC 角色填成同一個 tag），第二列將**永遠配不到資料、被游標跳過**，並使其後所有列錯位一格。
-  （先前分析列為「情況 A / 情況 B」兩種可能，現已確認為**情況 A**。）
+- **重複 tag 名稱：兩列只會有一列被寫入**：`SelectIH` 用 `tagname='A' or tagname='A'` 拼 WHERE，依 SQL 語意
+  重複條件不會讓結果重複（⚠️ 依 SQL 語意推定，iHistorian OLE DB 實際行為**未驗證**），預期只回一筆。
+  若 `VOC_SCADA_TagList` 有兩列填相同 `Name`（例如同一項目的 `OOS_HH`、`OOC_H` 角色都填同一個 tag，或「預警pH」與
+  「pH」的 OOC 角色填成同一個 tag），游標每筆 `iHDT` 只消耗**第一個遇到的** `TagsDT` 列，另一列**永遠不會被寫入**
+  （維持舊值／預設值）；是哪一列，取決於 `TagsDT` 的順序。
+  - 單邊規格：未消耗的重複列會在游標往前找下一個名稱時被自然跳過，**不會讓其後的列錯位**
+    （但若同時有『順序反轉』，仍會丟例外，見上）。
+  - 雙邊群組（pH／K21溫度）：群組內出現重複或缺列會破壞『連續 7 列』的假設，**值與角色會錯配**（靜默寫錯）。
+  - 先前版本寫『確認為情況 A、使其後所有列錯位一格』為過度推論，已更正。
+  - 語意上，即使兩個角色都寫入，`OOS_HH` 與 `OOC_H` 也會是同一個值；與 SPEC 的 OOS／OOC 比對時，
+    除非 SPEC 的 OOS＝OOC，否則必有一邊永遠『管制值不一致』（橙燈）。
+- **任一角色的 tag 品質不良，整個項目被標斷訊**：品質不良分支的 UPDATE 依 `plantno+item` 把 7 個欄位全寫『斷訊』
+  並設 `broken=1`，與是哪個角色的 tag 無關；同一輪內後處理到的好 tag 只會覆寫自己那一欄與 `broken=0`，
+  最終狀態取決於處理順序。
 - **`alert` 欄位反灰（顯示 `-`）**：品質不良分支的 SQL 是 `[alert] = IIF(alert='-','-',@alert)`，
   **欄位現值若已是 `-` 就永遠保留 `-`**，不會被改寫成「斷訊」。新建立或從未成功寫入過的 tag，
   一旦連線品質不良就會卡在反灰，直到收到一筆品質正常的讀值為止。
@@ -395,6 +423,87 @@ else light = 4;   // ← 只改燈號，不派報
 - 其餘（`JOB_INVENTORY.md`／`MTLIBRARY_AUDIT.md`／`REFACTOR_CANDIDATES.md`／
   `PYTHON_IH_INTEGRATION_PLAN.md`／`ANOMALY_NOTIFICATION_AUDIT_HANDOFF.md`）為 JOB 全域盤點與
   Python 改寫規劃，第二階段轉拋 JOB 設計時應優先參考。
+
+---
+
+## 待驗證事項（上述兩章推論的前提，需實測才能定案）
+
+以下四項決定『改 tag 會不會整批爆』『重複 tag 會怎樣』的說法是否成立，目前**都沒有環境資料佐證**：
+
+| # | 要確認什麼 | 怎麼確認 | 結果影響 |
+|---|---|---|---|
+| V1 | `TagsDT` 實際回傳順序是名稱序還是寫入序 | `EXEC sp_helpindex 'VOC_SCADA_TagList'` 看有無叢集索引；並直接執行 `ListSCADATags` 那句 SQL（不加 ORDER BY）看結果是否已按 `Name` 排序 | 決定『改名必然錯位』是否成立 |
+| V2 | 同一 `iHSelector` 內有無重複 `Name` | `SELECT iHSelector,Name,COUNT(*) FROM VOC_SCADA_TagList WHERE IsActive=1 AND Type='VOC' GROUP BY iHSelector,Name HAVING COUNT(*)>1` | 有重複者必有一列永不更新 |
+| V3 | `TagList.Name` 與 Historian 實際回傳的大小寫是否一致 | 對照 Historian tag browser 的拼法 | 大小寫差異會觸發例外 |
+| V4 | iHistorian 對重複 OR 條件是否只回一筆 | 在 Historian 手動執行 `WHERE tagname='A' or tagname='A'` | 影響重複 tag 的實際行為 |
+
+**驗證完成前**：`docs/給環工部_Tag異動須知.md` 與老闆簡報中『改名必然造成整批錯位』的說法，應視為待確認。
+
+---
+
+## 網頁欄位 ↔ `VOC_SCADA_TagList.TableItem` 對應（2026-10-04，由 `Job.dbVOC.UpdateVOCData` 與網頁端 `ListVOC` 確認）
+
+### 1. 整條對應鏈
+
+| 網頁欄位（Home 表格 Cell） | `VOC_SCADA_WEB` 欄位 | 來源 | `TagList.TableItem` |
+|---|---|---|---|
+| SCADA 管制值 OOS（Cell[8]） | `OOS_HH` | IH tag | `OOS_HH`（雙邊另需 `OOS_LL`） |
+| SCADA 管制值 OOC（Cell[9]） | `OOC_H` | IH tag | `OOC_H`（雙邊另需 `OOC_L`） |
+| SCADA Alert（Cell[10]） | `alert`（SQL 別名 `alert1`） | IH tag | `alert`（雙邊另需 `alert_L`） |
+| CWMS OOS（Cell[11]） | `OOS_HH1` | CWMS HTTP API，**不走 TagList** | — |
+| CWMS OOC（Cell[12]） | `OOC_H1` | CWMS HTTP API，**不走 TagList** | — |
+| 讀值 | `rvalue` | IH tag | `rvalue` |
+
+依據：`legacy/dbVOC.cs:62`（`W.OOS_HH, W.OOC_H, W.alert alert1, W.OOS_HH1, W.OOC_H1`）、
+`legacy/Home.aspx.cs:628-632`（Cell 編號）。表頭文字在 `.aspx` 標記檔中，**未取得**，故以 Cell 編號表示。
+
+### 2. 單邊規格：`TableItem` 直接就是欄位名
+
+```csharp
+SqlCommandText = "UPDATE [VOC].[dbo].[VOC_SCADA_WEB] SET " + sColumn + " =@rvalue , [cdatetime] = @cdatetime , [broken] = 0 WHERE ..."
+```
+`sColumn = TagsDT.Rows[iCount]["TableItem"]`，字串原樣拼入 SQL，**沒有對照表、沒有白名單檢查**。
+只能是這 7 個值：`rvalue`、`OOS_HH`、`OOC_H`、`alert`、`OOS_LL`、`OOC_L`、`alert_L`；
+寫錯（多空白、`OOS_H`…）會變成『無效的資料行名稱』例外 → 被 `catch` 吞掉 → 該輪整批中斷。
+
+### 3. 雙邊規格（item 含 `pH`，或 K21 的 `溫度`）：7 列拼成 3 欄
+
+| 寫入欄位 | 公式 | 用到的 TableItem |
+|---|---|---|
+| `OOS_HH` | `{OOS_LL}-{OOS_HH}` | `OOS_LL`、`OOS_HH` |
+| `OOC_H` | `{OOC_L}-{OOC_H}` | `OOC_L`、`OOC_H` |
+| `alert` | `{alert_L}-{alert}` | `alert_L`、`alert` |
+| `rvalue` | 讀值 | `rvalue` |
+
+`OOS_LL`／`OOC_L`／`alert_L` 三個資料庫欄位在此路徑**不會被寫入**，下限只存在於拼好的字串中。
+缺少的角色（`iCL[x]==-1`）以空字串取代，產生 `-8.5`／`6.5-` 這類殘缺字串。
+
+7 列在 TagList 中須依各廠順序排列（程式以順序陣列單向比對 `TableItem`）：
+
+| 廠區 | 陣列 | 順序 |
+|---|---|---|
+| 一般 | `CL` | `OOC_H`→`OOS_HH`→`OOC_L`→`OOS_LL`→`rvalue`→`alert`→`alert_L` |
+| K25 | `CL1` | `rvalue`→`OOC_H`→`OOS_HH`→`OOC_L`→`OOS_LL`→`alert`→`alert_L` |
+| K15 | `CL2` | `OOC_H`→`OOC_L`→`alert`→`OOS_HH`→`alert_L`→`OOS_LL`→`rvalue` |
+| K24「預警pH」 | `CL3` | `rvalue`→`alert`→`alert_L`→`OOC_H`→`OOC_L`→`OOS_HH`→`OOS_LL` |
+
+進入群組分支的條件：一般廠區由『第一個非 `rvalue` 角色』起頭；K25／K24 由 `rvalue` 起頭。
+（K24 一般 `pH` 用預設 `CL` 卻由 `rvalue` 起頭，是否一致需現場確認。）
+
+### 4. 四個容易被誤解的細節
+
+1. **『TagList 很多列沒有數字』是程式本來就不維護 `CurrentValue`**：群組寫入後只用『群組第一列』的
+   `TableItem` 與第一筆值更新 `CurrentValue`，其餘 6 列從不更新。判斷有沒有在更新，要看
+   `VOC_SCADA_WEB.cdatetime`，不要看 `TagList.CurrentValue`。
+2. **`TableItem` 拼錯一個字會使該批次中斷**（見第 2 點）。
+3. **`alert` 是 `alert_L` 的子字串**：角色辨識用 `IndexOf`，順序一旦錯位，下限 tag 會被當成上限。
+4. **TagList 沒有某角色的列 = 該欄位完全不被這支 JOB 碰**，維持建檔預設值（`-` 或 `建置中`）。
+   想讓網頁欄位顯示 `-`，不登記該角色即可。
+
+### 5. CWMS 組（供對照，不在 TagList）
+
+`GetCWMSValue` 的 JSON 欄位對應：`HH_A`→`OOS_HH1`（雙邊為 `LL_A-HH_A`）、`HI_A`→`OOC_H1`（雙邊為 `LO_A-HI_A`）、
+`LL_A`→`OOS_LL1`、`LO_A`→`OOC_L1`；API 無值填『建置中』；CWMS 沒有 Alert。
 
 ---
 
